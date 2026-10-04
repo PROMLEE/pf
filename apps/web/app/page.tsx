@@ -468,7 +468,7 @@ export default function PortfolioPage() {
       ).length;
       const firstError = result.quotes.find((quote) => quote.error)?.error;
       setNotice(
-        `${count}개 종목의 시세를 갱신했습니다.${result.quotes.length > count ? ` ${result.quotes.length - count}개는 조회되지 않았습니다.` : ""}${firstError ? ` ${firstError}` : ""}`,
+        `${count}개 자산의 시세를 갱신했습니다.${result.quotes.length > count ? ` ${result.quotes.length - count}개는 조회되지 않았습니다.` : ""}${firstError ? ` ${firstError}` : ""}`,
       );
     } catch (error) {
       setNotice(
@@ -519,15 +519,17 @@ export default function PortfolioPage() {
             <span className={styles.logo}>P</span> PORTFOLIO
           </div>
           <div className={styles.authPitch}>
-            <span className={styles.kicker}>YOUR PORTFOLIO, YOUR PRINCIPLES</span>
+            <span className={styles.kicker}>
+              YOUR PORTFOLIO, YOUR PRINCIPLES
+            </span>
             <h1>
               자산을 모으고,
               <br />
               투자 원칙을 지키세요.
             </h1>
             <p>
-              목표 비중을 직접 설계하고 국내·미국 종목을 연결하세요.
-              현재 비중과 목표의 차이, 다음 조정이 필요한 자산까지 한눈에 볼 수 있습니다.
+              목표 비중을 직접 설계하고 국내·미국 종목을 연결하세요. 현재 비중과
+              목표의 차이, 다음 조정이 필요한 자산까지 한눈에 볼 수 있습니다.
             </p>
             <div className={styles.authGraphic}>
               <div className={styles.authGraphicHead}>
@@ -535,18 +537,40 @@ export default function PortfolioPage() {
                 <strong>목표 비중 예시</strong>
               </div>
               <div className={styles.authGraphicBody}>
-                <div className={styles.authPreviewRing} aria-label="미국 지수 35%, 한국 지수 25%, 우량주 20%, 금 10%, 비트코인 10%">
-                  <span>나만의 기준<strong>100%</strong></span>
+                <div
+                  className={styles.authPreviewRing}
+                  aria-label="미국 지수 35%, 한국 지수 25%, 우량주 20%, 금 10%, 비트코인 10%"
+                >
+                  <span>
+                    나만의 기준<strong>100%</strong>
+                  </span>
                 </div>
                 <div className={styles.authPreviewLegend}>
-                  <span><i />미국 지수 <b>35%</b></span>
-                  <span><i />한국 지수 <b>25%</b></span>
-                  <span><i />우량주 <b>20%</b></span>
-                  <span><i />금·비트코인 <b>20%</b></span>
+                  <span>
+                    <i />
+                    미국 지수 <b>35%</b>
+                  </span>
+                  <span>
+                    <i />
+                    한국 지수 <b>25%</b>
+                  </span>
+                  <span>
+                    <i />
+                    우량주 <b>20%</b>
+                  </span>
+                  <span>
+                    <i />
+                    금·비트코인 <b>20%</b>
+                  </span>
                 </div>
               </div>
             </div>
-            <a className={styles.authQuote} href="https://www.berkshirehathaway.com/letters/1988.html" target="_blank" rel="noreferrer">
+            <a
+              className={styles.authQuote}
+              href="https://www.berkshirehathaway.com/letters/1988.html"
+              target="_blank"
+              rel="noreferrer"
+            >
               <span>“우리가 선호하는 보유 기간은 영원입니다.”</span>
               <small>워런 버핏 · 버크셔 해서웨이 1988 주주서한</small>
             </a>
@@ -557,13 +581,23 @@ export default function PortfolioPage() {
           <div>
             <span className={styles.kicker}>START WITH A PLAN</span>
             <h2>내 투자 기준을 세워보세요</h2>
-            <p>보유 자산을 정리하고, 목표 비중에 맞는 투자 결정을 준비하세요.</p>
+            <p>
+              보유 자산을 정리하고, 목표 비중에 맞는 투자 결정을 준비하세요.
+            </p>
             <div className={styles.authSteps} aria-label="서비스 이용 순서">
-              <span><b>01</b>목표 설계</span>
-              <span><b>02</b>종목 연결</span>
-              <span><b>03</b>비중 점검</span>
+              <span>
+                <b>01</b>목표 설계
+              </span>
+              <span>
+                <b>02</b>종목 연결
+              </span>
+              <span>
+                <b>03</b>비중 점검
+              </span>
             </div>
-            <small className={styles.authSignInLabel}>카카오 또는 네이버 계정으로 시작</small>
+            <small className={styles.authSignInLabel}>
+              카카오 또는 네이버 계정으로 시작
+            </small>
             <button
               className={styles.kakao}
               onClick={() => signIn("kakao", { callbackUrl: "/" })}
@@ -634,7 +668,12 @@ export default function PortfolioPage() {
               개인 자산 공간<small>계정별로 분리해 보관 중</small>
             </span>
           </div>
-          <a className={styles.sideQuote} href="https://www.berkshirehathaway.com/letters/2013ltr.pdf" target="_blank" rel="noreferrer">
+          <a
+            className={styles.sideQuote}
+            href="https://www.berkshirehathaway.com/letters/2013ltr.pdf"
+            target="_blank"
+            rel="noreferrer"
+          >
             <span>“가격은 지불하는 것, 가치는 얻는 것.”</span>
             <small>벤저민 그레이엄</small>
           </a>

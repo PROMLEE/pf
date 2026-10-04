@@ -3,9 +3,14 @@ import type { Portfolio } from "../../portfolio-model";
 import { currentUserId } from "../../../lib/auth";
 import {
   listPortfolio,
+  listCryptoAssets,
   recordSnapshot,
   savePortfolio,
 } from "../../../lib/portfolio-db";
+import {
+  listKrwCryptoMarkets,
+  refreshStoredCryptoQuotes,
+} from "../../../lib/upbit";
 
 export const runtime = "nodejs";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -50,6 +55,8 @@ function valid(input: Portfolio) {
     return false;
   if (!Array.isArray(input.rules) || input.rules.length > 100) return false;
   if (!Array.isArray(input.manualAssets) || input.manualAssets.length > 100)
+    return false;
+  if (!Array.isArray(input.cryptoAssets) || input.cryptoAssets.length > 100)
     return false;
   if (!Array.isArray(input.assignments) || input.assignments.length > 500)
     return false;
@@ -142,6 +149,33 @@ function valid(input: Portfolio) {
     assetIds.add(asset.id);
   }
 
+  const cryptoCodes = new Set<string>();
+  for (const asset of input.cryptoAssets) {
+    if (!uuid.test(asset.id) || assetIds.has(asset.id)) return false;
+    if (asset.bucketId !== null && !bucketIds.has(asset.bucketId)) return false;
+    if (
+      !/^KRW-[A-Z0-9]{2,20}$/.test(asset.marketCode) ||
+      cryptoCodes.has(asset.marketCode)
+    )
+      return false;
+    if (
+      typeof asset.name !== "string" ||
+      !asset.name.trim() ||
+      asset.name.length > 100
+    )
+      return false;
+    if (
+      typeof asset.quantity !== "number" ||
+      !Number.isFinite(asset.quantity) ||
+      asset.quantity <= 0 ||
+      asset.quantity >= 1e12 ||
+      Math.round(asset.quantity * 1e12) !== asset.quantity * 1e12
+    )
+      return false;
+    assetIds.add(asset.id);
+    cryptoCodes.add(asset.marketCode);
+  }
+
   const holdingIds = new Set<string>();
   for (const assignment of input.assignments) {
     if (
@@ -197,7 +231,43 @@ export async function PUT(request: Request) {
         },
         { status: 400 },
       );
-    return NextResponse.json({ portfolio: await savePortfolio(userId, input) });
+    const existingCodes = new Set(await listCryptoAssets(userId));
+    const newCodes = input.cryptoAssets
+      .map((asset) => asset.marketCode)
+      .filter((code) => !existingCodes.has(code));
+    if (newCodes.length) {
+      const markets = new Map(
+        (await listKrwCryptoMarkets()).map((market) => [
+          market.marketCode,
+          market.name,
+        ]),
+      );
+      if (newCodes.some((code) => !markets.has(code)))
+        return NextResponse.json(
+          { message: "업비트에서 지원하는 원화마켓 코드를 선택해 주세요" },
+          { status: 400 },
+        );
+      input.cryptoAssets = input.cryptoAssets.map((asset) => ({
+        ...asset,
+        name: markets.get(asset.marketCode) ?? asset.name,
+      }));
+    }
+    let portfolio = await savePortfolio(userId, input);
+    let quoteWarning: string | null = null;
+    if (input.cryptoAssets.length) {
+      try {
+        const quotes = await refreshStoredCryptoQuotes(userId);
+        if (quotes.some((quote) => quote.price === null))
+          quoteWarning =
+            "포트폴리오는 저장했지만 일부 가상자산 시세는 확인하지 못했습니다. 마켓 코드를 확인해 주세요.";
+        await recordSnapshot(userId);
+        portfolio = await listPortfolio(userId);
+      } catch {
+        quoteWarning =
+          "포트폴리오는 저장했지만 가상자산 시세는 갱신하지 못했습니다. 가격 갱신을 다시 눌러 주세요.";
+      }
+    }
+    return NextResponse.json({ portfolio, quoteWarning });
   } catch (error) {
     return NextResponse.json(
       {

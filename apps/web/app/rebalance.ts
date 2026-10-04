@@ -253,15 +253,22 @@ export function rebalance(
         !bucketTrades.length)
     )
       advice = "허용 오차 안에 있습니다.";
-    else if (!advice)
-      advice =
-        mode === "add-only" && gapPercent < 0
-          ? "현재 수량 유지"
-          : plan.manualAssets.some((asset) => asset.bucketId === bucket.id)
-            ? "직접 입력 자산의 거래 금액을 검토하세요."
-            : mode === "trade" && gapPercent < 0
-              ? "매도 가능한 1주 단위가 없거나 제외된 종목입니다."
-              : "매수 자금·종목 가격·1주 단위를 확인하세요.";
+    else if (!advice) {
+      const crypto = plan.cryptoAssets.find(
+        (asset) => asset.bucketId === bucket.id && asset.quotedPriceKrw,
+      );
+      const gapKrw = (targetTotal * bucket.targetPercent) / 100 - current;
+      if (mode === "add-only" && gapKrw < 0) advice = "현재 수량 유지";
+      else if (crypto?.quotedPriceKrw) {
+        advice = `${crypto.marketCode} 약 ${fmt(Math.abs(gapKrw))} ${gapKrw > 0 ? "부족" : "초과"} · 거래소에서 수량 조정 검토 (미리보기 미반영)`;
+      } else if (
+        plan.manualAssets.some((asset) => asset.bucketId === bucket.id)
+      )
+        advice = "직접 입력 자산의 거래 금액을 검토하세요.";
+      else if (mode === "trade" && gapPercent < 0)
+        advice = "매도 가능한 1주 단위가 없거나 제외된 종목입니다.";
+      else advice = "매수 자금·종목 가격·1주 단위를 확인하세요.";
+    }
     return {
       bucket,
       current,

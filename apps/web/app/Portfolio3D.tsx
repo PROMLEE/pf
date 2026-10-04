@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Holding } from "./holdings";
 import {
+  cryptoAssetValueKrw,
   holdingValueKrw,
   portfolioValues,
   type Portfolio,
@@ -57,6 +58,26 @@ function chartItems(mode: Mode, portfolio: Portfolio, holdings: Holding[]) {
           : holding.market === "KR"
             ? "#5378ea"
             : "#21a99a",
+    });
+  }
+  for (const asset of portfolio.cryptoAssets) {
+    const key = mode === "broker" ? "crypto" : `crypto:${asset.marketCode}`;
+    const existing = groups.get(key);
+    groups.set(key, {
+      key,
+      name: mode === "broker" ? "가상자산" : asset.name,
+      value: (existing?.value ?? 0) + cryptoAssetValueKrw(asset),
+      color: "#d88975",
+    });
+  }
+  for (const asset of portfolio.manualAssets) {
+    const key = mode === "broker" ? "manual" : `manual:${asset.id}`;
+    const existing = groups.get(key);
+    groups.set(key, {
+      key,
+      name: mode === "broker" ? "직접 입력" : asset.name,
+      value: (existing?.value ?? 0) + asset.valueKrw,
+      color: "#9d7fa8",
     });
   }
   const sorted = [...groups.values()]
@@ -292,11 +313,14 @@ export default function Portfolio3D({ portfolio, holdings }: Props) {
                 </button>
               ))}
             </div>
-            {mode === "broker" && portfolio.manualAssets.length > 0 && (
-              <small className={styles.note}>
-                직접 입력 자산은 증권사별 분포에서 제외됩니다.
-              </small>
-            )}
+            {mode === "broker" &&
+              (portfolio.manualAssets.length > 0 ||
+                portfolio.cryptoAssets.length > 0) && (
+                <small className={styles.note}>
+                  직접 입력·가상자산은 보유 증권사 정보가 없어 별도로
+                  표시합니다.
+                </small>
+              )}
           </div>
         </div>
       ) : (

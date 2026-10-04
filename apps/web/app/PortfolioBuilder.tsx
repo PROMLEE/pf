@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Camera,
@@ -17,6 +17,7 @@ import PortfolioVisuals from "./PortfolioVisuals";
 import {
   EXAMPLE_BUCKETS,
   EXAMPLE_RULES,
+  cryptoAssetValueKrw,
   holdingValueKrw,
   portfolioValues,
   type Bucket,
@@ -32,6 +33,7 @@ type Candidate = {
   name: string;
   exchange: string | null;
 };
+type CryptoMarket = { marketCode: string; name: string; englishName: string };
 type Props = {
   holdings: Holding[];
   quoteVersion: number;
@@ -80,6 +82,7 @@ function emptyPortfolio(): Portfolio {
     buckets: [],
     rules: [],
     manualAssets: [],
+    cryptoAssets: [],
     assignments: [],
     snapshots: [],
     cashFlows: [],
@@ -167,6 +170,16 @@ export default function PortfolioBuilder({
   const [manualName, setManualName] = useState("");
   const [manualValue, setManualValue] = useState("");
   const [manualBucketId, setManualBucketId] = useState("");
+  const [cryptoQuery, setCryptoQuery] = useState("");
+  const [cryptoCandidates, setCryptoCandidates] = useState<CryptoMarket[]>([]);
+  const [cryptoSelected, setCryptoSelected] = useState<CryptoMarket | null>(
+    null,
+  );
+  const [cryptoQuantity, setCryptoQuantity] = useState("");
+  const [cryptoBucketId, setCryptoBucketId] = useState("");
+  const [lookingUpCrypto, setLookingUpCrypto] = useState(false);
+  const [cryptoRefreshError, setCryptoRefreshError] = useState("");
+  const cryptoRefreshInFlight = useRef(false);
   const [trendKey, setTrendKey] = useState("__TOTAL__");
   const [show3d, setShow3d] = useState(false);
   const [rebalanceMode, setRebalanceMode] = useState<"trade" | "add-only">(
@@ -212,6 +225,59 @@ export default function PortfolioBuilder({
       active = false;
     };
   }, [quoteVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hasCryptoAssets = Boolean(draft?.cryptoAssets.length);
+  useEffect(() => {
+    if (!hasCryptoAssets || dirty) return;
+    let active = true;
+    async function refreshCrypto() {
+      if (
+        document.visibilityState !== "visible" ||
+        cryptoRefreshInFlight.current
+      )
+        return;
+      cryptoRefreshInFlight.current = true;
+      try {
+        const response = await fetch("/api/crypto/quotes", { method: "POST" });
+        const payload = (await response.json()) as {
+          portfolio?: Portfolio;
+          quotes?: { price: number | null }[];
+          message?: string;
+        };
+        if (!response.ok || !payload.portfolio)
+          throw new Error(payload.message || "업비트 시세 조회 실패");
+        if (active) {
+          setDraft(payload.portfolio);
+          setCryptoRefreshError(
+            payload.quotes?.some((quote) => quote.price === null)
+              ? "일부 업비트 시세를 확인하지 못했습니다"
+              : "",
+          );
+        }
+      } catch (error) {
+        if (active)
+          setCryptoRefreshError(
+            error instanceof Error ? error.message : "업비트 시세 조회 실패",
+          );
+      } finally {
+        cryptoRefreshInFlight.current = false;
+      }
+    }
+    const latest = draft?.cryptoAssets
+      .map((asset) => asset.quoteCheckedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1);
+    if (!latest || Date.now() - Date.parse(latest) > 60_000)
+      void refreshCrypto();
+    const timer = window.setInterval(() => {
+      void refreshCrypto();
+    }, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [hasCryptoAssets, dirty]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function change(next: Portfolio) {
     setDraft(next);
@@ -279,6 +345,9 @@ export default function PortfolioBuilder({
       buckets: draft.buckets.filter((bucket) => bucket.id !== id),
       rules: draft.rules.filter((rule) => rule.bucketId !== id),
       manualAssets: draft.manualAssets.map((asset) =>
+        asset.bucketId === id ? { ...asset, bucketId: null } : asset,
+      ),
+      cryptoAssets: draft.cryptoAssets.map((asset) =>
         asset.bucketId === id ? { ...asset, bucketId: null } : asset,
       ),
       assignments: draft.assignments.map((assignment) =>
@@ -390,6 +459,82 @@ export default function PortfolioBuilder({
     setManualName("");
     setManualValue("");
   }
+  async function lookupCrypto() {
+    if (!cryptoQuery.trim())
+      return onNotice("가상자산명이나 코드를 입력해 주세요.");
+    setLookingUpCrypto(true);
+    try {
+      const response = await fetch(
+        `/api/crypto/markets?query=${encodeURIComponent(cryptoQuery.trim())}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json()) as {
+        markets?: CryptoMarket[];
+        message?: string;
+      };
+      if (!response.ok)
+        throw new Error(payload.message || "원화마켓을 찾지 못했습니다.");
+      setCryptoCandidates(payload.markets ?? []);
+      if (!payload.markets?.length)
+        onNotice("일치하는 업비트 원화마켓이 없습니다.");
+    } catch (error) {
+      onNotice(
+        error instanceof Error ? error.message : "원화마켓을 찾지 못했습니다.",
+      );
+    } finally {
+      setLookingUpCrypto(false);
+    }
+  }
+  function addCryptoAsset() {
+    if (!draft || !cryptoSelected)
+      return onNotice("업비트 원화마켓을 먼저 선택해 주세요.");
+    const quantity = Number(cryptoQuantity);
+    if (
+      !Number.isFinite(quantity) ||
+      quantity <= 0 ||
+      quantity >= 1e12 ||
+      Math.round(quantity * 1e12) !== quantity * 1e12
+    )
+      return onNotice("보유 수량을 소수점 12자리 이내로 입력해 주세요.");
+    if (
+      draft.cryptoAssets.some(
+        (asset) => asset.marketCode === cryptoSelected.marketCode,
+      )
+    )
+      return onNotice(
+        "같은 가상자산은 한 번만 등록할 수 있습니다. 기존 수량을 수정해 주세요.",
+      );
+    const bucketId =
+      cryptoBucketId ||
+      draft.buckets.find((bucket) =>
+        /비트코인|가상자산|코인/i.test(bucket.name),
+      )?.id ||
+      draft.buckets[0]?.id ||
+      null;
+    change({
+      ...draft,
+      cryptoAssets: [
+        ...draft.cryptoAssets,
+        {
+          id: crypto.randomUUID(),
+          bucketId,
+          marketCode: cryptoSelected.marketCode,
+          name: cryptoSelected.name,
+          quantity,
+          quotedPriceKrw: null,
+          quoteCheckedAt: null,
+          lastTradeAt: null,
+        },
+      ],
+    });
+    setCryptoSelected(null);
+    setCryptoQuery("");
+    setCryptoQuantity("");
+    setCryptoCandidates([]);
+    onNotice(
+      "가상자산을 추가했습니다. 저장하면 업비트 원화 시세를 조회합니다.",
+    );
+  }
   function assign(holdingId: string, value: string) {
     if (!draft) return;
     const next = draft.assignments.filter(
@@ -422,6 +567,7 @@ export default function PortfolioBuilder({
       const payload = (await response.json()) as {
         portfolio?: Portfolio;
         message?: string;
+        quoteWarning?: string | null;
       };
       if (!response.ok || !payload.portfolio)
         throw new Error(payload.message || "저장하지 못했습니다.");
@@ -434,7 +580,9 @@ export default function PortfolioBuilder({
         onHoldings(
           ((await holdingsResponse.json()) as { holdings: Holding[] }).holdings,
         );
-      onNotice("포트폴리오와 오늘의 평가액을 저장했습니다.");
+      onNotice(
+        payload.quoteWarning ?? "포트폴리오와 오늘의 평가액을 저장했습니다.",
+      );
     } catch (error) {
       onNotice(
         error instanceof Error
@@ -712,7 +860,8 @@ export default function PortfolioBuilder({
             </span>
           </div>
           <span>
-            {holdings.length}개 보유 항목 · {draft.buckets.length}개 포트
+            {holdings.length + draft.cryptoAssets.length}개 보유 항목 ·{" "}
+            {draft.buckets.length}개 포트
             {(values?.unassigned ?? 0) > 0
               ? ` · 미분류 ${fmt(values?.unassigned ?? 0)}`
               : ""}
@@ -737,8 +886,29 @@ export default function PortfolioBuilder({
           수동 환율 USD {won.format(draft.usdKrw)}원 ·{" "}
           {timeLabel(draft.usdKrwUpdatedAt)}
         </span>
+        {draft.cryptoAssets.length > 0 && (
+          <span>
+            업비트 원화 시세{" "}
+            {
+              draft.cryptoAssets.filter(
+                (asset) => asset.quotedPriceKrw !== null,
+              ).length
+            }
+            /{draft.cryptoAssets.length}개 · 최근 조회{" "}
+            {timeLabel(
+              draft.cryptoAssets
+                .map((asset) => asset.quoteCheckedAt)
+                .filter((value): value is string => Boolean(value))
+                .sort()
+                .at(-1) ?? null,
+            )}
+          </span>
+        )}
+        {cryptoRefreshError && (
+          <em>{cryptoRefreshError} · 마지막 저장 가격을 표시 중</em>
+        )}
         {(values?.missingPrices ?? 0) > 0 && (
-          <em>가격 없는 종목 {values?.missingPrices}개는 평가액에서 제외</em>
+          <em>가격 없는 자산 {values?.missingPrices}개는 평가액에서 제외</em>
         )}
       </div>
 
@@ -1050,8 +1220,8 @@ export default function PortfolioBuilder({
             <h2>내 자산 배정</h2>
           </div>
           <span className={styles.collapseMeta}>
-            {holdings.length}개 보유 · 직접 입력 {draft.manualAssets.length}개{" "}
-            <ChevronDown size={16} />
+            주식 {holdings.length}개 · 가상자산 {draft.cryptoAssets.length}개 ·
+            직접 입력 {draft.manualAssets.length}개 <ChevronDown size={16} />
           </span>
         </summary>
         <div className={styles.assignmentActions}>
@@ -1113,9 +1283,176 @@ export default function PortfolioBuilder({
           </p>
         )}
         <div className={styles.subHead}>
-          <h3>직접 입력 자산</h3>
-          <small>비트코인·현금 등 증권사 캡처에 없는 자산</small>
+          <h3>가상자산 · 업비트 원화 시세</h3>
+          <small>
+            원화마켓 코드와 보유 수량을 등록하면 가격 갱신 시 평가액을
+            계산합니다.
+          </small>
         </div>
+        <div className={styles.cryptoSearch}>
+          <input
+            value={cryptoQuery}
+            onChange={(event) => setCryptoQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") lookupCrypto();
+            }}
+            placeholder="비트코인 또는 KRW-BTC 검색"
+            aria-label="가상자산 원화마켓 검색"
+          />
+          <button
+            type="button"
+            onClick={lookupCrypto}
+            disabled={lookingUpCrypto}
+          >
+            <Search size={15} /> {lookingUpCrypto ? "검색 중" : "검색"}
+          </button>
+        </div>
+        {cryptoCandidates.length > 0 && (
+          <div className={styles.cryptoCandidates}>
+            {cryptoCandidates.map((market) => (
+              <button
+                key={market.marketCode}
+                type="button"
+                onClick={() => {
+                  setCryptoSelected(market);
+                  setCryptoCandidates([]);
+                }}
+              >
+                <strong>{market.name}</strong>
+                <span>
+                  {market.marketCode} · {market.englishName}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className={styles.cryptoForm}>
+          <span className={styles.cryptoSelection}>
+            {cryptoSelected
+              ? `${cryptoSelected.name} · ${cryptoSelected.marketCode}`
+              : "마켓을 검색해 선택"}
+          </span>
+          <input
+            type="number"
+            min="0"
+            max="999999999999"
+            step="0.000000000001"
+            value={cryptoQuantity}
+            onChange={(event) => setCryptoQuantity(event.target.value)}
+            placeholder="보유 수량"
+            aria-label="가상자산 보유 수량"
+          />
+          <select
+            value={
+              cryptoBucketId ||
+              draft.buckets.find((bucket) =>
+                /비트코인|가상자산|코인/i.test(bucket.name),
+              )?.id ||
+              draft.buckets[0]?.id ||
+              ""
+            }
+            onChange={(event) => setCryptoBucketId(event.target.value)}
+            aria-label="가상자산 포트"
+          >
+            {draft.buckets.map((bucket) => (
+              <option key={bucket.id} value={bucket.id}>
+                {bucket.name}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={addCryptoAsset}>
+            <Plus size={15} /> 추가
+          </button>
+        </div>
+        {draft.cryptoAssets.map((asset) => (
+          <div className={styles.cryptoRow} key={asset.id}>
+            <div>
+              <strong>{asset.name}</strong>
+              <small>
+                {asset.marketCode} · 업비트{" "}
+                {asset.quotedPriceKrw === null
+                  ? "시세 미확인"
+                  : `현재가 ${fmt(asset.quotedPriceKrw)}`}
+              </small>
+              <small>
+                조회 {timeLabel(asset.quoteCheckedAt)}
+                {asset.lastTradeAt
+                  ? ` · 마지막 체결 ${timeLabel(asset.lastTradeAt)}`
+                  : ""}
+              </small>
+            </div>
+            <input
+              type="number"
+              min="0"
+              max="999999999999"
+              step="0.000000000001"
+              value={asset.quantity}
+              aria-label={`${asset.name} 보유 수량`}
+              onChange={(event) =>
+                change({
+                  ...draft,
+                  cryptoAssets: draft.cryptoAssets.map((item) =>
+                    item.id === asset.id
+                      ? { ...item, quantity: Number(event.target.value) }
+                      : item,
+                  ),
+                })
+              }
+            />
+            <select
+              value={asset.bucketId ?? ""}
+              aria-label={`${asset.name} 포트`}
+              onChange={(event) =>
+                change({
+                  ...draft,
+                  cryptoAssets: draft.cryptoAssets.map((item) =>
+                    item.id === asset.id
+                      ? { ...item, bucketId: event.target.value || null }
+                      : item,
+                  ),
+                })
+              }
+            >
+              <option value="">미분류</option>
+              {draft.buckets.map((bucket) => (
+                <option key={bucket.id} value={bucket.id}>
+                  {bucket.name}
+                </option>
+              ))}
+            </select>
+            <b>
+              {asset.quotedPriceKrw === null
+                ? "가격 미확인"
+                : fmt(cryptoAssetValueKrw(asset))}
+            </b>
+            <button
+              className={styles.iconButton}
+              aria-label={`${asset.name} 삭제`}
+              onClick={() =>
+                change({
+                  ...draft,
+                  cryptoAssets: draft.cryptoAssets.filter(
+                    (item) => item.id !== asset.id,
+                  ),
+                })
+              }
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        ))}
+        <div className={styles.subHead}>
+          <h3>기타 직접 입력 자산</h3>
+          <small>현금·RP 등 원화 평가액을 직접 관리하는 자산</small>
+        </div>
+        {draft.manualAssets.some((asset) =>
+          /비트코인|bitcoin|BTC/i.test(asset.name),
+        ) && (
+          <p className={styles.help}>
+            기존 비트코인 직접 입력 금액은 자동 시세와 별개입니다. 수량을 등록한
+            뒤 중복 합산되지 않도록 기존 금액을 확인해 주세요.
+          </p>
+        )}
         <div className={styles.manualForm}>
           <input
             value={manualName}
@@ -1343,12 +1680,18 @@ export default function PortfolioBuilder({
                 건 매도
               </span>
               <span>
-                남는 자금 약 {fmt(advice.residualCash)}
+                주식 제안 후 남는 자금 약 {fmt(advice.residualCash)}
                 {advice.projectedUnassignedPercent > 0
                   ? ` · 전체의 ${pct(advice.projectedUnassignedPercent)}`
                   : ""}
               </span>
             </div>
+            {draft.cryptoAssets.length > 0 && (
+              <p className={styles.help}>
+                가상자산 수량 조정은 직접 검토 항목이며 조정 후 예상 비중·잔여
+                자금에는 반영하지 않습니다.
+              </p>
+            )}
           </>
         )}
       </section>

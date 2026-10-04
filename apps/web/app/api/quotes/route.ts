@@ -4,9 +4,11 @@ import { kisConfigured, quoteKis } from "../../../lib/kis";
 import { listHoldings, setQuote } from "../../../lib/holdings-db";
 import {
   listRules,
+  listCryptoAssets,
   recordSnapshot,
   setRuleQuote,
 } from "../../../lib/portfolio-db";
+import { refreshStoredCryptoQuotes } from "../../../lib/upbit";
 
 export const runtime = "nodejs";
 
@@ -34,17 +36,16 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
-  if (!kisConfigured()) {
-    return NextResponse.json(
-      {
-        message:
-          "한국투자증권 API 설정이 필요합니다. apps/web/.env.local을 확인하세요.",
-      },
-      { status: 503 },
-    );
-  }
-
   try {
+    const cryptoCodes = await listCryptoAssets(userId);
+    if (!kisConfigured() && !cryptoCodes.length)
+      return NextResponse.json(
+        {
+          message:
+            "조회할 시세가 없습니다. KIS API 설정이나 가상자산 보유 항목을 확인해 주세요.",
+        },
+        { status: 503 },
+      );
     const holdings = (await listHoldings(userId)).filter(
       (row) =>
         (row.market === "KR" && /^[0-9A-Z]{6}$/.test(row.symbol)) ||
@@ -70,38 +71,62 @@ export async function POST(request: Request) {
         ]),
       ).values(),
     );
-    if (unique.length > 30) {
+    if (kisConfigured() && unique.length > 30) {
       return NextResponse.json(
         { message: "종목은 한 번에 30개까지 조회할 수 있습니다" },
         { status: 400 },
       );
     }
 
-    const quotes = [];
-    for (const row of unique) {
-      const quote = await quoteKis(
-        row.market,
-        row.symbol,
-        row.exchange ?? null,
-      );
-      quotes.push(quote);
-      if (quote.price !== null && quote.checkedAt) {
-        await setQuote(
-          userId,
-          row.market,
-          row.symbol,
-          row.exchange ?? null,
-          quote.price,
-          quote.label,
-          quote.checkedAt,
-        );
-        await setRuleQuote(
-          userId,
-          row.market,
-          row.symbol,
-          quote.price,
-          quote.checkedAt,
-        );
+    const quotes: { price: number | null; error?: string }[] = [];
+    if (kisConfigured()) {
+      for (const row of unique) {
+        try {
+          const quote = await quoteKis(
+            row.market,
+            row.symbol,
+            row.exchange ?? null,
+          );
+          quotes.push(quote);
+          if (quote.price !== null && quote.checkedAt) {
+            await setQuote(
+              userId,
+              row.market,
+              row.symbol,
+              row.exchange ?? null,
+              quote.price,
+              quote.label,
+              quote.checkedAt,
+            );
+            await setRuleQuote(
+              userId,
+              row.market,
+              row.symbol,
+              quote.price,
+              quote.checkedAt,
+            );
+          }
+        } catch {
+          quotes.push({
+            price: null,
+            error: `${row.symbol} 시세를 가져오지 못했습니다.`,
+          });
+        }
+      }
+    } else if (unique.length) {
+      quotes.push({
+        price: null,
+        error: "주식 가격은 KIS API 설정 후 갱신할 수 있습니다.",
+      });
+    }
+    if (cryptoCodes.length) {
+      try {
+        quotes.push(...(await refreshStoredCryptoQuotes(userId)));
+      } catch {
+        quotes.push({
+          price: null,
+          error: "업비트 원화 시세를 가져오지 못했습니다.",
+        });
       }
     }
     await recordSnapshot(userId);

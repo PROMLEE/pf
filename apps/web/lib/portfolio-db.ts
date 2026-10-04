@@ -3,6 +3,7 @@ import type {
   Assignment,
   Bucket,
   CashFlow,
+  CryptoAsset,
   ManualAsset,
   Portfolio,
   Rule,
@@ -46,6 +47,16 @@ type ManualRow = {
   name: string;
   value_krw: string;
 };
+type CryptoRow = {
+  id: string;
+  bucket_id: string | null;
+  market_code: string;
+  name: string;
+  quantity: string;
+  quoted_price_krw: string | null;
+  quote_checked_at: Date | null;
+  last_trade_at: Date | null;
+};
 type AssignmentRow = {
   id: string;
   bucket_id: string | null;
@@ -79,6 +90,11 @@ export async function listPortfolio(
   );
   const manualAssets = await client.query<ManualRow>(
     `select id, bucket_id, name, value_krw from portfolio.manual_assets where user_id = $1 order by name`,
+    [userId],
+  );
+  const cryptoAssets = await client.query<CryptoRow>(
+    `select id, bucket_id, market_code, name, quantity, quoted_price_krw, quote_checked_at, last_trade_at
+       from portfolio.crypto_assets where user_id = $1 order by name`,
     [userId],
   );
   const assignments = await client.query<AssignmentRow>(
@@ -128,6 +144,19 @@ export async function listPortfolio(
         bucketId: row.bucket_id,
         name: row.name,
         valueKrw: Number(row.value_krw),
+      }),
+    ),
+    cryptoAssets: cryptoAssets.rows.map(
+      (row): CryptoAsset => ({
+        id: row.id,
+        bucketId: row.bucket_id,
+        marketCode: row.market_code,
+        name: row.name,
+        quantity: Number(row.quantity),
+        quotedPriceKrw:
+          row.quoted_price_krw === null ? null : Number(row.quoted_price_krw),
+        quoteCheckedAt: row.quote_checked_at?.toISOString() ?? null,
+        lastTradeAt: row.last_trade_at?.toISOString() ?? null,
       }),
     ),
     assignments: assignments.rows.map(
@@ -182,8 +211,25 @@ export async function savePortfolio(userId: string, input: Portfolio) {
     const prices = new Map(
       previousPrices.rows.map((row) => [`${row.market}:${row.symbol}`, row]),
     );
+    const previousCrypto = await client.query<{
+      market_code: string;
+      quoted_price_krw: string | null;
+      quote_checked_at: Date | null;
+      last_trade_at: Date | null;
+    }>(
+      `select market_code, quoted_price_krw, quote_checked_at, last_trade_at
+       from portfolio.crypto_assets where user_id = $1`,
+      [userId],
+    );
+    const cryptoPrices = new Map(
+      previousCrypto.rows.map((row) => [row.market_code, row]),
+    );
     await client.query(
       `delete from portfolio.manual_assets where user_id = $1`,
+      [userId],
+    );
+    await client.query(
+      `delete from portfolio.crypto_assets where user_id = $1`,
       [userId],
     );
     await client.query(
@@ -252,6 +298,25 @@ export async function savePortfolio(userId: string, input: Portfolio) {
         [asset.id, userId, asset.bucketId, asset.name, asset.valueKrw],
       );
     }
+    for (const asset of input.cryptoAssets) {
+      const previous = cryptoPrices.get(asset.marketCode);
+      await client.query(
+        `insert into portfolio.crypto_assets
+         (id, user_id, bucket_id, market_code, name, quantity, quoted_price_krw, quote_checked_at, last_trade_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          asset.id,
+          userId,
+          asset.bucketId,
+          asset.marketCode,
+          asset.name,
+          asset.quantity,
+          previous?.quoted_price_krw ?? null,
+          previous?.quote_checked_at ?? null,
+          previous?.last_trade_at ?? null,
+        ],
+      );
+    }
     await recordSnapshot(userId, client);
     const saved = await listPortfolio(userId, client);
     await client.query("commit");
@@ -304,6 +369,29 @@ export async function listRules(userId: string) {
   return result.rows;
 }
 
+export async function listCryptoAssets(userId: string) {
+  const result = await db().query<{ market_code: string }>(
+    `select market_code from portfolio.crypto_assets where user_id = $1 order by market_code`,
+    [userId],
+  );
+  return result.rows.map((row) => row.market_code);
+}
+
+export async function setCryptoQuote(
+  userId: string,
+  marketCode: string,
+  priceKrw: number,
+  checkedAt: string,
+  lastTradeAt: string | null,
+) {
+  await db().query(
+    `update portfolio.crypto_assets
+     set quoted_price_krw = $3, quote_checked_at = $4, last_trade_at = $5, updated_at = now()
+     where user_id = $1 and market_code = $2`,
+    [userId, marketCode, priceKrw, checkedAt, lastTradeAt],
+  );
+}
+
 export async function setRuleQuote(
   userId: string,
   market: "KR" | "US",
@@ -350,6 +438,14 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
     `select bucket_id, value_krw from portfolio.manual_assets where user_id = $1`,
     [userId],
   );
+  const cryptoAssets = await client.query<{
+    bucket_id: string | null;
+    quantity: string;
+    quoted_price_krw: string | null;
+  }>(
+    `select bucket_id, quantity, quoted_price_krw from portfolio.crypto_assets where user_id = $1`,
+    [userId],
+  );
   const values = new Map<string, number>(
     buckets.rows.map((row) => [row.id, 0]),
   );
@@ -368,6 +464,11 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
   }
   for (const row of manualAssets.rows)
     add(row.bucket_id, Number(row.value_krw));
+  for (const row of cryptoAssets.rows)
+    add(
+      row.bucket_id,
+      Number(row.quantity) * Number(row.quoted_price_krw ?? 0),
+    );
   values.set(
     "__TOTAL__",
     [...values.values()].reduce((sum, value) => sum + value, 0),

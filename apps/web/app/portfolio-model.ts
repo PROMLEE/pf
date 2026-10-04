@@ -26,6 +26,17 @@ export type ManualAsset = {
   valueKrw: number;
 };
 
+export type CryptoAsset = {
+  id: string;
+  bucketId: string | null;
+  marketCode: string;
+  name: string;
+  quantity: number;
+  quotedPriceKrw: number | null;
+  quoteCheckedAt: string | null;
+  lastTradeAt: string | null;
+};
+
 export type Assignment = {
   holdingId: string;
   bucketId: string | null;
@@ -55,6 +66,7 @@ export type Portfolio = {
   buckets: Bucket[];
   rules: Rule[];
   manualAssets: ManualAsset[];
+  cryptoAssets: CryptoAsset[];
   assignments: Assignment[];
   snapshots: Snapshot[];
   cashFlows: CashFlow[];
@@ -64,6 +76,10 @@ export function holdingValueKrw(holding: Holding, usdKrw: number) {
   const price = holding.currentPrice ?? holding.capturedPrice;
   if (price === null) return 0;
   return holding.quantity * price * (holding.market === "US" ? usdKrw : 1);
+}
+
+export function cryptoAssetValueKrw(asset: CryptoAsset) {
+  return asset.quantity * (asset.quotedPriceKrw ?? 0);
 }
 
 export function portfolioValues(portfolio: Portfolio, holdings: Holding[]) {
@@ -102,6 +118,15 @@ export function portfolioValues(portfolio: Portfolio, holdings: Holding[]) {
       );
     } else {
       unassigned += asset.valueKrw;
+    }
+  }
+  for (const asset of portfolio.cryptoAssets) {
+    if (asset.quotedPriceKrw === null) missingPrices++;
+    const value = cryptoAssetValueKrw(asset);
+    if (asset.bucketId && values.has(asset.bucketId)) {
+      values.set(asset.bucketId, (values.get(asset.bucketId) ?? 0) + value);
+    } else {
+      unassigned += value;
     }
   }
   const total =
