@@ -127,15 +127,18 @@ export async function refreshStoredCryptoQuotes(userId: string) {
   const { listCryptoAssets, setCryptoQuote } = await import("./portfolio-db");
   const codes = await listCryptoAssets(userId);
   const quotes = await quoteKrwCryptoMarkets(codes);
-  for (const quote of quotes) {
-    if (quote.price !== null && quote.checkedAt)
-      await setCryptoQuote(
-        userId,
-        quote.marketCode,
-        quote.price,
-        quote.checkedAt,
-        quote.lastTradeAt,
-      );
-  }
+  await Promise.all(
+    quotes.map((quote) =>
+      quote.price !== null && quote.checkedAt
+        ? setCryptoQuote(
+            userId,
+            quote.marketCode,
+            quote.price,
+            quote.checkedAt,
+            quote.lastTradeAt,
+          )
+        : Promise.resolve(),
+    ),
+  );
   return quotes;
 }

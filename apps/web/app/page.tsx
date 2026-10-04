@@ -1,6 +1,13 @@
 "use client";
 
-import { ChangeEvent, Fragment, useEffect, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
   ArrowRight,
@@ -82,6 +89,8 @@ export default function PortfolioPage() {
   const [captureName, setCaptureName] = useState("");
   const [busy, setBusy] = useState(false);
   const [quoteBusy, setQuoteBusy] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
+  const quoteInFlight = useRef(false);
   const [quoteVersion, setQuoteVersion] = useState(0);
   const [filter, setFilter] = useState<"ALL" | Market>("ALL");
   const [search, setSearch] = useState("");
@@ -514,9 +523,20 @@ export default function PortfolioPage() {
     }
   }
 
-  async function refreshQuotes() {
+  async function refreshQuotes(silent = false) {
+    if (quoteInFlight.current) return;
+    quoteInFlight.current = true;
+    try {
+      sessionStorage.setItem(
+        `pf-quote-refresh:${session?.user?.appUserId ?? "account"}`,
+        String(Date.now()),
+      );
+    } catch {
+      // Private browsing may disable storage; the in-flight guard still applies.
+    }
     setQuoteBusy(true);
-    setNotice("시세를 조회하는 중입니다.");
+    setQuoteError("");
+    if (!silent) setNotice("시세를 조회하는 중입니다.");
     try {
       const result = await data<{
         holdings: Holding[];
@@ -528,17 +548,46 @@ export default function PortfolioPage() {
         (quote) => quote.price !== null,
       ).length;
       const firstError = result.quotes.find((quote) => quote.error)?.error;
-      setNotice(
-        `${count}개 자산의 시세를 갱신했습니다.${result.quotes.length > count ? ` ${result.quotes.length - count}개는 조회되지 않았습니다.` : ""}${firstError ? ` ${firstError}` : ""}`,
-      );
+      if (firstError) setQuoteError(firstError);
+      if (!silent)
+        setNotice(
+          `${count}개 자산의 시세를 갱신했습니다.${result.quotes.length > count ? ` ${result.quotes.length - count}개는 조회되지 않았습니다.` : ""}${firstError ? ` ${firstError}` : ""}`,
+        );
     } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : "시세를 조회하지 못했습니다.",
-      );
+      const message =
+        error instanceof Error ? error.message : "시세를 조회하지 못했습니다.";
+      setQuoteError(message);
+      if (!silent) setNotice(message);
     } finally {
       setQuoteBusy(false);
+      quoteInFlight.current = false;
     }
   }
+
+  useEffect(() => {
+    if (
+      authStatus !== "authenticated" ||
+      !holdings.length ||
+      (view !== "portfolio" && view !== "holdings")
+    )
+      return;
+    const key = `pf-quote-refresh:${session?.user?.appUserId ?? "account"}`;
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== "visible" || quoteInFlight.current)
+        return;
+      const last = Number(sessionStorage.getItem(key) ?? 0);
+      if (Date.now() - last < 5 * 60 * 1000) return;
+      sessionStorage.setItem(key, String(Date.now()));
+      void refreshQuotes(true);
+    };
+    refreshWhenVisible();
+    const timer = window.setInterval(refreshWhenVisible, 60_000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [authStatus, holdings.length, session?.user?.appUserId, view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function migrateLegacy() {
     setBusy(true);
@@ -808,6 +857,7 @@ export default function PortfolioPage() {
             ] as View[]
           ).includes(view) && (
             <PortfolioBuilder
+              userId={session.user?.appUserId ?? "account"}
               screen={
                 view === "portfolio"
                   ? "dashboard"
@@ -822,6 +872,8 @@ export default function PortfolioPage() {
               onHoldings={setHoldings}
               onNotice={setNotice}
               onRefreshQuotes={refreshQuotes}
+              quotesRefreshing={quoteBusy}
+              quoteError={quoteError}
               onImport={() => go("import")}
               onEditHoldings={() => go("edit")}
               onNavigate={go}

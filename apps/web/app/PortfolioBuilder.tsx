@@ -36,13 +36,17 @@ type Candidate = {
   exchange: string | null;
 };
 type CryptoMarket = { marketCode: string; name: string; englishName: string };
+const portfolioCache = new Map<string, Portfolio | null>();
 type Props = {
+  userId: string;
   screen: "dashboard" | "strategy" | "allocation" | "rebalance" | "history";
   holdings: Holding[];
   quoteVersion: number;
   onHoldings: (rows: Holding[]) => void;
   onNotice: (message: string) => void;
   onRefreshQuotes: () => Promise<void>;
+  quotesRefreshing: boolean;
+  quoteError: string;
   onImport: () => void;
   onEditHoldings: () => void;
   onNavigate: (
@@ -159,23 +163,30 @@ function Trend({
 }
 
 export default function PortfolioBuilder({
+  userId,
   screen,
   holdings,
   quoteVersion,
   onHoldings,
   onNotice,
   onRefreshQuotes,
+  quotesRefreshing,
+  quoteError,
   onImport,
   onEditHoldings,
   onNavigate,
   onDirtyChange,
 }: Props) {
-  const [draft, setDraft] = useState<Portfolio | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState<Portfolio | null>(
+    () => portfolioCache.get(userId) ?? null,
+  );
+  const [loading, setLoading] = useState(() => !portfolioCache.has(userId));
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [dirty, setDirty] = useState(false);
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
   const [ruleMarket, setRuleMarket] = useState<Market>("KR");
   const [ruleQuery, setRuleQuery] = useState("");
   const [ruleBucketId, setRuleBucketId] = useState("");
@@ -195,7 +206,12 @@ export default function PortfolioBuilder({
   const [cryptoBucketId, setCryptoBucketId] = useState("");
   const [lookingUpCrypto, setLookingUpCrypto] = useState(false);
   const [cryptoRefreshError, setCryptoRefreshError] = useState("");
+  const [fxRefreshError, setFxRefreshError] = useState("");
   const cryptoRefreshInFlight = useRef(false);
+  const lastCryptoFetchAt = useRef(0);
+  useEffect(() => {
+    if (quotesRefreshing) lastCryptoFetchAt.current = Date.now();
+  }, [quotesRefreshing]);
   const [trendKey, setTrendKey] = useState("__TOTAL__");
   const [show3d, setShow3d] = useState(false);
   const [rebalanceMode, setRebalanceMode] = useState<"trade" | "add-only">(
@@ -226,7 +242,56 @@ export default function PortfolioBuilder({
         return payload.portfolio ?? null;
       })
       .then((portfolio) => {
-        if (active && !dirty) setDraft(portfolio);
+        if (active && !dirtyRef.current) {
+          portfolioCache.set(userId, portfolio);
+          setDraft(portfolio);
+        }
+        if (active && portfolio?.usdKrwMode === "auto") {
+          const lastCheck = Number(
+            sessionStorage.getItem("pf-fx-check-at") ?? 0,
+          );
+          if (Date.now() - lastCheck >= 60 * 60 * 1000) {
+            sessionStorage.setItem("pf-fx-check-at", String(Date.now()));
+            void fetch("/api/portfolio/fx", { method: "POST" })
+              .then(async (response) => {
+                if (!response.ok) throw new Error("환율 자동 갱신 실패");
+                return (await response.json()) as {
+                  fx?: {
+                    rate: number;
+                    rateDate: string | null;
+                    updatedAt: string | null;
+                  } | null;
+                };
+              })
+              .then((result) => {
+                if (!active || dirtyRef.current || !result?.fx) return;
+                const fx = result.fx;
+                setFxRefreshError("");
+                const cached = portfolioCache.get(userId);
+                if (cached?.usdKrwMode === "auto")
+                  portfolioCache.set(userId, {
+                    ...cached,
+                    usdKrw: fx.rate,
+                    usdKrwUpdatedAt: fx.updatedAt,
+                    usdKrwRateDate: fx.rateDate,
+                  });
+                setDraft((current) =>
+                  current?.usdKrwMode === "auto"
+                    ? {
+                        ...current,
+                        usdKrw: fx.rate,
+                        usdKrwUpdatedAt: fx.updatedAt,
+                        usdKrwRateDate: fx.rateDate,
+                      }
+                    : current,
+                );
+              })
+              .catch(() => {
+                if (active)
+                  setFxRefreshError("환율 갱신 실패 · 마지막 저장 환율 적용");
+              });
+          }
+        }
       })
       .catch((error) => {
         if (active)
@@ -246,26 +311,53 @@ export default function PortfolioBuilder({
 
   const hasCryptoAssets = Boolean(draft?.cryptoAssets.length);
   useEffect(() => {
-    if (!hasCryptoAssets || dirty) return;
+    if (!hasCryptoAssets || dirty || screen !== "dashboard") return;
     let active = true;
     async function refreshCrypto() {
       if (
         document.visibilityState !== "visible" ||
-        cryptoRefreshInFlight.current
+        quotesRefreshing ||
+        cryptoRefreshInFlight.current ||
+        Date.now() - lastCryptoFetchAt.current < 55_000
       )
         return;
       cryptoRefreshInFlight.current = true;
+      lastCryptoFetchAt.current = Date.now();
       try {
         const response = await fetch("/api/crypto/quotes", { method: "POST" });
         const payload = (await response.json()) as {
-          portfolio?: Portfolio;
-          quotes?: { price: number | null }[];
+          quotes?: {
+            marketCode: string;
+            price: number | null;
+            checkedAt: string | null;
+            lastTradeAt: string | null;
+          }[];
           message?: string;
         };
-        if (!response.ok || !payload.portfolio)
+        if (!response.ok || !payload.quotes)
           throw new Error(payload.message || "빗썸 시세 조회 실패");
         if (active) {
-          setDraft(payload.portfolio);
+          const byCode = new Map(
+            payload.quotes.map((quote) => [quote.marketCode, quote]),
+          );
+          setDraft((current) =>
+            current
+              ? {
+                  ...current,
+                  cryptoAssets: current.cryptoAssets.map((asset) => {
+                    const quote = byCode.get(asset.marketCode);
+                    return quote?.price === null || !quote
+                      ? asset
+                      : {
+                          ...asset,
+                          quotedPriceKrw: quote.price,
+                          quoteCheckedAt: quote.checkedAt,
+                          lastTradeAt: quote.lastTradeAt,
+                        };
+                  }),
+                }
+              : current,
+          );
           setCryptoRefreshError(
             payload.quotes?.some((quote) => quote.price === null)
               ? "일부 빗썸 시세를 확인하지 못했습니다"
@@ -289,7 +381,7 @@ export default function PortfolioBuilder({
       active = false;
       window.clearInterval(timer);
     };
-  }, [hasCryptoAssets, dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasCryptoAssets, dirty, quotesRefreshing, screen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function change(next: Portfolio) {
     setDraft(next);
@@ -584,6 +676,7 @@ export default function PortfolioBuilder({
       if (!response.ok || !payload.portfolio)
         throw new Error(payload.message || "저장하지 못했습니다.");
       setDraft(payload.portfolio);
+      portfolioCache.set(userId, payload.portfolio);
       setDirty(false);
       const holdingsResponse = await fetch("/api/holdings", {
         cache: "no-store",
@@ -617,6 +710,7 @@ export default function PortfolioBuilder({
       if (!response.ok || !payload.portfolio)
         throw new Error(payload.message || "기록하지 못했습니다.");
       setDraft(payload.portfolio);
+      portfolioCache.set(userId, payload.portfolio);
       onNotice("오늘의 자산 평가액을 기록했습니다.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "기록하지 못했습니다.");
@@ -808,6 +902,72 @@ export default function PortfolioBuilder({
     },
     { value: 0, cost: 0, count: 0 },
   );
+  const previousPoint = [...totalHistory]
+    .reverse()
+    .find((point) => point.date < kstDate());
+  const flowsSincePrevious = previousPoint
+    ? (draft?.cashFlows
+        .filter((flow) => flow.date > previousPoint.date)
+        .reduce((sum, flow) => sum + flow.amountKrw, 0) ?? 0)
+    : 0;
+  const changeSincePrevious = previousPoint
+    ? (values?.total ?? 0) - previousPoint.valueKrw - flowsSincePrevious
+    : null;
+  const assetGroups = draft
+    ? [
+        {
+          label: "국내 주식",
+          value: holdings
+            .filter((holding) => holding.market === "KR")
+            .reduce(
+              (sum, holding) => sum + holdingValueKrw(holding, draft.usdKrw),
+              0,
+            ),
+        },
+        {
+          label: "미국 주식",
+          value: holdings
+            .filter((holding) => holding.market === "US")
+            .reduce(
+              (sum, holding) => sum + holdingValueKrw(holding, draft.usdKrw),
+              0,
+            ),
+        },
+        {
+          label: "가상자산",
+          value: draft.cryptoAssets.reduce(
+            (sum, asset) => sum + cryptoAssetValueKrw(asset),
+            0,
+          ),
+        },
+        {
+          label: "현금·기타",
+          value: draft.manualAssets.reduce(
+            (sum, asset) => sum + manualAssetValueKrw(asset, draft.usdKrw),
+            0,
+          ),
+        },
+      ]
+    : [];
+  const topHoldings = draft
+    ? holdings
+        .map((holding) => ({
+          holding,
+          value: holdingValueKrw(holding, draft.usdKrw),
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 3)
+    : [];
+  const latestCryptoQuote = draft?.cryptoAssets
+    .map((asset) => asset.quoteCheckedAt)
+    .filter((date): date is string => Boolean(date))
+    .sort()
+    .at(-1);
+  const latestPriceTime =
+    [latestQuote, latestCryptoQuote]
+      .filter((date): date is string => Boolean(date))
+      .sort()
+      .at(-1) ?? null;
   const titles = {
     dashboard: [
       "MY PORTFOLIO",
@@ -882,9 +1042,10 @@ export default function PortfolioBuilder({
           <button
             className={styles.ghost}
             onClick={refresh}
-            disabled={refreshing}
+            disabled={refreshing || quotesRefreshing}
           >
-            <RefreshCw size={16} /> {refreshing ? "갱신 중" : "가격 갱신"}
+            <RefreshCw size={16} />{" "}
+            {refreshing || quotesRefreshing ? "갱신 중" : "가격 갱신"}
           </button>
           {dirty ? (
             <button className={styles.save} onClick={save} disabled={saving}>
@@ -900,6 +1061,18 @@ export default function PortfolioBuilder({
 
       {screen === "dashboard" && (
         <>
+          <div className={styles.liveStatus} role="status">
+            <span
+              className={quotesRefreshing ? styles.livePulse : styles.liveDot}
+            />
+            <strong>
+              {quotesRefreshing ? "시세 갱신 중" : "최근 시세 확인"}
+            </strong>
+            <span>{timeLabel(latestPriceTime)}</span>
+            <small>주식 약 5분 · 빗썸 약 1분 간격 자동 조회</small>
+            {quoteError && <em>{quoteError} · 저장된 가격 표시 중</em>}
+            {fxRefreshError && <em>{fxRefreshError}</em>}
+          </div>
           <div className={styles.keyMetrics}>
             <div className={styles.keyMetric}>
               <span>총 평가액</span>
@@ -923,6 +1096,25 @@ export default function PortfolioBuilder({
                   : ""}
                 매입단가 확인 {knownGains.count}/{holdings.length}개 · USD 현재
                 환율 환산, 환차손익 제외
+              </small>
+            </div>
+            <div className={styles.keyMetric}>
+              <span>이전 기록 대비 순자산 변화</span>
+              <strong
+                className={
+                  (changeSincePrevious ?? 0) >= 0
+                    ? styles.profitUp
+                    : styles.profitDown
+                }
+              >
+                {changeSincePrevious === null
+                  ? "—"
+                  : `${changeSincePrevious > 0 ? "+" : ""}${fmt(changeSincePrevious)}`}
+              </strong>
+              <small>
+                {previousPoint
+                  ? `${previousPoint.date} 기록 대비 · 입출금 제외`
+                  : "이전 날짜의 기록이 쌓이면 표시됩니다"}
               </small>
             </div>
           </div>
@@ -953,6 +1145,34 @@ export default function PortfolioBuilder({
               </span>
             </section>
             <PortfolioVisuals portfolio={draft} holdings={holdings} />
+          </div>
+
+          <div className={styles.dashboardDetails}>
+            <section>
+              <h2>자산 종류별 평가액</h2>
+              {assetGroups.map((group) => (
+                <div key={group.label}>
+                  <span>{group.label}</span>
+                  <strong>{fmt(group.value)}</strong>
+                </div>
+              ))}
+            </section>
+            <section>
+              <h2>비중이 큰 주식</h2>
+              {topHoldings.length ? (
+                topHoldings.map(({ holding, value }) => (
+                  <div key={holding.id}>
+                    <span>{holding.name}</span>
+                    <strong>{fmt(value)}</strong>
+                  </div>
+                ))
+              ) : (
+                <p>보유 주식을 추가하면 표시됩니다.</p>
+              )}
+              <button onClick={onEditHoldings}>
+                자산 관리 <ArrowRight size={15} />
+              </button>
+            </section>
           </div>
 
           <details className={styles.dataDetails}>
@@ -1010,22 +1230,6 @@ export default function PortfolioBuilder({
               )}
             </div>
           </details>
-
-          <div className={styles.vizDisclosure}>
-            <div>
-              <strong>자산 지도를 더 자세히 보고 싶나요?</strong>
-              <span>종목·포트·증권사별 비중을 3D로 탐색할 수 있습니다.</span>
-            </div>
-            <button
-              type="button"
-              aria-expanded={show3d}
-              onClick={() => setShow3d((value) => !value)}
-            >
-              {show3d ? "3D 분석 접기" : "3D 분석 열기"}{" "}
-              <ChevronDown size={16} />
-            </button>
-          </div>
-          {show3d && <Portfolio3D portfolio={draft} holdings={holdings} />}
 
           <div className={styles.screenLinks}>
             <button onClick={() => onNavigate("strategy")}>
@@ -1348,6 +1552,22 @@ export default function PortfolioBuilder({
       )}
       {screen === "allocation" && (
         <>
+          <div className={styles.vizDisclosure}>
+            <div>
+              <strong>자산 지도를 더 자세히 보고 싶나요?</strong>
+              <span>종목·포트·증권사별 비중을 3D로 탐색할 수 있습니다.</span>
+            </div>
+            <button
+              type="button"
+              aria-expanded={show3d}
+              onClick={() => setShow3d((value) => !value)}
+            >
+              {show3d ? "3D 분석 접기" : "3D 분석 열기"}{" "}
+              <ChevronDown size={16} />
+            </button>
+          </div>
+          {show3d && <Portfolio3D portfolio={draft} holdings={holdings} />}
+
           <details className={`${styles.panel} ${styles.collapsible}`} open>
             <summary className={styles.panelHead}>
               <div>

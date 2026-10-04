@@ -82,37 +82,47 @@ export async function listPortfolio(
     [userId],
   );
   if (!plan.rows[0]) return null;
-  const buckets = await client.query<BucketRow>(
-    `select id, name, target_percent, color from portfolio.buckets where user_id = $1 order by position, name`,
-    [userId],
-  );
-  const rules = await client.query<RuleRow>(
-    `select id, bucket_id, market, symbol, exchange_code, name, manual_price, quoted_price, quote_checked_at
+  const [
+    buckets,
+    rules,
+    manualAssets,
+    cryptoAssets,
+    assignments,
+    snapshots,
+    cashFlows,
+  ] = await Promise.all([
+    client.query<BucketRow>(
+      `select id, name, target_percent, color from portfolio.buckets where user_id = $1 order by position, name`,
+      [userId],
+    ),
+    client.query<RuleRow>(
+      `select id, bucket_id, market, symbol, exchange_code, name, manual_price, quoted_price, quote_checked_at
        from portfolio.rules where user_id = $1 order by position, symbol`,
-    [userId],
-  );
-  const manualAssets = await client.query<ManualRow>(
-    `select id, bucket_id, name, value_krw, value_usd from portfolio.manual_assets where user_id = $1 order by name`,
-    [userId],
-  );
-  const cryptoAssets = await client.query<CryptoRow>(
-    `select id, bucket_id, market_code, name, quantity, quoted_price_krw, quote_checked_at, last_trade_at
+      [userId],
+    ),
+    client.query<ManualRow>(
+      `select id, bucket_id, name, value_krw, value_usd from portfolio.manual_assets where user_id = $1 order by name`,
+      [userId],
+    ),
+    client.query<CryptoRow>(
+      `select id, bucket_id, market_code, name, quantity, quoted_price_krw, quote_checked_at, last_trade_at
        from portfolio.crypto_assets where user_id = $1 order by name`,
-    [userId],
-  );
-  const assignments = await client.query<AssignmentRow>(
-    `select id, bucket_id, assignment_source from portfolio.holdings where user_id = $1`,
-    [userId],
-  );
-  const snapshots = await client.query<SnapshotRow>(
-    `select snapshot_date::text, bucket_key, bucket_name, value_krw, target_percent
+      [userId],
+    ),
+    client.query<AssignmentRow>(
+      `select id, bucket_id, assignment_source from portfolio.holdings where user_id = $1`,
+      [userId],
+    ),
+    client.query<SnapshotRow>(
+      `select snapshot_date::text, bucket_key, bucket_name, value_krw, target_percent
        from portfolio.snapshots where user_id = $1 order by snapshot_date, bucket_key`,
-    [userId],
-  );
-  const cashFlows = await client.query<CashFlowRow>(
-    `select id, flow_date::text, amount_krw, note from portfolio.cash_flows where user_id = $1 order by flow_date desc, created_at desc`,
-    [userId],
-  );
+      [userId],
+    ),
+    client.query<CashFlowRow>(
+      `select id, flow_date::text, amount_krw, note from portfolio.cash_flows where user_id = $1 order by flow_date desc, created_at desc`,
+      [userId],
+    ),
+  ]);
   return {
     title: plan.rows[0].title,
     usdKrw: Number(plan.rows[0].usd_krw),
@@ -458,46 +468,49 @@ export async function setRuleQuote(
 }
 
 export async function recordSnapshot(userId: string, client: Client = db()) {
-  const plan = await client.query<{ usd_krw: string }>(
-    `select usd_krw from portfolio.plans where user_id = $1`,
-    [userId],
-  );
+  const [plan, buckets, holdings, manualAssets, cryptoAssets] =
+    await Promise.all([
+      client.query<{ usd_krw: string }>(
+        `select usd_krw from portfolio.plans where user_id = $1`,
+        [userId],
+      ),
+      client.query<{
+        id: string;
+        name: string;
+        target_percent: string;
+      }>(
+        `select id, name, target_percent from portfolio.buckets where user_id = $1`,
+        [userId],
+      ),
+      client.query<{
+        bucket_id: string | null;
+        market: "KR" | "US";
+        quantity: string;
+        price: string | null;
+      }>(
+        `select bucket_id, market, quantity, coalesce(current_price, captured_price) as price
+       from portfolio.holdings where user_id = $1`,
+        [userId],
+      ),
+      client.query<{
+        bucket_id: string | null;
+        value_krw: string;
+        value_usd: string | null;
+      }>(
+        `select bucket_id, value_krw, value_usd from portfolio.manual_assets where user_id = $1`,
+        [userId],
+      ),
+      client.query<{
+        bucket_id: string | null;
+        quantity: string;
+        quoted_price_krw: string | null;
+      }>(
+        `select bucket_id, quantity, quoted_price_krw from portfolio.crypto_assets where user_id = $1`,
+        [userId],
+      ),
+    ]);
   if (!plan.rows[0]) return;
   const fx = Number(plan.rows[0].usd_krw);
-  const buckets = await client.query<{
-    id: string;
-    name: string;
-    target_percent: string;
-  }>(
-    `select id, name, target_percent from portfolio.buckets where user_id = $1`,
-    [userId],
-  );
-  const holdings = await client.query<{
-    bucket_id: string | null;
-    market: "KR" | "US";
-    quantity: string;
-    price: string | null;
-  }>(
-    `select bucket_id, market, quantity, coalesce(current_price, captured_price) as price
-       from portfolio.holdings where user_id = $1`,
-    [userId],
-  );
-  const manualAssets = await client.query<{
-    bucket_id: string | null;
-    value_krw: string;
-    value_usd: string | null;
-  }>(
-    `select bucket_id, value_krw, value_usd from portfolio.manual_assets where user_id = $1`,
-    [userId],
-  );
-  const cryptoAssets = await client.query<{
-    bucket_id: string | null;
-    quantity: string;
-    quoted_price_krw: string | null;
-  }>(
-    `select bucket_id, quantity, quoted_price_krw from portfolio.crypto_assets where user_id = $1`,
-    [userId],
-  );
   const values = new Map<string, number>(
     buckets.rows.map((row) => [row.id, 0]),
   );
@@ -538,25 +551,33 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
   const targets = new Map(
     buckets.rows.map((row) => [row.id, Number(row.target_percent)]),
   );
-  for (const [key, value] of values) {
-    await client.query(
-      `insert into portfolio.snapshots
-       (user_id, snapshot_date, bucket_key, bucket_name, value_krw, target_percent)
-       values ($1,(now() at time zone 'Asia/Seoul')::date,$2,$3,$4,$5)
-       on conflict (user_id, snapshot_date, bucket_key) do update set
-         bucket_name = excluded.bucket_name, value_krw = excluded.value_krw,
-         target_percent = excluded.target_percent, captured_at = now()`,
-      [
-        userId,
-        key,
-        key === "__TOTAL__"
-          ? "전체"
-          : key === "__UNASSIGNED__"
-            ? "미분류"
-            : names.get(key),
-        Math.round(value * 100) / 100,
-        targets.get(key) ?? null,
-      ],
-    );
-  }
+  const entries = [...values];
+  const placeholders = entries
+    .map((_, index) => {
+      const start = index * 4 + 2;
+      return `($1,(now() at time zone 'Asia/Seoul')::date,$${start},$${start + 1},$${start + 2},$${start + 3})`;
+    })
+    .join(",");
+  const parameters = [
+    userId,
+    ...entries.flatMap(([key, value]) => [
+      key,
+      key === "__TOTAL__"
+        ? "전체"
+        : key === "__UNASSIGNED__"
+          ? "미분류"
+          : names.get(key),
+      Math.round(value * 100) / 100,
+      targets.get(key) ?? null,
+    ]),
+  ];
+  await client.query(
+    `insert into portfolio.snapshots
+     (user_id, snapshot_date, bucket_key, bucket_name, value_krw, target_percent)
+     values ${placeholders}
+     on conflict (user_id, snapshot_date, bucket_key) do update set
+       bucket_name = excluded.bucket_name, value_krw = excluded.value_krw,
+       target_percent = excluded.target_percent, captured_at = now()`,
+    parameters,
+  );
 }

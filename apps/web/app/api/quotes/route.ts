@@ -37,7 +37,11 @@ export async function POST(request: Request) {
     );
   }
   try {
-    const cryptoCodes = await listCryptoAssets(userId);
+    const [cryptoCodes, allHoldings, rules] = await Promise.all([
+      listCryptoAssets(userId),
+      listHoldings(userId),
+      listRules(userId),
+    ]);
     if (!kisConfigured() && !cryptoCodes.length)
       return NextResponse.json(
         {
@@ -46,12 +50,11 @@ export async function POST(request: Request) {
         },
         { status: 503 },
       );
-    const holdings = (await listHoldings(userId)).filter(
+    const holdings = allHoldings.filter(
       (row) =>
         (row.market === "KR" && /^[0-9A-Z]{6}$/.test(row.symbol)) ||
         (row.market === "US" && /^[A-Z.]{1,10}$/.test(row.symbol)),
     );
-    const rules = await listRules(userId);
     const unique = Array.from(
       new Map(
         [
@@ -78,57 +81,59 @@ export async function POST(request: Request) {
       );
     }
 
-    const quotes: { price: number | null; error?: string }[] = [];
-    if (kisConfigured()) {
-      for (const row of unique) {
-        try {
-          const quote = await quoteKis(
-            row.market,
-            row.symbol,
-            row.exchange ?? null,
-          );
-          quotes.push(quote);
-          if (quote.price !== null && quote.checkedAt) {
-            await setQuote(
-              userId,
-              row.market,
-              row.symbol,
-              row.exchange ?? null,
-              quote.price,
-              quote.label,
-              quote.checkedAt,
-            );
-            await setRuleQuote(
-              userId,
-              row.market,
-              row.symbol,
-              quote.price,
-              quote.checkedAt,
-            );
-          }
-        } catch {
-          quotes.push({
-            price: null,
-            error: `${row.symbol} 시세를 가져오지 못했습니다.`,
-          });
-        }
-      }
-    } else if (unique.length) {
-      quotes.push({
-        price: null,
-        error: "주식 가격은 KIS API 설정 후 갱신할 수 있습니다.",
-      });
-    }
-    if (cryptoCodes.length) {
-      try {
-        quotes.push(...(await refreshStoredCryptoQuotes(userId)));
-      } catch {
-        quotes.push({
-          price: null,
-          error: "빗썸 원화 시세를 가져오지 못했습니다.",
-        });
-      }
-    }
+    const cryptoPromise = cryptoCodes.length
+      ? refreshStoredCryptoQuotes(userId).catch(() => [
+          { price: null, error: "빗썸 원화 시세를 가져오지 못했습니다." },
+        ])
+      : Promise.resolve([]);
+    const stockQuotes = kisConfigured()
+      ? await Promise.all(
+          unique.map(async (row) => {
+            try {
+              const quote = await quoteKis(
+                row.market,
+                row.symbol,
+                row.exchange ?? null,
+              );
+              if (quote.price !== null && quote.checkedAt) {
+                await Promise.all([
+                  setQuote(
+                    userId,
+                    row.market,
+                    row.symbol,
+                    row.exchange ?? null,
+                    quote.price,
+                    quote.label,
+                    quote.checkedAt,
+                  ),
+                  setRuleQuote(
+                    userId,
+                    row.market,
+                    row.symbol,
+                    quote.price,
+                    quote.checkedAt,
+                  ),
+                ]);
+              }
+              return quote;
+            } catch {
+              return {
+                price: null,
+                error: `${row.symbol} 시세를 가져오지 못했습니다.`,
+              };
+            }
+          }),
+        )
+      : unique.length
+        ? [
+            {
+              price: null,
+              error: "주식 가격은 KIS API 설정 후 갱신할 수 있습니다.",
+            },
+          ]
+        : [];
+    const cryptoQuotes = await cryptoPromise;
+    const quotes = [...stockQuotes, ...cryptoQuotes];
     await recordSnapshot(userId);
     return NextResponse.json({ quotes, holdings: await listHoldings(userId) });
   } catch (error) {

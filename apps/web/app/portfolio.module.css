@@ -1008,9 +1008,6 @@
   background: #f4fbfa;
 }
 @media (max-width: 800px) {
-  .keyMetrics {
-    grid-template-columns: 1fr;
-  }
   .screenLinks {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1020,3 +1017,24 @@
 .dataDetails summary::-webkit-details-marker { display: none; }
 .dataDetails[open] summary svg { transform: rotate(180deg); }
 .dataDetails .dataStatus { border: 0; border-top: 1px solid #dceae8; border-radius: 0 0 12px 12px; }
+
+.liveStatus { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; color: #58777f; font-size: 12px; }
+.liveStatus strong { color: #275a62; }
+.liveStatus small { margin-left: auto; color: #82969b; font-size: 11px; }
+.liveStatus em { flex-basis: 100%; color: #a35d35; font-size: 11px; font-style: normal; }
+.liveDot, .livePulse { width: 8px; height: 8px; border-radius: 50%; background: #37a894; }
+.livePulse { animation: quotePulse 1s ease-in-out infinite alternate; }
+@keyframes quotePulse { to { opacity: .3; } }
+.keyMetrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.keyMetric { padding: 22px; }
+.keyMetric strong { font-size: clamp(23px, 2.4vw, 36px); }
+.dashboardDetails { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.dashboardDetails section { display: grid; align-content: start; gap: 0; padding: 20px 24px; border: 1px solid var(--line, #e2e9eb); border-radius: 14px; background: #fff; }
+.dashboardDetails h2 { margin: 0 0 10px; color: #264a53; font-size: 15px; }
+.dashboardDetails section > div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid #edf2f2; font-size: 12px; }
+.dashboardDetails section > div span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #687e84; }
+.dashboardDetails section > div strong { color: #2a4b53; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dashboardDetails p { color: #82969b; font-size: 12px; }
+.dashboardDetails button { justify-self: start; display: inline-flex; align-items: center; gap: 4px; margin-top: 12px; padding: 0; border: 0; background: none; color: #087b83; font-size: 12px; font-weight: 700; cursor: pointer; }
+@media (max-width: 1000px) { .keyMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .keyMetric:last-child { grid-column: 1 / -1; } }
+@media (max-width: 720px) { .keyMetrics, .dashboardDetails { grid-template-columns: 1fr; } .keyMetric:last-child { grid-column: auto; } .liveStatus small { flex-basis: 100%; margin-left: 17px; } }

@@ -24,7 +24,12 @@ export type KisQuote = {
 };
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
-let masterCache: { instruments: Instrument[]; expiresAt: number } | null = null;
+let pendingToken: Promise<string> | null = null;
+const masterCache = new Map<
+  Market,
+  { instruments: Instrument[]; expiresAt: number }
+>();
+const pendingMasters = new Map<Market, Promise<Instrument[]>>();
 let nextQuoteAt = 0;
 let quoteQueue: Promise<void> = Promise.resolve();
 
@@ -60,32 +65,39 @@ async function token() {
   requireConfiguration();
   if (cachedToken && cachedToken.expiresAt > Date.now())
     return cachedToken.value;
-  const response = await fetch(`${BASE}/oauth2/tokenP`, {
-    method: "POST",
-    headers: { "content-type": "application/json; charset=utf-8" },
-    body: JSON.stringify({
-      grant_type: "client_credentials",
-      appkey: process.env.KIS_APP_KEY,
-      appsecret: process.env.KIS_APP_SECRET,
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(10_000),
-  });
-  const payload = (await response.json().catch(() => ({}))) as {
-    access_token?: string;
-    expires_in?: number;
-    msg1?: string;
-  };
-  if (!response.ok || !payload.access_token)
-    throw new Error(
-      payload.msg1 || `한국투자증권 토큰 발급 실패 (${response.status})`,
-    );
-  cachedToken = {
-    value: payload.access_token,
-    expiresAt:
-      Date.now() + Math.max(60, (payload.expires_in ?? 3600) - 60) * 1000,
-  };
-  return cachedToken.value;
+  if (!pendingToken) {
+    pendingToken = (async () => {
+      const response = await fetch(`${BASE}/oauth2/tokenP`, {
+        method: "POST",
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify({
+          grant_type: "client_credentials",
+          appkey: process.env.KIS_APP_KEY,
+          appsecret: process.env.KIS_APP_SECRET,
+        }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        access_token?: string;
+        expires_in?: number;
+        msg1?: string;
+      };
+      if (!response.ok || !payload.access_token)
+        throw new Error(
+          payload.msg1 || `한국투자증권 토큰 발급 실패 (${response.status})`,
+        );
+      cachedToken = {
+        value: payload.access_token,
+        expiresAt:
+          Date.now() + Math.max(60, (payload.expires_in ?? 3600) - 60) * 1000,
+      };
+      return cachedToken.value;
+    })().finally(() => {
+      pendingToken = null;
+    });
+  }
+  return pendingToken;
 }
 
 async function kisGet(
@@ -119,8 +131,7 @@ async function kisGet(
     };
     if (response.ok && payload.rt_cd === "0") return payload.output ?? {};
     const rateLimited =
-      payload.msg_cd === "EGW00201" ||
-      payload.msg1?.includes("초당 거래건수");
+      payload.msg_cd === "EGW00201" || payload.msg1?.includes("초당 거래건수");
     if (rateLimited && attempt < 2) {
       await wait(1000 * (attempt + 1));
       continue;
@@ -163,7 +174,9 @@ function koreanMaster(text: string, market: "KOSPI" | "KOSDAQ") {
         exchange: market,
       };
     })
-    .filter((item) => /^[0-9A-Z]{6}$/.test(item.symbol) && item.name.length > 0);
+    .filter(
+      (item) => /^[0-9A-Z]{6}$/.test(item.symbol) && item.name.length > 0,
+    );
 }
 
 function overseasMaster(text: string, exchange: "NAS" | "NYS" | "AMS") {
@@ -181,36 +194,52 @@ function overseasMaster(text: string, exchange: "NAS" | "NYS" | "AMS") {
     );
 }
 
-async function instruments() {
-  if (masterCache && masterCache.expiresAt > Date.now())
-    return masterCache.instruments;
-  const [kospi, kosdaq, nas, nys, ams] = await Promise.all([
-    downloadMaster("kospi_code.mst"),
-    downloadMaster("kosdaq_code.mst"),
-    downloadMaster("nasmst.cod"),
-    downloadMaster("nysmst.cod"),
-    downloadMaster("amsmst.cod"),
-  ]);
-  const loaded = [
-    ...koreanMaster(kospi, "KOSPI"),
-    ...koreanMaster(kosdaq, "KOSDAQ"),
-    ...overseasMaster(nas, "NAS"),
-    ...overseasMaster(nys, "NYS"),
-    ...overseasMaster(ams, "AMS"),
-  ];
-  masterCache = {
-    instruments: loaded,
-    expiresAt: Date.now() + 6 * 60 * 60 * 1000,
-  };
-  return loaded;
+async function instruments(market: Market) {
+  const cached = masterCache.get(market);
+  if (cached && cached.expiresAt > Date.now()) return cached.instruments;
+  const pending = pendingMasters.get(market);
+  if (pending) return pending;
+  const loading = (async () => {
+    let loaded: Instrument[];
+    if (market === "KR") {
+      const [kospi, kosdaq] = await Promise.all([
+        downloadMaster("kospi_code.mst"),
+        downloadMaster("kosdaq_code.mst"),
+      ]);
+      loaded = [
+        ...koreanMaster(kospi, "KOSPI"),
+        ...koreanMaster(kosdaq, "KOSDAQ"),
+      ];
+    } else {
+      const [nas, nys, ams] = await Promise.all([
+        downloadMaster("nasmst.cod"),
+        downloadMaster("nysmst.cod"),
+        downloadMaster("amsmst.cod"),
+      ]);
+      loaded = [
+        ...overseasMaster(nas, "NAS"),
+        ...overseasMaster(nys, "NYS"),
+        ...overseasMaster(ams, "AMS"),
+      ];
+    }
+    masterCache.set(market, {
+      instruments: loaded,
+      expiresAt: Date.now() + 6 * 60 * 60 * 1000,
+    });
+    return loaded;
+  })();
+  pendingMasters.set(market, loading);
+  try {
+    return await loading;
+  } finally {
+    pendingMasters.delete(market);
+  }
 }
 
 export async function findInstruments(market: Market, query: string) {
   const needle = normalize(query);
   if (!needle) return [];
-  const catalog = (await instruments()).filter(
-    (item) => item.market === market,
-  );
+  const catalog = await instruments(market);
   const exact = catalog.filter(
     (item) =>
       normalize(item.symbol) === needle || normalize(item.name) === needle,

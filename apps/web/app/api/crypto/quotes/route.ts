@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUserId } from "../../../../lib/auth";
-import { listPortfolio, recordSnapshot } from "../../../../lib/portfolio-db";
+import { recordSnapshot } from "../../../../lib/portfolio-db";
 import { refreshStoredCryptoQuotes } from "../../../../lib/bithumb";
 
 export const runtime = "nodejs";
@@ -31,10 +31,7 @@ export async function POST(request: Request) {
     const quotes = await refreshStoredCryptoQuotes(userId);
     if (quotes.some((quote) => quote.price !== null))
       await recordSnapshot(userId);
-    return NextResponse.json({
-      quotes,
-      portfolio: await listPortfolio(userId),
-    });
+    return NextResponse.json({ quotes });
   } catch {
     return NextResponse.json(
       { message: "빗썸 원화 시세를 갱신하지 못했습니다" },

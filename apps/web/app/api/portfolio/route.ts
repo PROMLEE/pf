@@ -6,7 +6,6 @@ import {
   listCryptoAssets,
   recordSnapshot,
   savePortfolio,
-  updateAutomaticFx,
 } from "../../../lib/portfolio-db";
 import { fetchUsdKrwReference } from "../../../lib/fx";
 import {
@@ -219,18 +218,7 @@ export async function GET() {
       { status: 401 },
     );
   try {
-    let portfolio = await listPortfolio(userId);
-    let fxWarning: string | null = null;
-    if (portfolio?.usdKrwMode === "auto") {
-      try {
-        const reference = await fetchUsdKrwReference();
-        if (await updateAutomaticFx(userId, reference.rate, reference.date))
-          portfolio = await listPortfolio(userId);
-      } catch {
-        fxWarning = "환율 자동 조회에 실패해 마지막 저장 환율을 사용합니다.";
-      }
-    }
-    return NextResponse.json({ portfolio, fxWarning });
+    return NextResponse.json({ portfolio: await listPortfolio(userId) });
   } catch {
     return NextResponse.json(
       { message: "포트폴리오를 불러오지 못했습니다" },
