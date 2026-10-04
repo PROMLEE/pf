@@ -10,7 +10,7 @@ import {
 import {
   listKrwCryptoMarkets,
   refreshStoredCryptoQuotes,
-} from "../../../lib/upbit";
+} from "../../../lib/bithumb";
 
 export const runtime = "nodejs";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -244,7 +244,7 @@ export async function PUT(request: Request) {
       );
       if (newCodes.some((code) => !markets.has(code)))
         return NextResponse.json(
-          { message: "업비트에서 지원하는 원화마켓 코드를 선택해 주세요" },
+          { message: "빗썸에서 지원하는 원화마켓 코드를 선택해 주세요" },
           { status: 400 },
         );
       input.cryptoAssets = input.cryptoAssets.map((asset) => ({

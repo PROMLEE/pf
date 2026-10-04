@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserId } from "../../../../lib/auth";
 import { listPortfolio, recordSnapshot } from "../../../../lib/portfolio-db";
-import { refreshStoredCryptoQuotes } from "../../../../lib/upbit";
+import { refreshStoredCryptoQuotes } from "../../../../lib/bithumb";
 
 export const runtime = "nodejs";
 
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     });
   } catch {
     return NextResponse.json(
-      { message: "업비트 원화 시세를 갱신하지 못했습니다" },
+      { message: "빗썸 원화 시세를 갱신하지 못했습니다" },
       { status: 502 },
     );
   }

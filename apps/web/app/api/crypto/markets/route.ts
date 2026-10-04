@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUserId } from "../../../../lib/auth";
-import { listKrwCryptoMarkets } from "../../../../lib/upbit";
+import { listKrwCryptoMarkets } from "../../../../lib/bithumb";
 
 export const runtime = "nodejs";
 
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ markets });
   } catch {
     return NextResponse.json(
-      { message: "업비트 원화마켓 목록을 불러오지 못했습니다" },
+      { message: "빗썸 원화마켓 목록을 불러오지 못했습니다" },
       { status: 502 },
     );
   }

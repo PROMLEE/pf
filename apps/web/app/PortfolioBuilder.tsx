@@ -245,31 +245,25 @@ export default function PortfolioBuilder({
           message?: string;
         };
         if (!response.ok || !payload.portfolio)
-          throw new Error(payload.message || "업비트 시세 조회 실패");
+          throw new Error(payload.message || "빗썸 시세 조회 실패");
         if (active) {
           setDraft(payload.portfolio);
           setCryptoRefreshError(
             payload.quotes?.some((quote) => quote.price === null)
-              ? "일부 업비트 시세를 확인하지 못했습니다"
+              ? "일부 빗썸 시세를 확인하지 못했습니다"
               : "",
           );
         }
       } catch (error) {
         if (active)
           setCryptoRefreshError(
-            error instanceof Error ? error.message : "업비트 시세 조회 실패",
+            error instanceof Error ? error.message : "빗썸 시세 조회 실패",
           );
       } finally {
         cryptoRefreshInFlight.current = false;
       }
     }
-    const latest = draft?.cryptoAssets
-      .map((asset) => asset.quoteCheckedAt)
-      .filter((value): value is string => Boolean(value))
-      .sort()
-      .at(-1);
-    if (!latest || Date.now() - Date.parse(latest) > 60_000)
-      void refreshCrypto();
+    void refreshCrypto();
     const timer = window.setInterval(() => {
       void refreshCrypto();
     }, 60_000);
@@ -476,7 +470,7 @@ export default function PortfolioBuilder({
         throw new Error(payload.message || "원화마켓을 찾지 못했습니다.");
       setCryptoCandidates(payload.markets ?? []);
       if (!payload.markets?.length)
-        onNotice("일치하는 업비트 원화마켓이 없습니다.");
+        onNotice("일치하는 빗썸 원화마켓이 없습니다.");
     } catch (error) {
       onNotice(
         error instanceof Error ? error.message : "원화마켓을 찾지 못했습니다.",
@@ -487,7 +481,7 @@ export default function PortfolioBuilder({
   }
   function addCryptoAsset() {
     if (!draft || !cryptoSelected)
-      return onNotice("업비트 원화마켓을 먼저 선택해 주세요.");
+      return onNotice("빗썸 원화마켓을 먼저 선택해 주세요.");
     const quantity = Number(cryptoQuantity);
     if (
       !Number.isFinite(quantity) ||
@@ -532,7 +526,7 @@ export default function PortfolioBuilder({
     setCryptoQuantity("");
     setCryptoCandidates([]);
     onNotice(
-      "가상자산을 추가했습니다. 저장하면 업비트 원화 시세를 조회합니다.",
+      "가상자산을 추가했습니다. 저장하면 빗썸 원화 시세를 조회합니다.",
     );
   }
   function assign(holdingId: string, value: string) {
@@ -888,7 +882,7 @@ export default function PortfolioBuilder({
         </span>
         {draft.cryptoAssets.length > 0 && (
           <span>
-            업비트 원화 시세{" "}
+            빗썸 원화 시세{" "}
             {
               draft.cryptoAssets.filter(
                 (asset) => asset.quotedPriceKrw !== null,
@@ -1283,7 +1277,7 @@ export default function PortfolioBuilder({
           </p>
         )}
         <div className={styles.subHead}>
-          <h3>가상자산 · 업비트 원화 시세</h3>
+          <h3>가상자산 · 빗썸 원화 시세</h3>
           <small>
             원화마켓 코드와 보유 수량을 등록하면 가격 갱신 시 평가액을
             계산합니다.
@@ -1369,7 +1363,7 @@ export default function PortfolioBuilder({
             <div>
               <strong>{asset.name}</strong>
               <small>
-                {asset.marketCode} · 업비트{" "}
+                {asset.marketCode} · 빗썸{" "}
                 {asset.quotedPriceKrw === null
                   ? "시세 미확인"
                   : `현재가 ${fmt(asset.quotedPriceKrw)}`}
