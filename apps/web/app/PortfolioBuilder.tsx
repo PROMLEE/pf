@@ -37,6 +37,7 @@ type Candidate = {
 };
 type CryptoMarket = { marketCode: string; name: string; englishName: string };
 type Props = {
+  screen: "dashboard" | "strategy" | "allocation" | "rebalance" | "history";
   holdings: Holding[];
   quoteVersion: number;
   onHoldings: (rows: Holding[]) => void;
@@ -44,6 +45,10 @@ type Props = {
   onRefreshQuotes: () => Promise<void>;
   onImport: () => void;
   onEditHoldings: () => void;
+  onNavigate: (
+    screen: "strategy" | "allocation" | "rebalance" | "history",
+  ) => void;
+  onDirtyChange: (dirty: boolean) => void;
 };
 const won = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 const fmt = (value: number) => `${won.format(value)}원`;
@@ -154,6 +159,7 @@ function Trend({
 }
 
 export default function PortfolioBuilder({
+  screen,
   holdings,
   quoteVersion,
   onHoldings,
@@ -161,12 +167,15 @@ export default function PortfolioBuilder({
   onRefreshQuotes,
   onImport,
   onEditHoldings,
+  onNavigate,
+  onDirtyChange,
 }: Props) {
   const [draft, setDraft] = useState<Portfolio | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [dirty, setDirty] = useState(false);
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   const [ruleMarket, setRuleMarket] = useState<Market>("KR");
   const [ruleQuery, setRuleQuery] = useState("");
   const [ruleBucketId, setRuleBucketId] = useState("");
@@ -785,6 +794,48 @@ export default function PortfolioBuilder({
       ? lastPoint.valueKrw - firstPoint.valueKrw - periodFlow
       : null;
 
+  const knownGains = holdings.reduce(
+    (summary, holding) => {
+      const price = holding.currentPrice ?? holding.capturedPrice;
+      if (price !== null && holding.averageCost !== null) {
+        const rate = holding.market === "US" ? (draft?.usdKrw ?? 0) : 1;
+        summary.value +=
+          (price - holding.averageCost) * holding.quantity * rate;
+        summary.cost += holding.averageCost * holding.quantity * rate;
+        summary.count++;
+      }
+      return summary;
+    },
+    { value: 0, cost: 0, count: 0 },
+  );
+  const titles = {
+    dashboard: [
+      "MY PORTFOLIO",
+      "내 포트폴리오",
+      "전체 비중과 핵심 지표를 확인하세요.",
+    ],
+    strategy: [
+      "TARGET ALLOCATION",
+      "목표 설계",
+      "원하는 비중과 종목 배정 규칙을 정하세요.",
+    ],
+    allocation: [
+      "ASSET ALLOCATION",
+      "자산 배정",
+      "실제 자산을 포트에 연결하고 가상자산·현금을 관리하세요.",
+    ],
+    rebalance: [
+      "REBALANCE",
+      "리밸런싱",
+      "목표 비중에 맞는 거래 수량을 확인하세요.",
+    ],
+    history: [
+      "HISTORY",
+      "자산 기록",
+      "포트별 자산 추이와 입출금 기록을 확인하세요.",
+    ],
+  }[screen];
+
   if (loading)
     return (
       <div className={styles.loading}>포트폴리오를 불러오는 중입니다…</div>
@@ -823,9 +874,9 @@ export default function PortfolioBuilder({
     <div className={styles.builder}>
       <div className={styles.heading}>
         <div>
-          <span>MY PORTFOLIO</span>
-          <h1>내 포트폴리오</h1>
-          <p>{draft.title}</p>
+          <span>{titles[0]}</span>
+          <h1>{titles[1]}</h1>
+          <p>{titles[2]}</p>
         </div>
         <div>
           <button
@@ -847,1036 +898,1127 @@ export default function PortfolioBuilder({
         </div>
       </div>
 
-      <div className={styles.summaryGrid}>
-        <section className={styles.totalCard}>
-          <small>총 평가액</small>
-          <strong>{fmt(values?.total ?? 0)}</strong>
-          <div className={styles.totalInsight}>
-            <b>
-              {rebalanceReady
-                ? `${driftItems.length}개 포트 조정 필요`
-                : "배정·가격 확인 필요"}
-            </b>
-            <span>
-              {driftItems[0]
-                ? `${driftItems[0].bucket.name} ${driftItems[0].gapPercent > 0 ? "+" : ""}${driftItems[0].gapPercent.toFixed(1)}%p`
-                : "목표 비중 안에 있습니다"}
-            </span>
-          </div>
-          <span>
-            {holdings.length + draft.cryptoAssets.length}개 보유 항목 ·{" "}
-            {draft.buckets.length}개 포트
-            {(values?.unassigned ?? 0) > 0
-              ? ` · 미분류 ${fmt(values?.unassigned ?? 0)}`
-              : ""}
-            {(values?.missingPrices ?? 0) > 0
-              ? ` · 가격 미확인 ${values?.missingPrices}개`
-              : ""}
-          </span>
-        </section>
-        <PortfolioVisuals portfolio={draft} holdings={holdings} />
-      </div>
-
-      <div className={styles.dataStatus} aria-label="평가 데이터 기준 시각">
-        <strong>평가 기준</strong>
-        <span>
-          KIS 가격 {priceFromQuote}개 · 최근 확인 {timeLabel(latestQuote)}
-        </span>
-        <span>
-          캡처 가격 {priceFromCapture}개
-          {oldestCapture ? ` · 가장 오래된 ${timeLabel(oldestCapture)}` : ""}
-        </span>
-        <span>
-          {draft.usdKrwMode === "auto" ? "자동 기준환율" : "직접 입력 환율"} USD{" "}
-          {won.format(draft.usdKrw)}원 ·{" "}
-          {draft.usdKrwMode === "auto"
-            ? `ECB ${draft.usdKrwRateDate ?? "기준일 확인 안 됨"}`
-            : timeLabel(draft.usdKrwUpdatedAt)}
-        </span>
-        {draft.cryptoAssets.length > 0 && (
-          <span>
-            빗썸 원화 시세{" "}
-            {
-              draft.cryptoAssets.filter(
-                (asset) => asset.quotedPriceKrw !== null,
-              ).length
-            }
-            /{draft.cryptoAssets.length}개 · 최근 조회{" "}
-            {timeLabel(
-              draft.cryptoAssets
-                .map((asset) => asset.quoteCheckedAt)
-                .filter((value): value is string => Boolean(value))
-                .sort()
-                .at(-1) ?? null,
-            )}
-          </span>
-        )}
-        {cryptoRefreshError && (
-          <em>{cryptoRefreshError} · 마지막 저장 가격을 표시 중</em>
-        )}
-        {(values?.missingPrices ?? 0) > 0 && (
-          <em>가격 없는 자산 {values?.missingPrices}개는 평가액에서 제외</em>
-        )}
-      </div>
-
-      <div className={styles.vizDisclosure}>
-        <div>
-          <strong>자산 지도를 더 자세히 보고 싶나요?</strong>
-          <span>종목·포트·증권사별 비중을 3D로 탐색할 수 있습니다.</span>
-        </div>
-        <button
-          type="button"
-          aria-expanded={show3d}
-          onClick={() => setShow3d((value) => !value)}
-        >
-          {show3d ? "3D 분석 접기" : "3D 분석 열기"} <ChevronDown size={16} />
-        </button>
-      </div>
-      {show3d && <Portfolio3D portfolio={draft} holdings={holdings} />}
-
-      <div className={styles.quoteStrip}>
-        <span>INVESTMENT PRINCIPLE</span>
-        <p>“가격은 지불하는 것, 가치는 얻는 것.”</p>
-        <a
-          href="https://www.berkshirehathaway.com/letters/2013ltr.pdf"
-          target="_blank"
-          rel="noreferrer"
-        >
-          벤저민 그레이엄 ↗
-        </a>
-      </div>
-
-      <section className={styles.panel}>
-        <div className={styles.panelHead}>
-          <div>
-            <span>01 · STRATEGY</span>
-            <h2>목표 비중 편집</h2>
-          </div>
-          <button className={styles.ghost} onClick={addBucket}>
-            <Plus size={16} /> 포트 추가
-          </button>
-        </div>
-        <details className={styles.advancedSettings}>
-          <summary>
-            계산 기준{" "}
-            <span>
-              USD {won.format(draft.usdKrw)}원 · 허용 오차 ±
-              {pct(draft.tolerancePercent)}
-            </span>
-            <ChevronDown size={15} />
-          </summary>
-          <div className={styles.settings}>
-            <label>
-              포트폴리오 이름
-              <input
-                value={draft.title}
-                onChange={(event) =>
-                  change({ ...draft, title: event.target.value })
-                }
-              />
-            </label>
-            <label>
-              환율 적용 방식
-              <select
-                value={draft.usdKrwMode}
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    usdKrwMode: event.target.value as "auto" | "manual",
-                    usdKrwRateDate: null,
-                  })
+      {screen === "dashboard" && (
+        <>
+          <div className={styles.keyMetrics}>
+            <div className={styles.keyMetric}>
+              <span>총 평가액</span>
+              <strong>{fmt(values?.total ?? 0)}</strong>
+              <small>{draft.title}</small>
+            </div>
+            <div className={styles.keyMetric}>
+              <span>주식 평가손익</span>
+              <strong
+                className={
+                  knownGains.value >= 0 ? styles.profitUp : styles.profitDown
                 }
               >
-                <option value="auto">자동 · ECB 일일 기준환율</option>
-                <option value="manual">직접 입력</option>
-              </select>
-            </label>
-            <label>
-              USD → KRW 환율 (1달러당 원)
-              <input
-                type="number"
-                min="100"
-                step="0.01"
-                value={draft.usdKrw}
-                disabled={draft.usdKrwMode === "auto"}
-                onChange={(event) =>
-                  change({ ...draft, usdKrw: Number(event.target.value) })
-                }
-              />
-            </label>
-            <label>
-              허용 오차 ±%
-              <input
-                type="number"
-                min="0"
-                max="30"
-                step="0.1"
-                value={draft.tolerancePercent}
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    tolerancePercent: Number(event.target.value),
-                  })
-                }
-              />
-            </label>
+                {knownGains.count
+                  ? `${knownGains.value > 0 ? "+" : ""}${fmt(knownGains.value)}`
+                  : "—"}
+              </strong>
+              <small>
+                {knownGains.cost > 0
+                  ? `${knownGains.value >= 0 ? "+" : ""}${pct((knownGains.value / knownGains.cost) * 100)} · `
+                  : ""}
+                매입단가 확인 {knownGains.count}/{holdings.length}개 · USD 현재
+                환율 환산, 환차손익 제외
+              </small>
+            </div>
           </div>
-        </details>
-        <div className={styles.bucketList}>
-          {draft.buckets.map((bucket) => {
-            const current = values?.values.get(bucket.id) ?? 0;
-            const currentPercent = values?.total
-              ? (current / values.total) * 100
-              : 0;
-            return (
-              <div className={styles.bucket} key={bucket.id}>
-                <input
-                  className={styles.color}
-                  type="color"
-                  value={bucket.color}
-                  aria-label={`${bucket.name} 색상`}
-                  onChange={(event) =>
-                    editBucket(bucket.id, "color", event.target.value)
+          <div className={styles.summaryGrid}>
+            <section className={styles.totalCard}>
+              <small>목표 비중 점검</small>
+              <strong>
+                {rebalanceReady
+                  ? `${driftItems.length}개 조정 필요`
+                  : "배정·가격 확인 필요"}
+              </strong>
+              <div className={styles.totalInsight}>
+                <span>
+                  {driftItems[0]
+                    ? `${driftItems[0].bucket.name} ${driftItems[0].gapPercent > 0 ? "+" : ""}${driftItems[0].gapPercent.toFixed(1)}%p`
+                    : "목표 비중 안에 있습니다"}
+                </span>
+              </div>
+              <span>
+                {holdings.length + draft.cryptoAssets.length}개 보유 항목 ·{" "}
+                {draft.buckets.length}개 포트
+                {(values?.unassigned ?? 0) > 0
+                  ? ` · 미분류 ${fmt(values?.unassigned ?? 0)}`
+                  : ""}
+                {(values?.missingPrices ?? 0) > 0
+                  ? ` · 가격 미확인 ${values?.missingPrices}개`
+                  : ""}
+              </span>
+            </section>
+            <PortfolioVisuals portfolio={draft} holdings={holdings} />
+          </div>
+
+          <details className={styles.dataDetails}>
+            <summary>
+              가격·환율 기준 보기 <ChevronDown size={15} />
+            </summary>
+            <div
+              className={styles.dataStatus}
+              aria-label="평가 데이터 기준 시각"
+            >
+              <strong>평가 기준</strong>
+              <span>
+                KIS 가격 {priceFromQuote}개 · 최근 확인 {timeLabel(latestQuote)}
+              </span>
+              <span>
+                캡처 가격 {priceFromCapture}개
+                {oldestCapture
+                  ? ` · 가장 오래된 ${timeLabel(oldestCapture)}`
+                  : ""}
+              </span>
+              <span>
+                {draft.usdKrwMode === "auto"
+                  ? "자동 기준환율"
+                  : "직접 입력 환율"}{" "}
+                USD {won.format(draft.usdKrw)}원 ·{" "}
+                {draft.usdKrwMode === "auto"
+                  ? `ECB ${draft.usdKrwRateDate ?? "기준일 확인 안 됨"}`
+                  : timeLabel(draft.usdKrwUpdatedAt)}
+              </span>
+              {draft.cryptoAssets.length > 0 && (
+                <span>
+                  빗썸 원화 시세{" "}
+                  {
+                    draft.cryptoAssets.filter(
+                      (asset) => asset.quotedPriceKrw !== null,
+                    ).length
                   }
-                />
-                <input
-                  className={styles.bucketName}
-                  value={bucket.name}
-                  aria-label="포트 이름"
-                  onChange={(event) =>
-                    editBucket(bucket.id, "name", event.target.value)
-                  }
-                />
-                <div className={styles.barArea}>
-                  <div className={styles.bar}>
-                    <i
-                      style={{
-                        width: `${Math.min(currentPercent, 100)}%`,
-                        background: bucket.color,
-                      }}
-                    />
-                  </div>
-                  <small>
-                    현재 {pct(currentPercent)} · 목표 차이{" "}
-                    {currentPercent - bucket.targetPercent > 0 ? "+" : ""}
-                    {(currentPercent - bucket.targetPercent).toFixed(1)}%p ·{" "}
-                    {fmt(current)}
-                  </small>
-                </div>
+                  /{draft.cryptoAssets.length}개 · 최근 조회{" "}
+                  {timeLabel(
+                    draft.cryptoAssets
+                      .map((asset) => asset.quoteCheckedAt)
+                      .filter((value): value is string => Boolean(value))
+                      .sort()
+                      .at(-1) ?? null,
+                  )}
+                </span>
+              )}
+              {cryptoRefreshError && (
+                <em>{cryptoRefreshError} · 마지막 저장 가격을 표시 중</em>
+              )}
+              {(values?.missingPrices ?? 0) > 0 && (
+                <em>
+                  가격 없는 자산 {values?.missingPrices}개는 평가액에서 제외
+                </em>
+              )}
+            </div>
+          </details>
+
+          <div className={styles.vizDisclosure}>
+            <div>
+              <strong>자산 지도를 더 자세히 보고 싶나요?</strong>
+              <span>종목·포트·증권사별 비중을 3D로 탐색할 수 있습니다.</span>
+            </div>
+            <button
+              type="button"
+              aria-expanded={show3d}
+              onClick={() => setShow3d((value) => !value)}
+            >
+              {show3d ? "3D 분석 접기" : "3D 분석 열기"}{" "}
+              <ChevronDown size={16} />
+            </button>
+          </div>
+          {show3d && <Portfolio3D portfolio={draft} holdings={holdings} />}
+
+          <div className={styles.screenLinks}>
+            <button onClick={() => onNavigate("strategy")}>
+              목표 비중 편집 <ArrowRight size={16} />
+            </button>
+            <button onClick={() => onNavigate("allocation")}>
+              자산 배정 <ArrowRight size={16} />
+            </button>
+            <button onClick={() => onNavigate("rebalance")}>
+              리밸런싱 보기 <ArrowRight size={16} />
+            </button>
+            <button onClick={() => onNavigate("history")}>
+              자산 추이 <ArrowRight size={16} />
+            </button>
+          </div>
+        </>
+      )}
+
+      {screen === "strategy" && (
+        <>
+          <section className={styles.panel}>
+            <div className={styles.panelHead}>
+              <div>
+                <span>01 · STRATEGY</span>
+                <h2>목표 비중 편집</h2>
+              </div>
+              <button className={styles.ghost} onClick={addBucket}>
+                <Plus size={16} /> 포트 추가
+              </button>
+            </div>
+            <details className={styles.advancedSettings}>
+              <summary>
+                계산 기준{" "}
+                <span>
+                  USD {won.format(draft.usdKrw)}원 · 허용 오차 ±
+                  {pct(draft.tolerancePercent)}
+                </span>
+                <ChevronDown size={15} />
+              </summary>
+              <div className={styles.settings}>
                 <label>
-                  목표{" "}
+                  포트폴리오 이름
+                  <input
+                    value={draft.title}
+                    onChange={(event) =>
+                      change({ ...draft, title: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  환율 적용 방식
+                  <select
+                    value={draft.usdKrwMode}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        usdKrwMode: event.target.value as "auto" | "manual",
+                        usdKrwRateDate: null,
+                      })
+                    }
+                  >
+                    <option value="auto">자동 · ECB 일일 기준환율</option>
+                    <option value="manual">직접 입력</option>
+                  </select>
+                </label>
+                <label>
+                  USD → KRW 환율 (1달러당 원)
+                  <input
+                    type="number"
+                    min="100"
+                    step="0.01"
+                    value={draft.usdKrw}
+                    disabled={draft.usdKrwMode === "auto"}
+                    onChange={(event) =>
+                      change({ ...draft, usdKrw: Number(event.target.value) })
+                    }
+                  />
+                </label>
+                <label>
+                  허용 오차 ±%
                   <input
                     type="number"
                     min="0"
-                    max="100"
+                    max="30"
                     step="0.1"
-                    value={bucket.targetPercent}
+                    value={draft.tolerancePercent}
                     onChange={(event) =>
-                      editBucket(bucket.id, "targetPercent", event.target.value)
+                      change({
+                        ...draft,
+                        tolerancePercent: Number(event.target.value),
+                      })
                     }
-                  />{" "}
-                  %
+                  />
                 </label>
-                <button
-                  className={styles.iconButton}
-                  aria-label={`${bucket.name} 삭제`}
-                  disabled={draft.buckets.length <= 1}
-                  onClick={() => removeBucket(bucket.id)}
-                >
-                  <Trash2 size={16} />
-                </button>
               </div>
-            );
-          })}
-        </div>
-        <p className={targetTotal === 100 ? styles.ok : styles.warning}>
-          목표 합계 {pct(targetTotal)}
-          {targetTotal === 100
-            ? " · 저장할 수 있습니다."
-            : " · 저장하려면 100%로 맞춰 주세요."}
-        </p>
-      </section>
-
-      <details className={`${styles.panel} ${styles.collapsible}`}>
-        <summary className={styles.panelHead}>
-          <div>
-            <span>02 · INSTRUMENTS</span>
-            <h2>종목코드별 자동 배정</h2>
-          </div>
-          <span className={styles.collapseMeta}>
-            {draft.rules.length}개 규칙 <ChevronDown size={16} />
-          </span>
-        </summary>
-        <p className={styles.help}>
-          종목코드가 일치하는 보유 종목을 저장할 때 자동으로 분류합니다. 국내
-          기준가는 원, 미국 기준가는 달러입니다. 원하는 종목은 아래에서 직접
-          다른 포트로 옮길 수 있습니다.
-        </p>
-        <div className={styles.ruleForm}>
-          <select
-            value={ruleBucketId || draft.buckets[0]?.id || ""}
-            onChange={(event) => setRuleBucketId(event.target.value)}
-            aria-label="배정할 포트"
-          >
-            {draft.buckets.map((bucket) => (
-              <option key={bucket.id} value={bucket.id}>
-                {bucket.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={ruleMarket}
-            onChange={(event) => {
-              setRuleMarket(event.target.value as Market);
-              setCandidates([]);
-            }}
-            aria-label="시장"
-          >
-            <option value="KR">국내</option>
-            <option value="US">미국</option>
-          </select>
-          <input
-            value={ruleQuery}
-            onChange={(event) => {
-              setRuleQuery(event.target.value);
-              setCandidates([]);
-            }}
-            placeholder="종목명 또는 종목코드"
-            aria-label="종목 검색어"
-          />
-          <input
-            type="number"
-            min="0"
-            step="any"
-            value={rulePrice}
-            onChange={(event) => setRulePrice(event.target.value)}
-            placeholder="기준 가격(선택)"
-            aria-label="기준 가격"
-          />
-          <button onClick={lookup} disabled={lookingUp}>
-            <Search size={15} /> {lookingUp ? "검색 중" : "KIS 검색"}
-          </button>
-        </div>
-        {candidates.length > 0 && (
-          <div className={styles.candidates}>
-            {candidates.map((item) => (
-              <button
-                key={`${item.market}:${item.symbol}:${item.exchange}`}
-                onClick={() => addRule(item)}
-              >
-                <strong>{item.name}</strong>
-                <span>
-                  {item.symbol} · {item.exchange}
-                </span>
-                <Plus size={14} />
-              </button>
-            ))}
-          </div>
-        )}
-        <div className={styles.rules}>
-          {draft.rules.map((rule) => (
-            <div key={rule.id} className={styles.rule}>
-              <span
-                className={styles.dot}
-                style={{
-                  background:
-                    draft.buckets.find((bucket) => bucket.id === rule.bucketId)
-                      ?.color ?? "#aaa",
-                }}
-              />
-              <strong>{rule.name || rule.symbol}</strong>
-              <small>
-                {rule.market} · {rule.symbol} ·{" "}
-                {
-                  draft.buckets.find((bucket) => bucket.id === rule.bucketId)
-                    ?.name
-                }
-              </small>
-              <label>
-                기준가{" "}
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={rule.manualPrice ?? ""}
-                  placeholder={
-                    rule.quotedPrice ? String(rule.quotedPrice) : "미입력"
-                  }
-                  onChange={(event) =>
-                    change({
-                      ...draft,
-                      rules: draft.rules.map(
-                        (item): Rule =>
-                          item.id === rule.id
-                            ? {
-                                ...item,
-                                manualPrice: event.target.value
-                                  ? Number(event.target.value)
-                                  : null,
-                              }
-                            : item,
-                      ),
-                    })
-                  }
-                />
-              </label>
-              <button
-                className={styles.iconButton}
-                aria-label={`${rule.symbol} 규칙 삭제`}
-                onClick={() =>
-                  change({
-                    ...draft,
-                    rules: draft.rules.filter((item) => item.id !== rule.id),
-                  })
-                }
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </details>
-
-      <details className={`${styles.panel} ${styles.collapsible}`}>
-        <summary className={styles.panelHead}>
-          <div>
-            <span>03 · ACTUAL POSITIONS</span>
-            <h2>내 자산 배정</h2>
-          </div>
-          <span className={styles.collapseMeta}>
-            주식 {holdings.length}개 · 가상자산 {draft.cryptoAssets.length}개 ·
-            직접 입력 {draft.manualAssets.length}개 <ChevronDown size={16} />
-          </span>
-        </summary>
-        <div className={styles.assignmentActions}>
-          <button className={styles.ghost} onClick={onEditHoldings}>
-            <Pencil size={15} /> 주식 수량·매입단가 수정
-          </button>
-          <button className={styles.ghost} onClick={onImport}>
-            <Camera size={15} /> 캡처 가져오기
-          </button>
-        </div>
-        {holdings.length ? (
-          <div className={styles.assignmentList}>
-            {holdings.map((holding) => {
-              const assignment = draft.assignments.find(
-                (item) => item.holdingId === holding.id,
-              );
-              const autoBucket =
-                draft.rules.find(
-                  (rule) =>
-                    rule.market === holding.market &&
-                    rule.symbol === holding.symbol,
-                )?.bucketId ?? null;
-              const selection =
-                assignment?.source === "manual"
-                  ? (assignment.bucketId ?? "unassigned")
-                  : "auto";
-              return (
-                <div key={holding.id}>
-                  <div>
-                    <strong>{holding.name}</strong>
-                    <small>
-                      {holding.broker} · {holding.symbol || "코드 미확인"} ·{" "}
-                      {fmt(holdingValueKrw(holding, draft.usdKrw))}
-                    </small>
-                  </div>
-                  <select
-                    value={selection}
-                    aria-label={`${holding.name} 포트 배정`}
-                    onChange={(event) => assign(holding.id, event.target.value)}
-                  >
-                    <option value="auto">
-                      자동{" "}
-                      {autoBucket
-                        ? `· ${draft.buckets.find((bucket) => bucket.id === autoBucket)?.name}`
-                        : "· 미분류"}
-                    </option>
-                    <option value="unassigned">직접 · 미분류</option>
-                    {draft.buckets.map((bucket) => (
-                      <option key={bucket.id} value={bucket.id}>
-                        직접 · {bucket.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className={styles.help}>
-            보유 종목이 없습니다. 잔고 캡처를 가져오면 이곳에서 포트별로 배정할
-            수 있습니다.
-          </p>
-        )}
-        <div className={styles.subHead}>
-          <h3>가상자산 · 빗썸 원화 시세</h3>
-          <small>
-            원화마켓 코드와 보유 수량을 등록하면 가격 갱신 시 평가액을
-            계산합니다.
-          </small>
-        </div>
-        <div className={styles.cryptoSearch}>
-          <input
-            value={cryptoQuery}
-            onChange={(event) => setCryptoQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") lookupCrypto();
-            }}
-            placeholder="비트코인 또는 KRW-BTC 검색"
-            aria-label="가상자산 원화마켓 검색"
-          />
-          <button
-            type="button"
-            onClick={lookupCrypto}
-            disabled={lookingUpCrypto}
-          >
-            <Search size={15} /> {lookingUpCrypto ? "검색 중" : "검색"}
-          </button>
-        </div>
-        {cryptoCandidates.length > 0 && (
-          <div className={styles.cryptoCandidates}>
-            {cryptoCandidates.map((market) => (
-              <button
-                key={market.marketCode}
-                type="button"
-                onClick={() => {
-                  setCryptoSelected(market);
-                  setCryptoCandidates([]);
-                }}
-              >
-                <strong>{market.name}</strong>
-                <span>
-                  {market.marketCode} · {market.englishName}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-        <div className={styles.cryptoForm}>
-          <span className={styles.cryptoSelection}>
-            {cryptoSelected
-              ? `${cryptoSelected.name} · ${cryptoSelected.marketCode}`
-              : "마켓을 검색해 선택"}
-          </span>
-          <input
-            type="number"
-            min="0"
-            max="999999999999"
-            step="0.000000000001"
-            value={cryptoQuantity}
-            onChange={(event) => setCryptoQuantity(event.target.value)}
-            placeholder="보유 수량"
-            aria-label="가상자산 보유 수량"
-          />
-          <select
-            value={
-              cryptoBucketId ||
-              draft.buckets.find((bucket) =>
-                /비트코인|가상자산|코인/i.test(bucket.name),
-              )?.id ||
-              draft.buckets[0]?.id ||
-              ""
-            }
-            onChange={(event) => setCryptoBucketId(event.target.value)}
-            aria-label="가상자산 포트"
-          >
-            {draft.buckets.map((bucket) => (
-              <option key={bucket.id} value={bucket.id}>
-                {bucket.name}
-              </option>
-            ))}
-          </select>
-          <button type="button" onClick={addCryptoAsset}>
-            <Plus size={15} /> 추가
-          </button>
-        </div>
-        {draft.cryptoAssets.map((asset) => (
-          <div className={styles.cryptoRow} key={asset.id}>
-            <div>
-              <strong>{asset.name}</strong>
-              <small>
-                {asset.marketCode} · 빗썸{" "}
-                {asset.quotedPriceKrw === null
-                  ? "시세 미확인"
-                  : `현재가 ${fmt(asset.quotedPriceKrw)}`}
-              </small>
-              <small>
-                조회 {timeLabel(asset.quoteCheckedAt)}
-                {asset.lastTradeAt
-                  ? ` · 마지막 체결 ${timeLabel(asset.lastTradeAt)}`
-                  : ""}
-              </small>
-            </div>
-            <input
-              type="number"
-              min="0"
-              max="999999999999"
-              step="0.000000000001"
-              value={asset.quantity}
-              aria-label={`${asset.name} 보유 수량`}
-              onChange={(event) =>
-                change({
-                  ...draft,
-                  cryptoAssets: draft.cryptoAssets.map((item) =>
-                    item.id === asset.id
-                      ? { ...item, quantity: Number(event.target.value) }
-                      : item,
-                  ),
-                })
-              }
-            />
-            <select
-              value={asset.bucketId ?? ""}
-              aria-label={`${asset.name} 포트`}
-              onChange={(event) =>
-                change({
-                  ...draft,
-                  cryptoAssets: draft.cryptoAssets.map((item) =>
-                    item.id === asset.id
-                      ? { ...item, bucketId: event.target.value || null }
-                      : item,
-                  ),
-                })
-              }
-            >
-              <option value="">미분류</option>
-              {draft.buckets.map((bucket) => (
-                <option key={bucket.id} value={bucket.id}>
-                  {bucket.name}
-                </option>
-              ))}
-            </select>
-            <b>
-              {asset.quotedPriceKrw === null
-                ? "가격 미확인"
-                : fmt(cryptoAssetValueKrw(asset))}
-            </b>
-            <button
-              className={styles.iconButton}
-              aria-label={`${asset.name} 삭제`}
-              onClick={() =>
-                change({
-                  ...draft,
-                  cryptoAssets: draft.cryptoAssets.filter(
-                    (item) => item.id !== asset.id,
-                  ),
-                })
-              }
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
-        ))}
-        <div className={styles.subHead}>
-          <h3>기타 직접 입력 자산</h3>
-          <small>원화 금액이나 달러 수량을 직접 관리하는 자산</small>
-        </div>
-        {draft.manualAssets.some((asset) =>
-          /비트코인|bitcoin|BTC/i.test(asset.name),
-        ) && (
-          <p className={styles.help}>
-            기존 비트코인 직접 입력 금액은 자동 시세와 별개입니다. 수량을 등록한
-            뒤 중복 합산되지 않도록 기존 금액을 확인해 주세요.
-          </p>
-        )}
-        <div className={styles.manualForm}>
-          <input
-            value={manualName}
-            onChange={(event) => setManualName(event.target.value)}
-            placeholder="자산 이름"
-            aria-label="직접 입력 자산 이름"
-          />
-          <input
-            type="number"
-            min="0"
-            value={manualValue}
-            onChange={(event) => setManualValue(event.target.value)}
-            placeholder={manualCurrency === "USD" ? "달러 금액" : "평가액 (원)"}
-            aria-label="직접 입력 자산 금액"
-          />
-          <select
-            value={manualCurrency}
-            onChange={(event) =>
-              setManualCurrency(event.target.value as "KRW" | "USD")
-            }
-            aria-label="직접 입력 자산 통화"
-          >
-            <option value="KRW">원화</option>
-            <option value="USD">달러</option>
-          </select>
-          <select
-            value={manualBucketId || draft.buckets[0]?.id || ""}
-            onChange={(event) => setManualBucketId(event.target.value)}
-            aria-label="자산 포트"
-          >
-            {draft.buckets.map((bucket) => (
-              <option key={bucket.id} value={bucket.id}>
-                {bucket.name}
-              </option>
-            ))}
-          </select>
-          <button onClick={addManualAsset}>
-            <Plus size={15} /> 추가
-          </button>
-        </div>
-        {draft.manualAssets.map((asset) => (
-          <div className={styles.manualRow} key={asset.id}>
-            <strong>{asset.name}</strong>
-            <input
-              type="number"
-              min="0"
-              max="1000000000000000"
-              value={asset.valueUsd ?? asset.valueKrw}
-              aria-label={`${asset.name} ${asset.valueUsd === null ? "원화 평가액" : "달러 금액"}`}
-              onChange={(event) =>
-                change({
-                  ...draft,
-                  manualAssets: draft.manualAssets.map((item) =>
-                    item.id === asset.id
-                      ? item.valueUsd === null
-                        ? { ...item, valueKrw: Number(event.target.value) }
-                        : {
-                            ...item,
-                            valueUsd: Number(event.target.value),
-                            valueKrw: Number(event.target.value) * draft.usdKrw,
-                          }
-                      : item,
-                  ),
-                })
-              }
-            />
-            <small>
-              {asset.valueUsd === null
-                ? "KRW"
-                : `USD · ${fmt(manualAssetValueKrw(asset, draft.usdKrw))}`}
-            </small>
-            <select
-              value={asset.bucketId ?? ""}
-              aria-label={`${asset.name} 포트`}
-              onChange={(event) =>
-                change({
-                  ...draft,
-                  manualAssets: draft.manualAssets.map((item) =>
-                    item.id === asset.id
-                      ? { ...item, bucketId: event.target.value || null }
-                      : item,
-                  ),
-                })
-              }
-            >
-              <option value="">미분류</option>
-              {draft.buckets.map((bucket) => (
-                <option key={bucket.id} value={bucket.id}>
-                  {bucket.name}
-                </option>
-              ))}
-            </select>
-            <button
-              className={styles.iconButton}
-              aria-label={`${asset.name} 삭제`}
-              onClick={() =>
-                change({
-                  ...draft,
-                  manualAssets: draft.manualAssets.filter(
-                    (item) => item.id !== asset.id,
-                  ),
-                })
-              }
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
-        ))}
-      </details>
-
-      <section className={styles.panel}>
-        <div className={styles.panelHead}>
-          <div>
-            <span>04 · REBALANCE</span>
-            <h2>리밸런싱</h2>
-          </div>
-          <select
-            value={rebalanceMode}
-            onChange={(event) =>
-              setRebalanceMode(event.target.value as "trade" | "add-only")
-            }
-            aria-label="리밸런싱 방법"
-          >
-            <option value="trade">매도 후 매수</option>
-            <option value="add-only">신규 자금으로 매수</option>
-          </select>
-        </div>
-        <p className={styles.methodNote}>
-          허용 오차 ±{pct(draft.tolerancePercent)}
-          {rebalanceMode === "add-only" && advice.requiredCash > 0
-            ? ` · 목표 비중까지 이론상 필요한 신규 자금 약 ${fmt(advice.requiredCash)}`
-            : ""}
-        </p>
-        {rebalanceMode === "add-only" && (
-          <label className={styles.cashBudget}>
-            이번에 투입할 금액 (원)
-            <input
-              type="number"
-              min="0"
-              max="1000000000000000"
-              step="1"
-              value={cashInput}
-              onChange={(event) => setCashInput(event.target.value)}
-              placeholder="비우면 이론상 필요 금액"
-            />
-          </label>
-        )}
-        <details className={styles.exclusions}>
-          <summary>
-            이번 조정에서 제외할 보유 종목 {excludedHoldingIds.length}개{" "}
-            <ChevronDown size={14} />
-          </summary>
-          <div>
-            {holdings.map((holding) => (
-              <label key={holding.id}>
-                <input
-                  type="checkbox"
-                  checked={excludedHoldingIds.includes(holding.id)}
-                  onChange={(event) =>
-                    setExcludedHoldingIds((ids) =>
-                      event.target.checked
-                        ? [...ids, holding.id]
-                        : ids.filter((id) => id !== holding.id),
-                    )
-                  }
-                />
-                {holding.broker} · {holding.name} (
-                {holding.symbol || "코드 없음"})
-              </label>
-            ))}
-            {!holdings.length && <small>제외할 보유 종목이 없습니다.</small>}
-          </div>
-        </details>
-        <p className={styles.help}>
-          예상 수량은 1주 단위이며 수수료·세금·환전 비용은 포함하지 않습니다.
-          계좌별 주문 가능 금액도 확인하세요.
-        </p>
-        {!rebalanceReady ? (
-          <p className={styles.rebalanceStatus}>
-            {values?.missingPrices
-              ? `가격 미확인 ${values.missingPrices}개 종목을 확인해 주세요.`
-              : values?.unassigned
-                ? `미분류 자산 ${fmt(values.unassigned)}을 배정해 주세요.`
-                : "가격이 있는 자산을 등록하면 추천이 표시됩니다."}
-          </p>
-        ) : (
-          <>
-            <p className={styles.rebalanceStatus}>
-              {inRangeCount > 0
-                ? `${inRangeCount}개 포트는 허용 오차 안에 있습니다.`
-                : ""}
-              {!actionItems.length ? " 현재 조정할 포트가 없습니다." : ""}
-            </p>
-            <div className={styles.adviceList}>
-              {actionItems.map((item) => {
-                const itemTrades = advice.trades.filter(
-                  (trade) => trade.bucketId === item.bucket.id,
-                );
-                const action = itemTrades.some((trade) => trade.side === "buy")
-                  ? "add"
-                  : itemTrades.some((trade) => trade.side === "sell")
-                    ? "sell"
-                    : item.gapPercent > 0
-                      ? "add"
-                      : rebalanceMode === "trade"
-                        ? "sell"
-                        : "hold";
+            </details>
+            <div className={styles.bucketList}>
+              {draft.buckets.map((bucket) => {
+                const current = values?.values.get(bucket.id) ?? 0;
+                const currentPercent = values?.total
+                  ? (current / values.total) * 100
+                  : 0;
                 return (
-                  <div
-                    key={item.bucket.id}
-                    className={`${styles.advice} ${action === "add" ? styles.adviceAdd : action === "sell" ? styles.adviceSell : styles.adviceHold}`}
-                  >
-                    <span
-                      className={styles.dot}
-                      style={{ background: item.bucket.color }}
+                  <div className={styles.bucket} key={bucket.id}>
+                    <input
+                      className={styles.color}
+                      type="color"
+                      value={bucket.color}
+                      aria-label={`${bucket.name} 색상`}
+                      onChange={(event) =>
+                        editBucket(bucket.id, "color", event.target.value)
+                      }
                     />
-                    <div>
-                      <strong>
-                        <span className={styles.actionTag}>
-                          {action === "add"
-                            ? "추가"
-                            : action === "sell"
-                              ? "매도"
-                              : "유지"}
-                        </span>
-                        {item.bucket.name}
-                      </strong>
+                    <input
+                      className={styles.bucketName}
+                      value={bucket.name}
+                      aria-label="포트 이름"
+                      onChange={(event) =>
+                        editBucket(bucket.id, "name", event.target.value)
+                      }
+                    />
+                    <div className={styles.barArea}>
+                      <div className={styles.bar}>
+                        <i
+                          style={{
+                            width: `${Math.min(currentPercent, 100)}%`,
+                            background: bucket.color,
+                          }}
+                        />
+                      </div>
                       <small>
-                        목표와 차이 {item.gapPercent > 0 ? "+" : ""}
-                        {item.gapPercent.toFixed(1)}%p · 조정 후 예상{" "}
-                        {pct(item.projectedPercent)}
+                        현재 {pct(currentPercent)} · 목표 차이{" "}
+                        {currentPercent - bucket.targetPercent > 0 ? "+" : ""}
+                        {(currentPercent - bucket.targetPercent).toFixed(1)}%p ·{" "}
+                        {fmt(current)}
                       </small>
                     </div>
-                    <p>{item.advice}</p>
+                    <label>
+                      목표{" "}
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={bucket.targetPercent}
+                        onChange={(event) =>
+                          editBucket(
+                            bucket.id,
+                            "targetPercent",
+                            event.target.value,
+                          )
+                        }
+                      />{" "}
+                      %
+                    </label>
+                    <button
+                      className={styles.iconButton}
+                      aria-label={`${bucket.name} 삭제`}
+                      disabled={draft.buckets.length <= 1}
+                      onClick={() => removeBucket(bucket.id)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 );
               })}
             </div>
-            <div className={styles.previewSummary}>
-              <strong>조정 후 미리보기</strong>
-              <span>
-                제안{" "}
-                {advice.trades.filter((trade) => trade.side === "buy").length}건
-                매수 ·{" "}
-                {advice.trades.filter((trade) => trade.side === "sell").length}
-                건 매도
+            <p className={targetTotal === 100 ? styles.ok : styles.warning}>
+              목표 합계 {pct(targetTotal)}
+              {targetTotal === 100
+                ? " · 저장할 수 있습니다."
+                : " · 저장하려면 100%로 맞춰 주세요."}
+            </p>
+          </section>
+
+          <details className={`${styles.panel} ${styles.collapsible}`}>
+            <summary className={styles.panelHead}>
+              <div>
+                <span>02 · INSTRUMENTS</span>
+                <h2>종목코드별 자동 배정</h2>
+              </div>
+              <span className={styles.collapseMeta}>
+                {draft.rules.length}개 규칙 <ChevronDown size={16} />
               </span>
-              <span>
-                주식 제안 후 남는 자금 약 {fmt(advice.residualCash)}
-                {advice.projectedUnassignedPercent > 0
-                  ? ` · 전체의 ${pct(advice.projectedUnassignedPercent)}`
-                  : ""}
-              </span>
+            </summary>
+            <p className={styles.help}>
+              종목코드가 일치하는 보유 종목을 저장할 때 자동으로 분류합니다.
+              국내 기준가는 원, 미국 기준가는 달러입니다. 원하는 종목은 아래에서
+              직접 다른 포트로 옮길 수 있습니다.
+            </p>
+            <div className={styles.ruleForm}>
+              <select
+                value={ruleBucketId || draft.buckets[0]?.id || ""}
+                onChange={(event) => setRuleBucketId(event.target.value)}
+                aria-label="배정할 포트"
+              >
+                {draft.buckets.map((bucket) => (
+                  <option key={bucket.id} value={bucket.id}>
+                    {bucket.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={ruleMarket}
+                onChange={(event) => {
+                  setRuleMarket(event.target.value as Market);
+                  setCandidates([]);
+                }}
+                aria-label="시장"
+              >
+                <option value="KR">국내</option>
+                <option value="US">미국</option>
+              </select>
+              <input
+                value={ruleQuery}
+                onChange={(event) => {
+                  setRuleQuery(event.target.value);
+                  setCandidates([]);
+                }}
+                placeholder="종목명 또는 종목코드"
+                aria-label="종목 검색어"
+              />
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={rulePrice}
+                onChange={(event) => setRulePrice(event.target.value)}
+                placeholder="기준 가격(선택)"
+                aria-label="기준 가격"
+              />
+              <button onClick={lookup} disabled={lookingUp}>
+                <Search size={15} /> {lookingUp ? "검색 중" : "KIS 검색"}
+              </button>
             </div>
-            {draft.cryptoAssets.length > 0 && (
+            {candidates.length > 0 && (
+              <div className={styles.candidates}>
+                {candidates.map((item) => (
+                  <button
+                    key={`${item.market}:${item.symbol}:${item.exchange}`}
+                    onClick={() => addRule(item)}
+                  >
+                    <strong>{item.name}</strong>
+                    <span>
+                      {item.symbol} · {item.exchange}
+                    </span>
+                    <Plus size={14} />
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className={styles.rules}>
+              {draft.rules.map((rule) => (
+                <div key={rule.id} className={styles.rule}>
+                  <span
+                    className={styles.dot}
+                    style={{
+                      background:
+                        draft.buckets.find(
+                          (bucket) => bucket.id === rule.bucketId,
+                        )?.color ?? "#aaa",
+                    }}
+                  />
+                  <strong>{rule.name || rule.symbol}</strong>
+                  <small>
+                    {rule.market} · {rule.symbol} ·{" "}
+                    {
+                      draft.buckets.find(
+                        (bucket) => bucket.id === rule.bucketId,
+                      )?.name
+                    }
+                  </small>
+                  <label>
+                    기준가{" "}
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={rule.manualPrice ?? ""}
+                      placeholder={
+                        rule.quotedPrice ? String(rule.quotedPrice) : "미입력"
+                      }
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          rules: draft.rules.map(
+                            (item): Rule =>
+                              item.id === rule.id
+                                ? {
+                                    ...item,
+                                    manualPrice: event.target.value
+                                      ? Number(event.target.value)
+                                      : null,
+                                  }
+                                : item,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                  <button
+                    className={styles.iconButton}
+                    aria-label={`${rule.symbol} 규칙 삭제`}
+                    onClick={() =>
+                      change({
+                        ...draft,
+                        rules: draft.rules.filter(
+                          (item) => item.id !== rule.id,
+                        ),
+                      })
+                    }
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
+        </>
+      )}
+      {screen === "allocation" && (
+        <>
+          <details className={`${styles.panel} ${styles.collapsible}`} open>
+            <summary className={styles.panelHead}>
+              <div>
+                <span>03 · ACTUAL POSITIONS</span>
+                <h2>내 자산 배정</h2>
+              </div>
+              <span className={styles.collapseMeta}>
+                주식 {holdings.length}개 · 가상자산 {draft.cryptoAssets.length}
+                개 · 직접 입력 {draft.manualAssets.length}개{" "}
+                <ChevronDown size={16} />
+              </span>
+            </summary>
+            <div className={styles.assignmentActions}>
+              <button className={styles.ghost} onClick={onEditHoldings}>
+                <Pencil size={15} /> 주식 수량·매입단가 수정
+              </button>
+              <button className={styles.ghost} onClick={onImport}>
+                <Camera size={15} /> 캡처 가져오기
+              </button>
+            </div>
+            {holdings.length ? (
+              <div className={styles.assignmentList}>
+                {holdings.map((holding) => {
+                  const assignment = draft.assignments.find(
+                    (item) => item.holdingId === holding.id,
+                  );
+                  const autoBucket =
+                    draft.rules.find(
+                      (rule) =>
+                        rule.market === holding.market &&
+                        rule.symbol === holding.symbol,
+                    )?.bucketId ?? null;
+                  const selection =
+                    assignment?.source === "manual"
+                      ? (assignment.bucketId ?? "unassigned")
+                      : "auto";
+                  return (
+                    <div key={holding.id}>
+                      <div>
+                        <strong>{holding.name}</strong>
+                        <small>
+                          {holding.broker} · {holding.symbol || "코드 미확인"} ·{" "}
+                          {fmt(holdingValueKrw(holding, draft.usdKrw))}
+                        </small>
+                      </div>
+                      <select
+                        value={selection}
+                        aria-label={`${holding.name} 포트 배정`}
+                        onChange={(event) =>
+                          assign(holding.id, event.target.value)
+                        }
+                      >
+                        <option value="auto">
+                          자동{" "}
+                          {autoBucket
+                            ? `· ${draft.buckets.find((bucket) => bucket.id === autoBucket)?.name}`
+                            : "· 미분류"}
+                        </option>
+                        <option value="unassigned">직접 · 미분류</option>
+                        {draft.buckets.map((bucket) => (
+                          <option key={bucket.id} value={bucket.id}>
+                            직접 · {bucket.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
               <p className={styles.help}>
-                가상자산 수량 조정은 직접 검토 항목이며 조정 후 예상 비중·잔여
-                자금에는 반영하지 않습니다.
+                보유 종목이 없습니다. 잔고 캡처를 가져오면 이곳에서 포트별로
+                배정할 수 있습니다.
               </p>
             )}
-          </>
-        )}
-      </section>
-
-      <section className={styles.panel}>
-        <div className={styles.panelHead}>
-          <div>
-            <span>05 · HISTORY</span>
-            <h2>자산 기록</h2>
-          </div>
-          <button className={styles.ghost} onClick={record} disabled={dirty}>
-            <Check size={15} /> 오늘 기록
-          </button>
-        </div>
-        <div className={styles.trendControls}>
-          <select
-            value={trendKey}
-            onChange={(event) => setTrendKey(event.target.value)}
-            aria-label="추이를 볼 포트"
-          >
-            <option value="__TOTAL__">전체 자산</option>
-            <option value="__UNASSIGNED__">미분류</option>
-            {draft.buckets.map((bucket) => (
-              <option key={bucket.id} value={bucket.id}>
-                {bucket.name}
-              </option>
-            ))}
-          </select>
-          <small>하루 한 기록 · 같은 날에는 최신 값으로 갱신</small>
-        </div>
-        <Trend points={history} color={trendColor} />
-        {trendKey === "__TOTAL__" && (
-          <div className={styles.performanceSummary}>
-            <div>
-              <small>기록 기간의 평가액 변화</small>
-              <strong>
-                {adjustedChange === null
-                  ? "기록 2일 이상 필요"
-                  : fmt(
-                      (lastPoint?.valueKrw ?? 0) - (firstPoint?.valueKrw ?? 0),
-                    )}
-              </strong>
+            <div className={styles.subHead}>
+              <h3>가상자산 · 빗썸 원화 시세</h3>
+              <small>
+                원화마켓 코드와 보유 수량을 등록하면 가격 갱신 시 평가액을
+                계산합니다.
+              </small>
             </div>
-            <div>
-              <small>같은 기간 순입금</small>
-              <strong>{adjustedChange === null ? "—" : fmt(periodFlow)}</strong>
+            <div className={styles.cryptoSearch}>
+              <input
+                value={cryptoQuery}
+                onChange={(event) => setCryptoQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") lookupCrypto();
+                }}
+                placeholder="비트코인 또는 KRW-BTC 검색"
+                aria-label="가상자산 원화마켓 검색"
+              />
+              <button
+                type="button"
+                onClick={lookupCrypto}
+                disabled={lookingUpCrypto}
+              >
+                <Search size={15} /> {lookingUpCrypto ? "검색 중" : "검색"}
+              </button>
             </div>
-            <div>
-              <small>순입금 제외 증감</small>
-              <strong>
-                {adjustedChange === null ? "—" : fmt(adjustedChange)}
-              </strong>
+            {cryptoCandidates.length > 0 && (
+              <div className={styles.cryptoCandidates}>
+                {cryptoCandidates.map((market) => (
+                  <button
+                    key={market.marketCode}
+                    type="button"
+                    onClick={() => {
+                      setCryptoSelected(market);
+                      setCryptoCandidates([]);
+                    }}
+                  >
+                    <strong>{market.name}</strong>
+                    <span>
+                      {market.marketCode} · {market.englishName}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className={styles.cryptoForm}>
+              <span className={styles.cryptoSelection}>
+                {cryptoSelected
+                  ? `${cryptoSelected.name} · ${cryptoSelected.marketCode}`
+                  : "마켓을 검색해 선택"}
+              </span>
+              <input
+                type="number"
+                min="0"
+                max="999999999999"
+                step="0.000000000001"
+                value={cryptoQuantity}
+                onChange={(event) => setCryptoQuantity(event.target.value)}
+                placeholder="보유 수량"
+                aria-label="가상자산 보유 수량"
+              />
+              <select
+                value={
+                  cryptoBucketId ||
+                  draft.buckets.find((bucket) =>
+                    /비트코인|가상자산|코인/i.test(bucket.name),
+                  )?.id ||
+                  draft.buckets[0]?.id ||
+                  ""
+                }
+                onChange={(event) => setCryptoBucketId(event.target.value)}
+                aria-label="가상자산 포트"
+              >
+                {draft.buckets.map((bucket) => (
+                  <option key={bucket.id} value={bucket.id}>
+                    {bucket.name}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={addCryptoAsset}>
+                <Plus size={15} /> 추가
+              </button>
             </div>
-            <p>
-              순입금 제외 증감은 평가액 변화에서 기록한 입출금을 뺀
-              참고값입니다. 신규 자산 등록·수량 수정, 배당·수수료·환율 변동도
-              영향을 줍니다. 투자 수익률은 아닙니다.
-            </p>
-          </div>
-        )}
-        <details className={styles.flowDetails}>
-          <summary>
-            입출금 기록 {draft.cashFlows.length}건 <ChevronDown size={15} />
-          </summary>
-          <p className={styles.help}>
-            계좌 밖에서 들어오거나 나간 자금만 기록하세요. 계좌 간 이동은 합산
-            범위에 따라 중복되지 않게 입력해야 합니다.
-          </p>
-          <div className={styles.flowForm}>
-            <input
-              type="date"
-              value={flowDate}
-              onChange={(event) => setFlowDate(event.target.value)}
-              aria-label="입출금 날짜"
-            />
-            <select
-              value={flowKind}
-              onChange={(event) =>
-                setFlowKind(event.target.value as "deposit" | "withdrawal")
-              }
-              aria-label="입출금 구분"
-            >
-              <option value="deposit">입금</option>
-              <option value="withdrawal">출금</option>
-            </select>
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={flowAmount}
-              onChange={(event) => setFlowAmount(event.target.value)}
-              placeholder="금액 (원)"
-              aria-label="입출금 금액"
-            />
-            <input
-              value={flowNote}
-              onChange={(event) => setFlowNote(event.target.value)}
-              maxLength={120}
-              placeholder="메모 (선택)"
-              aria-label="입출금 메모"
-            />
-            <button
-              type="button"
-              onClick={saveFlow}
-              disabled={flowSaving || dirty}
-            >
-              {flowSaving ? "저장 중" : "기록"}
-            </button>
-          </div>
-          <div className={styles.flowList}>
-            {draft.cashFlows.map((flow) => (
-              <div key={flow.id}>
-                <span>
-                  {flow.date} ·{" "}
-                  {flow.note || (flow.amountKrw > 0 ? "입금" : "출금")}
-                </span>
-                <strong>
-                  {flow.amountKrw > 0 ? "+" : ""}
-                  {fmt(flow.amountKrw)}
-                </strong>
-                <button
-                  type="button"
-                  className={styles.iconButton}
-                  onClick={() => removeFlow(flow.id)}
-                  disabled={dirty}
-                  aria-label={`${flow.date} 입출금 삭제`}
+            {draft.cryptoAssets.map((asset) => (
+              <div className={styles.cryptoRow} key={asset.id}>
+                <div>
+                  <strong>{asset.name}</strong>
+                  <small>
+                    {asset.marketCode} · 빗썸{" "}
+                    {asset.quotedPriceKrw === null
+                      ? "시세 미확인"
+                      : `현재가 ${fmt(asset.quotedPriceKrw)}`}
+                  </small>
+                  <small>
+                    조회 {timeLabel(asset.quoteCheckedAt)}
+                    {asset.lastTradeAt
+                      ? ` · 마지막 체결 ${timeLabel(asset.lastTradeAt)}`
+                      : ""}
+                  </small>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  max="999999999999"
+                  step="0.000000000001"
+                  value={asset.quantity}
+                  aria-label={`${asset.name} 보유 수량`}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      cryptoAssets: draft.cryptoAssets.map((item) =>
+                        item.id === asset.id
+                          ? { ...item, quantity: Number(event.target.value) }
+                          : item,
+                      ),
+                    })
+                  }
+                />
+                <select
+                  value={asset.bucketId ?? ""}
+                  aria-label={`${asset.name} 포트`}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      cryptoAssets: draft.cryptoAssets.map((item) =>
+                        item.id === asset.id
+                          ? { ...item, bucketId: event.target.value || null }
+                          : item,
+                      ),
+                    })
+                  }
                 >
-                  <Trash2 size={14} />
+                  <option value="">미분류</option>
+                  {draft.buckets.map((bucket) => (
+                    <option key={bucket.id} value={bucket.id}>
+                      {bucket.name}
+                    </option>
+                  ))}
+                </select>
+                <b>
+                  {asset.quotedPriceKrw === null
+                    ? "가격 미확인"
+                    : fmt(cryptoAssetValueKrw(asset))}
+                </b>
+                <button
+                  className={styles.iconButton}
+                  aria-label={`${asset.name} 삭제`}
+                  onClick={() =>
+                    change({
+                      ...draft,
+                      cryptoAssets: draft.cryptoAssets.filter(
+                        (item) => item.id !== asset.id,
+                      ),
+                    })
+                  }
+                >
+                  <Trash2 size={15} />
                 </button>
               </div>
             ))}
-            {!draft.cashFlows.length && (
-              <small>기록된 입출금이 없습니다.</small>
+            <div className={styles.subHead}>
+              <h3>기타 직접 입력 자산</h3>
+              <small>원화 금액이나 달러 수량을 직접 관리하는 자산</small>
+            </div>
+            {draft.manualAssets.some((asset) =>
+              /비트코인|bitcoin|BTC/i.test(asset.name),
+            ) && (
+              <p className={styles.help}>
+                기존 비트코인 직접 입력 금액은 자동 시세와 별개입니다. 수량을
+                등록한 뒤 중복 합산되지 않도록 기존 금액을 확인해 주세요.
+              </p>
             )}
-          </div>
-        </details>
-      </section>
+            <div className={styles.manualForm}>
+              <input
+                value={manualName}
+                onChange={(event) => setManualName(event.target.value)}
+                placeholder="자산 이름"
+                aria-label="직접 입력 자산 이름"
+              />
+              <input
+                type="number"
+                min="0"
+                value={manualValue}
+                onChange={(event) => setManualValue(event.target.value)}
+                placeholder={
+                  manualCurrency === "USD" ? "달러 금액" : "평가액 (원)"
+                }
+                aria-label="직접 입력 자산 금액"
+              />
+              <select
+                value={manualCurrency}
+                onChange={(event) =>
+                  setManualCurrency(event.target.value as "KRW" | "USD")
+                }
+                aria-label="직접 입력 자산 통화"
+              >
+                <option value="KRW">원화</option>
+                <option value="USD">달러</option>
+              </select>
+              <select
+                value={manualBucketId || draft.buckets[0]?.id || ""}
+                onChange={(event) => setManualBucketId(event.target.value)}
+                aria-label="자산 포트"
+              >
+                {draft.buckets.map((bucket) => (
+                  <option key={bucket.id} value={bucket.id}>
+                    {bucket.name}
+                  </option>
+                ))}
+              </select>
+              <button onClick={addManualAsset}>
+                <Plus size={15} /> 추가
+              </button>
+            </div>
+            {draft.manualAssets.map((asset) => (
+              <div className={styles.manualRow} key={asset.id}>
+                <strong>{asset.name}</strong>
+                <input
+                  type="number"
+                  min="0"
+                  max="1000000000000000"
+                  value={asset.valueUsd ?? asset.valueKrw}
+                  aria-label={`${asset.name} ${asset.valueUsd === null ? "원화 평가액" : "달러 금액"}`}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      manualAssets: draft.manualAssets.map((item) =>
+                        item.id === asset.id
+                          ? item.valueUsd === null
+                            ? { ...item, valueKrw: Number(event.target.value) }
+                            : {
+                                ...item,
+                                valueUsd: Number(event.target.value),
+                                valueKrw:
+                                  Number(event.target.value) * draft.usdKrw,
+                              }
+                          : item,
+                      ),
+                    })
+                  }
+                />
+                <small>
+                  {asset.valueUsd === null
+                    ? "KRW"
+                    : `USD · ${fmt(manualAssetValueKrw(asset, draft.usdKrw))}`}
+                </small>
+                <select
+                  value={asset.bucketId ?? ""}
+                  aria-label={`${asset.name} 포트`}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      manualAssets: draft.manualAssets.map((item) =>
+                        item.id === asset.id
+                          ? { ...item, bucketId: event.target.value || null }
+                          : item,
+                      ),
+                    })
+                  }
+                >
+                  <option value="">미분류</option>
+                  {draft.buckets.map((bucket) => (
+                    <option key={bucket.id} value={bucket.id}>
+                      {bucket.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className={styles.iconButton}
+                  aria-label={`${asset.name} 삭제`}
+                  onClick={() =>
+                    change({
+                      ...draft,
+                      manualAssets: draft.manualAssets.filter(
+                        (item) => item.id !== asset.id,
+                      ),
+                    })
+                  }
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+          </details>
+        </>
+      )}
+      {screen === "rebalance" && (
+        <>
+          <section className={styles.panel}>
+            <div className={styles.panelHead}>
+              <div>
+                <span>04 · REBALANCE</span>
+                <h2>리밸런싱</h2>
+              </div>
+              <select
+                value={rebalanceMode}
+                onChange={(event) =>
+                  setRebalanceMode(event.target.value as "trade" | "add-only")
+                }
+                aria-label="리밸런싱 방법"
+              >
+                <option value="trade">매도 후 매수</option>
+                <option value="add-only">신규 자금으로 매수</option>
+              </select>
+            </div>
+            <p className={styles.methodNote}>
+              허용 오차 ±{pct(draft.tolerancePercent)}
+              {rebalanceMode === "add-only" && advice.requiredCash > 0
+                ? ` · 목표 비중까지 이론상 필요한 신규 자금 약 ${fmt(advice.requiredCash)}`
+                : ""}
+            </p>
+            {rebalanceMode === "add-only" && (
+              <label className={styles.cashBudget}>
+                이번에 투입할 금액 (원)
+                <input
+                  type="number"
+                  min="0"
+                  max="1000000000000000"
+                  step="1"
+                  value={cashInput}
+                  onChange={(event) => setCashInput(event.target.value)}
+                  placeholder="비우면 이론상 필요 금액"
+                />
+              </label>
+            )}
+            <details className={styles.exclusions}>
+              <summary>
+                이번 조정에서 제외할 보유 종목 {excludedHoldingIds.length}개{" "}
+                <ChevronDown size={14} />
+              </summary>
+              <div>
+                {holdings.map((holding) => (
+                  <label key={holding.id}>
+                    <input
+                      type="checkbox"
+                      checked={excludedHoldingIds.includes(holding.id)}
+                      onChange={(event) =>
+                        setExcludedHoldingIds((ids) =>
+                          event.target.checked
+                            ? [...ids, holding.id]
+                            : ids.filter((id) => id !== holding.id),
+                        )
+                      }
+                    />
+                    {holding.broker} · {holding.name} (
+                    {holding.symbol || "코드 없음"})
+                  </label>
+                ))}
+                {!holdings.length && (
+                  <small>제외할 보유 종목이 없습니다.</small>
+                )}
+              </div>
+            </details>
+            <p className={styles.help}>
+              예상 수량은 1주 단위이며 수수료·세금·환전 비용은 포함하지
+              않습니다. 계좌별 주문 가능 금액도 확인하세요.
+            </p>
+            {!rebalanceReady ? (
+              <p className={styles.rebalanceStatus}>
+                {values?.missingPrices
+                  ? `가격 미확인 ${values.missingPrices}개 종목을 확인해 주세요.`
+                  : values?.unassigned
+                    ? `미분류 자산 ${fmt(values.unassigned)}을 배정해 주세요.`
+                    : "가격이 있는 자산을 등록하면 추천이 표시됩니다."}
+              </p>
+            ) : (
+              <>
+                <p className={styles.rebalanceStatus}>
+                  {inRangeCount > 0
+                    ? `${inRangeCount}개 포트는 허용 오차 안에 있습니다.`
+                    : ""}
+                  {!actionItems.length ? " 현재 조정할 포트가 없습니다." : ""}
+                </p>
+                <div className={styles.adviceList}>
+                  {actionItems.map((item) => {
+                    const itemTrades = advice.trades.filter(
+                      (trade) => trade.bucketId === item.bucket.id,
+                    );
+                    const action = itemTrades.some(
+                      (trade) => trade.side === "buy",
+                    )
+                      ? "add"
+                      : itemTrades.some((trade) => trade.side === "sell")
+                        ? "sell"
+                        : item.gapPercent > 0
+                          ? "add"
+                          : rebalanceMode === "trade"
+                            ? "sell"
+                            : "hold";
+                    return (
+                      <div
+                        key={item.bucket.id}
+                        className={`${styles.advice} ${action === "add" ? styles.adviceAdd : action === "sell" ? styles.adviceSell : styles.adviceHold}`}
+                      >
+                        <span
+                          className={styles.dot}
+                          style={{ background: item.bucket.color }}
+                        />
+                        <div>
+                          <strong>
+                            <span className={styles.actionTag}>
+                              {action === "add"
+                                ? "추가"
+                                : action === "sell"
+                                  ? "매도"
+                                  : "유지"}
+                            </span>
+                            {item.bucket.name}
+                          </strong>
+                          <small>
+                            목표와 차이 {item.gapPercent > 0 ? "+" : ""}
+                            {item.gapPercent.toFixed(1)}%p · 조정 후 예상{" "}
+                            {pct(item.projectedPercent)}
+                          </small>
+                        </div>
+                        <p>{item.advice}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className={styles.previewSummary}>
+                  <strong>조정 후 미리보기</strong>
+                  <span>
+                    제안{" "}
+                    {
+                      advice.trades.filter((trade) => trade.side === "buy")
+                        .length
+                    }
+                    건 매수 ·{" "}
+                    {
+                      advice.trades.filter((trade) => trade.side === "sell")
+                        .length
+                    }
+                    건 매도
+                  </span>
+                  <span>
+                    주식 제안 후 남는 자금 약 {fmt(advice.residualCash)}
+                    {advice.projectedUnassignedPercent > 0
+                      ? ` · 전체의 ${pct(advice.projectedUnassignedPercent)}`
+                      : ""}
+                  </span>
+                </div>
+                {draft.cryptoAssets.length > 0 && (
+                  <p className={styles.help}>
+                    가상자산 수량 조정은 직접 검토 항목이며 조정 후 예상
+                    비중·잔여 자금에는 반영하지 않습니다.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
+        </>
+      )}
+      {screen === "history" && (
+        <>
+          <section className={styles.panel}>
+            <div className={styles.panelHead}>
+              <div>
+                <span>05 · HISTORY</span>
+                <h2>자산 기록</h2>
+              </div>
+              <button
+                className={styles.ghost}
+                onClick={record}
+                disabled={dirty}
+              >
+                <Check size={15} /> 오늘 기록
+              </button>
+            </div>
+            <div className={styles.trendControls}>
+              <select
+                value={trendKey}
+                onChange={(event) => setTrendKey(event.target.value)}
+                aria-label="추이를 볼 포트"
+              >
+                <option value="__TOTAL__">전체 자산</option>
+                <option value="__UNASSIGNED__">미분류</option>
+                {draft.buckets.map((bucket) => (
+                  <option key={bucket.id} value={bucket.id}>
+                    {bucket.name}
+                  </option>
+                ))}
+              </select>
+              <small>하루 한 기록 · 같은 날에는 최신 값으로 갱신</small>
+            </div>
+            <Trend points={history} color={trendColor} />
+            {trendKey === "__TOTAL__" && (
+              <div className={styles.performanceSummary}>
+                <div>
+                  <small>기록 기간의 평가액 변화</small>
+                  <strong>
+                    {adjustedChange === null
+                      ? "기록 2일 이상 필요"
+                      : fmt(
+                          (lastPoint?.valueKrw ?? 0) -
+                            (firstPoint?.valueKrw ?? 0),
+                        )}
+                  </strong>
+                </div>
+                <div>
+                  <small>같은 기간 순입금</small>
+                  <strong>
+                    {adjustedChange === null ? "—" : fmt(periodFlow)}
+                  </strong>
+                </div>
+                <div>
+                  <small>순입금 제외 증감</small>
+                  <strong>
+                    {adjustedChange === null ? "—" : fmt(adjustedChange)}
+                  </strong>
+                </div>
+                <p>
+                  순입금 제외 증감은 평가액 변화에서 기록한 입출금을 뺀
+                  참고값입니다. 신규 자산 등록·수량 수정, 배당·수수료·환율
+                  변동도 영향을 줍니다. 투자 수익률은 아닙니다.
+                </p>
+              </div>
+            )}
+            <details className={styles.flowDetails}>
+              <summary>
+                입출금 기록 {draft.cashFlows.length}건 <ChevronDown size={15} />
+              </summary>
+              <p className={styles.help}>
+                계좌 밖에서 들어오거나 나간 자금만 기록하세요. 계좌 간 이동은
+                합산 범위에 따라 중복되지 않게 입력해야 합니다.
+              </p>
+              <div className={styles.flowForm}>
+                <input
+                  type="date"
+                  value={flowDate}
+                  onChange={(event) => setFlowDate(event.target.value)}
+                  aria-label="입출금 날짜"
+                />
+                <select
+                  value={flowKind}
+                  onChange={(event) =>
+                    setFlowKind(event.target.value as "deposit" | "withdrawal")
+                  }
+                  aria-label="입출금 구분"
+                >
+                  <option value="deposit">입금</option>
+                  <option value="withdrawal">출금</option>
+                </select>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={flowAmount}
+                  onChange={(event) => setFlowAmount(event.target.value)}
+                  placeholder="금액 (원)"
+                  aria-label="입출금 금액"
+                />
+                <input
+                  value={flowNote}
+                  onChange={(event) => setFlowNote(event.target.value)}
+                  maxLength={120}
+                  placeholder="메모 (선택)"
+                  aria-label="입출금 메모"
+                />
+                <button
+                  type="button"
+                  onClick={saveFlow}
+                  disabled={flowSaving || dirty}
+                >
+                  {flowSaving ? "저장 중" : "기록"}
+                </button>
+              </div>
+              <div className={styles.flowList}>
+                {draft.cashFlows.map((flow) => (
+                  <div key={flow.id}>
+                    <span>
+                      {flow.date} ·{" "}
+                      {flow.note || (flow.amountKrw > 0 ? "입금" : "출금")}
+                    </span>
+                    <strong>
+                      {flow.amountKrw > 0 ? "+" : ""}
+                      {fmt(flow.amountKrw)}
+                    </strong>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      onClick={() => removeFlow(flow.id)}
+                      disabled={dirty}
+                      aria-label={`${flow.date} 입출금 삭제`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                {!draft.cashFlows.length && (
+                  <small>기록된 입출금이 없습니다.</small>
+                )}
+              </div>
+            </details>
+          </section>
+        </>
+      )}
     </div>
   );
 }

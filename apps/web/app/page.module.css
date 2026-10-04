@@ -1606,3 +1606,81 @@
   .holdingRow > strong { font-size: 12px; }
   .pageHead h1 { font-size: 24px; }
 }
+
+.editIntro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  border: 1px solid #cae3e2;
+  border-radius: 13px;
+  background: #f5fbfa;
+  color: #23565d;
+}
+.editIntro strong {
+  font-size: 14px;
+}
+.editIntro span {
+  flex: 1 1 320px;
+  font-size: 12px;
+}
+.editIntro button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: #087b83;
+  font-weight: 700;
+  cursor: pointer;
+}
+.editTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+}
+.editTitle strong {
+  color: #244851;
+}
+.editTitle span {
+  color: #718790;
+  font-size: 11px;
+}
+.codeVerification {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 100%;
+  padding-top: 15px;
+  border-top: 1px solid #dce8e7;
+}
+.codeVerification > div {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+.codeVerification strong {
+  color: #31565c;
+  font-size: 12px;
+}
+.codeVerification span {
+  color: #69818a;
+  font-size: 11px;
+}
+.codeVerification select {
+  padding: 8px;
+  border: 1px solid #cddae5;
+  border-radius: 7px;
+}
+@media (max-width: 720px) {
+  .codeVerification {
+    flex-wrap: wrap;
+  }
+  .codeVerification > div {
+    flex-basis: 100%;
+  }
+}
+
+.navGroup > span:not(:first-child) { padding-top: 15px; }

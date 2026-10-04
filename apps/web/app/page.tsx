@@ -30,7 +30,16 @@ import {
 import PortfolioBuilder from "./PortfolioBuilder";
 import styles from "./page.module.css";
 
-type View = "portfolio" | "overview" | "holdings" | "import" | "settings";
+type View =
+  | "portfolio"
+  | "holdings"
+  | "edit"
+  | "strategy"
+  | "allocation"
+  | "rebalance"
+  | "history"
+  | "import"
+  | "settings";
 type Instrument = {
   market: Market;
   symbol: string;
@@ -62,6 +71,7 @@ async function data<T>(response: Response): Promise<T> {
 export default function PortfolioPage() {
   const { data: session, status: authStatus } = useSession();
   const [view, setView] = useState<View>("portfolio");
+  const [portfolioDirty, setPortfolioDirty] = useState(false);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
@@ -150,17 +160,6 @@ export default function PortfolioPage() {
     [holdings],
   );
 
-  const brokers = useMemo(() => {
-    const rows = new Map<string, { KR: number; US: number; count: number }>();
-    for (const row of holdings) {
-      const entry = rows.get(row.broker) ?? { KR: 0, US: 0, count: 0 };
-      entry[row.market] += valueOf(row);
-      entry.count++;
-      rows.set(row.broker, entry);
-    }
-    return [...rows.entries()];
-  }, [holdings]);
-
   const shown = useMemo(
     () =>
       holdings
@@ -177,6 +176,21 @@ export default function PortfolioPage() {
   );
 
   function go(next: View) {
+    const portfolioScreens: View[] = [
+      "portfolio",
+      "strategy",
+      "allocation",
+      "rebalance",
+      "history",
+    ];
+    if (
+      portfolioDirty &&
+      portfolioScreens.includes(view) &&
+      !portfolioScreens.includes(next) &&
+      !window.confirm("저장하지 않은 포트폴리오 변경 사항을 버리고 이동할까요?")
+    )
+      return;
+    if (!portfolioScreens.includes(next)) setPortfolioDirty(false);
     setView(next);
     setMenuOpen(false);
     setNotice("");
@@ -667,9 +681,13 @@ export default function PortfolioPage() {
     );
 
   const nav = [
-    { id: "portfolio" as View, label: "내 포트폴리오", Icon: LayoutDashboard },
-    { id: "overview" as View, label: "자산 현황", Icon: Wallet },
+    { id: "portfolio" as View, label: "대시보드", Icon: LayoutDashboard },
     { id: "holdings" as View, label: "보유 자산", Icon: Wallet },
+    { id: "edit" as View, label: "자산 수정", Icon: Pencil },
+    { id: "strategy" as View, label: "목표 설계", Icon: Settings2 },
+    { id: "allocation" as View, label: "자산 배정", Icon: Wallet },
+    { id: "rebalance" as View, label: "리밸런싱", Icon: RefreshCw },
+    { id: "history" as View, label: "자산 기록", Icon: LayoutDashboard },
     { id: "import" as View, label: "캡처 가져오기", Icon: Camera },
     { id: "settings" as View, label: "계정", Icon: Settings2 },
   ];
@@ -695,17 +713,20 @@ export default function PortfolioPage() {
           </div>
         </div>
         <div className={styles.navGroup}>
-          <span>WORKSPACE</span>
-          {nav.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              className={view === id ? styles.navActive : ""}
-              onClick={() => go(id)}
-            >
-              <Icon size={19} />
-              {label}
-              {view === id && <i />}
-            </button>
+          {nav.map(({ id, label, Icon }, index) => (
+            <Fragment key={id}>
+              {index === 0 && <span>자산</span>}
+              {index === 3 && <span>포트폴리오</span>}
+              {index === 7 && <span>도구</span>}
+              <button
+                className={view === id ? styles.navActive : ""}
+                onClick={() => go(id)}
+              >
+                <Icon size={19} />
+                {label}
+                {view === id && <i />}
+              </button>
+            </Fragment>
           ))}
         </div>
         <div className={styles.sideFoot}>
@@ -777,205 +798,110 @@ export default function PortfolioPage() {
               </button>
             </div>
           )}
-          {view === "portfolio" && (
+          {(
+            [
+              "portfolio",
+              "strategy",
+              "allocation",
+              "rebalance",
+              "history",
+            ] as View[]
+          ).includes(view) && (
             <PortfolioBuilder
+              screen={
+                view === "portfolio"
+                  ? "dashboard"
+                  : (view as
+                      | "strategy"
+                      | "allocation"
+                      | "rebalance"
+                      | "history")
+              }
               holdings={holdings}
               quoteVersion={quoteVersion}
               onHoldings={setHoldings}
               onNotice={setNotice}
               onRefreshQuotes={refreshQuotes}
               onImport={() => go("import")}
-              onEditHoldings={() => go("holdings")}
+              onEditHoldings={() => go("edit")}
+              onNavigate={go}
+              onDirtyChange={setPortfolioDirty}
             />
           )}
-          {view === "overview" && (
+          {(view === "holdings" || view === "edit") && (
             <>
               <div className={styles.pageHead}>
                 <div>
-                  <span className={styles.kicker}>OVERVIEW</span>
-                  <h1>내 자산 현황</h1>
-                  <p>여러 증권사의 보유 자산을 한곳에서 확인하세요.</p>
-                </div>
-                <button
-                  className={styles.secondaryButton}
-                  onClick={refreshQuotes}
-                  disabled={quoteBusy || !holdings.length}
-                >
-                  <RefreshCw size={17} />{" "}
-                  {quoteBusy ? "조회 중" : "시세 새로고침"}
-                </button>
-              </div>
-              <section className={styles.hero}>
-                <div className={styles.heroArt} />
-                <div className={styles.heroLabel}>
-                  <Wallet size={19} /> 국내 주식 평가금액 <span>KRW</span>
-                </div>
-                <strong>
-                  {won.format(totals.KR)}
-                  <small>원</small>
-                </strong>
-                <div className={styles.heroBottom}>
-                  <span>
-                    {totals.costKnown.KR
-                      ? `국내 평가손익 ${signedMoney(totals.gain.KR, "KR")} · `
-                      : ""}
-                    {brokers.length}개 증권사 · {holdings.length}개 보유 항목
+                  <span className={styles.kicker}>
+                    {view === "edit" ? "EDIT ASSETS" : "MY ASSETS"}
                   </span>
-                  <button onClick={() => go("holdings")}>
-                    자세히 보기 <ArrowRight size={16} />
-                  </button>
-                </div>
-              </section>
-              <div className={styles.metrics}>
-                <article>
-                  <span className={styles.metricIcon}>$</span>
-                  <p>미국 주식 평가금액</p>
-                  <strong>$ {dollars.format(totals.US)}</strong>
-                  <small>
-                    {totals.costKnown.US
-                      ? `평가손익 ${signedMoney(totals.gain.US, "US")} · `
-                      : ""}
-                    USD · 환율 변환 전
-                  </small>
-                </article>
-                <article>
-                  <span className={styles.metricIcon}>
-                    <RefreshCw size={18} />
-                  </span>
-                  <p>가격 조회 완료</p>
-                  <strong>
-                    {totals.quoted}
-                    <em> / {holdings.length}</em>
-                  </strong>
-                  <small>조회 실패 시 캡처 가격 사용</small>
-                </article>
-              </div>
-              <div className={styles.dashboardGrid}>
-                <section className={styles.panel}>
-                  <div className={styles.panelHead}>
-                    <div>
-                      <span className={styles.kicker}>POSITIONS</span>
-                      <h2>보유 종목</h2>
-                    </div>
-                    <button
-                      className={styles.linkButton}
-                      onClick={() => go("holdings")}
-                    >
-                      전체 보기 <ArrowRight size={16} />
-                    </button>
-                  </div>
-                  {holdings.length ? (
-                    <div className={styles.miniList}>
-                      {holdings.slice(0, 5).map((row) => (
-                        <div className={styles.miniRow} key={row.id}>
-                          <span className={styles.assetIcon}>{row.market}</span>
-                          <div>
-                            <strong>{row.name}</strong>
-                            <small>
-                              {row.broker} · {row.symbol || "코드 미확인"}
-                            </small>
-                          </div>
-                          <div>
-                            <strong>{money(valueOf(row), row.market)}</strong>
-                            <small>{won.format(row.quantity)}주</small>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <Empty onImport={() => go("import")} loading={loading} />
-                  )}
-                </section>
-                <section className={styles.panel}>
-                  <div className={styles.panelHead}>
-                    <div>
-                      <span className={styles.kicker}>BROKERAGES</span>
-                      <h2>증권사별 자산</h2>
-                    </div>
-                    <span className={styles.pill}>{brokers.length}곳</span>
-                  </div>
-                  {brokers.length ? (
-                    <div className={styles.brokerList}>
-                      {brokers.map(([name, value]) => (
-                        <div className={styles.brokerRow} key={name}>
-                          <span>{name.slice(0, 1)}</span>
-                          <div>
-                            <strong>{name}</strong>
-                            <small>{value.count}개 종목</small>
-                          </div>
-                          <div>
-                            <strong>{money(value.KR, "KR")}</strong>
-                            <small>{money(value.US, "US")}</small>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className={styles.muted}>
-                      캡처를 가져오면 증권사별 내역이 표시됩니다.
-                    </p>
-                  )}
-                  <div className={styles.panelNote}>
-                    <ShieldCheck size={16} /> 원화와 달러는 서로 합산하지
-                    않습니다.
-                  </div>
-                </section>
-              </div>
-            </>
-          )}
-          {view === "holdings" && (
-            <>
-              <div className={styles.pageHead}>
-                <div>
-                  <span className={styles.kicker}>MY ASSETS</span>
-                  <h1>보유 자산</h1>
-                  <p>확인한 종목과 가격 출처를 함께 보여드립니다.</p>
+                  <h1>{view === "edit" ? "자산 수정" : "보유 자산"}</h1>
+                  <p>
+                    {view === "edit"
+                      ? "보유 수량, 매입단가와 시세 조회용 종목코드를 관리하세요."
+                      : "확인한 종목과 가격 출처를 함께 보여드립니다."}
+                  </p>
                 </div>
                 <button
                   className={styles.primaryButton}
-                  onClick={() => go("import")}
+                  onClick={() => go(view === "edit" ? "holdings" : "edit")}
                 >
-                  <Plus size={17} /> 자산 추가
+                  {view === "edit" ? "보유 자산으로" : "자산 수정"}{" "}
+                  <ArrowRight size={17} />
                 </button>
               </div>
-              <div className={styles.holdingStats}>
-                <div>
-                  <span>국내 평가금액</span>
-                  <strong>{money(totals.KR, "KR")}</strong>
+              {view === "holdings" && (
+                <div className={styles.holdingStats}>
+                  <div>
+                    <span>국내 평가금액</span>
+                    <strong>{money(totals.KR, "KR")}</strong>
+                  </div>
+                  <div>
+                    <span>국내 평가손익</span>
+                    <strong
+                      className={
+                        totals.gain.KR >= 0
+                          ? styles.gainPositive
+                          : styles.gainNegative
+                      }
+                    >
+                      {totals.costKnown.KR
+                        ? signedMoney(totals.gain.KR, "KR")
+                        : "—"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>미국 평가금액</span>
+                    <strong>{money(totals.US, "US")}</strong>
+                  </div>
+                  <div>
+                    <span>미국 평가손익</span>
+                    <strong
+                      className={
+                        totals.gain.US >= 0
+                          ? styles.gainPositive
+                          : styles.gainNegative
+                      }
+                    >
+                      {totals.costKnown.US
+                        ? signedMoney(totals.gain.US, "US")
+                        : "—"}
+                    </strong>
+                  </div>
                 </div>
-                <div>
-                  <span>국내 평가손익</span>
-                  <strong
-                    className={
-                      totals.gain.KR >= 0
-                        ? styles.gainPositive
-                        : styles.gainNegative
-                    }
-                  >
-                    {totals.costKnown.KR
-                      ? signedMoney(totals.gain.KR, "KR")
-                      : "—"}
-                  </strong>
+              )}
+              {view === "edit" && (
+                <div className={styles.editIntro}>
+                  <strong>수정할 종목을 선택하세요</strong>
+                  <span>
+                    수량·매입단가를 바꾸거나 종목코드 연결을 확인할 수 있습니다.
+                    종목코드는 시세 조회에 사용됩니다.
+                  </span>
+                  <button onClick={() => go("import")}>
+                    새 자산 추가 <Plus size={15} />
+                  </button>
                 </div>
-                <div>
-                  <span>미국 평가금액</span>
-                  <strong>{money(totals.US, "US")}</strong>
-                </div>
-                <div>
-                  <span>미국 평가손익</span>
-                  <strong
-                    className={
-                      totals.gain.US >= 0
-                        ? styles.gainPositive
-                        : styles.gainNegative
-                    }
-                  >
-                    {totals.costKnown.US
-                      ? signedMoney(totals.gain.US, "US")
-                      : "—"}
-                  </strong>
-                </div>
-              </div>
+              )}
               <section className={styles.panel}>
                 <div className={styles.toolbar}>
                   <div className={styles.tabs}>
@@ -1027,53 +953,15 @@ export default function PortfolioPage() {
                                 {row.broker} · {row.account} ·{" "}
                                 {row.symbol || "코드 미확인"}
                               </small>
-                              <button
-                                type="button"
-                                className={styles.savedCodeButton}
-                                disabled={savedResolvingId === row.id}
-                                onClick={() => resolveSavedInstrument(row)}
-                              >
-                                {savedResolvingId === row.id
-                                  ? "확인 중"
-                                  : "KIS 코드 확인"}
-                              </button>
-                              <button
-                                type="button"
-                                className={styles.savedCodeButton}
-                                onClick={() => beginHoldingEdit(row)}
-                              >
-                                <Pencil size={11} /> 수량·매입단가 수정
-                              </button>
-                              {savedInstrumentMatches[row.id]?.length ? (
-                                <select
-                                  className={styles.savedInstrumentSelect}
-                                  defaultValue=""
-                                  aria-label={`${row.name} 종목 코드 후보`}
-                                  onChange={(event) => {
-                                    const item = savedInstrumentMatches[
-                                      row.id
-                                    ].find(
-                                      (candidate) =>
-                                        `${candidate.symbol}|${candidate.exchange}` ===
-                                        event.target.value,
-                                    );
-                                    if (item) applySavedInstrument(row, item);
-                                  }}
+                              {view === "edit" && (
+                                <button
+                                  type="button"
+                                  className={styles.savedCodeButton}
+                                  onClick={() => beginHoldingEdit(row)}
                                 >
-                                  <option value="">후보를 선택하세요</option>
-                                  {savedInstrumentMatches[row.id].map(
-                                    (item) => (
-                                      <option
-                                        key={`${item.symbol}|${item.exchange}`}
-                                        value={`${item.symbol}|${item.exchange}`}
-                                      >
-                                        {item.name} · {item.symbol} (
-                                        {item.exchange})
-                                      </option>
-                                    ),
-                                  )}
-                                </select>
-                              ) : null}
+                                  <Pencil size={12} /> 이 종목 수정
+                                </button>
+                              )}
                             </div>
                           </div>
                           <div>
@@ -1109,16 +997,26 @@ export default function PortfolioPage() {
                               ? "—"
                               : signedMoney(gainOf(row)!, row.market)}
                           </strong>
-                          <button
-                            className={styles.deleteButton}
-                            aria-label={`${row.name} 삭제`}
-                            onClick={() => removeHolding(row.id)}
-                          >
-                            <X size={18} />
-                          </button>
+                          {view === "edit" ? (
+                            <button
+                              className={styles.deleteButton}
+                              aria-label={`${row.name} 삭제`}
+                              onClick={() => removeHolding(row.id)}
+                            >
+                              <X size={18} />
+                            </button>
+                          ) : (
+                            <span />
+                          )}
                         </div>
-                        {editingHoldingId === row.id && (
+                        {view === "edit" && editingHoldingId === row.id && (
                           <div className={styles.holdingEdit}>
+                            <div className={styles.editTitle}>
+                              <strong>{row.name}</strong>
+                              <span>
+                                {row.broker} · {row.account}
+                              </span>
+                            </div>
                             <label>
                               보유 수량
                               <input
@@ -1158,6 +1056,56 @@ export default function PortfolioPage() {
                             >
                               취소
                             </button>
+                            <div className={styles.codeVerification}>
+                              <div>
+                                <strong>
+                                  종목코드 · {row.symbol || "미확인"}
+                                </strong>
+                                <span>
+                                  한국투자증권 종목 마스터에서 코드와 거래소를
+                                  확인합니다. 올바른 코드가 연결돼야 현재가를
+                                  조회할 수 있습니다.
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={savedResolvingId === row.id}
+                                onClick={() => resolveSavedInstrument(row)}
+                              >
+                                {savedResolvingId === row.id
+                                  ? "조회 중"
+                                  : "종목코드 확인·변경"}
+                              </button>
+                              {savedInstrumentMatches[row.id]?.length ? (
+                                <select
+                                  defaultValue=""
+                                  aria-label={`${row.name} 종목 코드 후보`}
+                                  onChange={(event) => {
+                                    const item = savedInstrumentMatches[
+                                      row.id
+                                    ].find(
+                                      (candidate) =>
+                                        `${candidate.symbol}|${candidate.exchange}` ===
+                                        event.target.value,
+                                    );
+                                    if (item) applySavedInstrument(row, item);
+                                  }}
+                                >
+                                  <option value="">후보를 선택하세요</option>
+                                  {savedInstrumentMatches[row.id].map(
+                                    (item) => (
+                                      <option
+                                        key={`${item.symbol}|${item.exchange}`}
+                                        value={`${item.symbol}|${item.exchange}`}
+                                      >
+                                        {item.name} · {item.symbol} (
+                                        {item.exchange})
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              ) : null}
+                            </div>
                           </div>
                         )}
                       </Fragment>
@@ -1469,7 +1417,9 @@ export default function PortfolioPage() {
                   </div>
                   <div className={styles.settingRow}>
                     <span>연결된 증권사</span>
-                    <strong>{brokers.length}곳</strong>
+                    <strong>
+                      {new Set(holdings.map((row) => row.broker)).size}곳
+                    </strong>
                   </div>
                   <div className={styles.settingRow}>
                     <span>데이터 보관</span>
