@@ -784,3 +784,101 @@
     font-size: 24px;
   }
 }
+
+/* Portfolio overview: the allocation chart stays readable without WebGL. */
+.builder {
+  color: var(--ink);
+  gap: 18px;
+}
+.heading h1 { font-size: clamp(26px, 3vw, 34px); color: var(--ink); }
+.heading p { color: var(--muted); font-size: 13px; }
+.heading span, .panelHead span, .start > span { color: #087b83; }
+.summaryGrid { grid-template-columns: minmax(250px, .88fr) minmax(410px, 1.5fr); gap: 16px; }
+.totalCard {
+  min-height: 310px;
+  border-radius: 18px;
+  padding: 28px;
+  justify-content: flex-start;
+  background: radial-gradient(circle at 100% 10%, #1b6572 0, #123d4a 42%, #102d39 100%);
+  box-shadow: 0 18px 38px #123e4a22;
+}
+.totalCard small { color: #a9cfd0; font-size: 12px; }
+.totalCard strong { margin: 27px 0 16px; font-size: clamp(29px, 3vw, 43px); }
+.totalCard span { max-width: 240px; margin-top: auto; font-size: 12px; line-height: 1.6; color: #c3d8dc; }
+.allocationCard {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  padding: 22px 24px;
+  box-shadow: 0 8px 28px #1b48520a;
+}
+.allocationHead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.allocationHead small { color: #087b83; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.allocationHead h2 { margin: 5px 0 4px; font-size: 18px; letter-spacing: -.035em; }
+.allocationHead p { margin: 0; color: var(--muted); font-size: 11px; }
+.allocationSwitch { display: flex; padding: 3px; border-radius: 9px; background: #eef4f4; flex: none; }
+.allocationSwitch button { border: 0; border-radius: 7px; background: transparent; color: #718794; padding: 6px 11px; font-size: 11px; font-weight: 750; }
+.allocationSwitch button[aria-pressed="true"] { background: #fff; color: #126471; box-shadow: 0 1px 5px #204d531c; }
+.allocationBody { display: grid; grid-template-columns: minmax(150px, .72fr) minmax(175px, 1fr); align-items: center; gap: 18px; margin-top: 10px; }
+.allocationChart { position: relative; width: min(100%, 205px); aspect-ratio: 1; margin: auto; }
+.allocationChart svg { display: block; width: 100%; height: 100%; }
+.allocationChart circle { transition: stroke-dasharray .25s ease, stroke-dashoffset .25s ease; }
+.allocationCenter { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.allocationCenter span { color: #788c96; font-size: 10px; }
+.allocationCenter strong { color: #153340; font-size: 29px; line-height: 1.1; }
+.allocationCenter small { margin-left: 2px; font-size: 10px; font-weight: 600; }
+.allocationLegend { min-width: 0; }
+.allocationLegendHead, .allocationLegendRow { display: grid; grid-template-columns: minmax(70px, 1fr) 52px 52px; align-items: center; gap: 7px; }
+.allocationLegendHead { padding: 0 0 7px; border-bottom: 1px solid #ecf1f2; color: #8ea0a9; font-size: 10px; }
+.allocationLegendHead span:not(:first-child), .allocationLegendRow > span:last-child, .allocationLegendRow strong { text-align: right; }
+.allocationLegendRow { min-height: 27px; font-size: 11px; }
+.allocationLegendRow > span:first-child { min-width: 0; display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.allocationLegendRow i { width: 8px; height: 8px; border-radius: 3px; flex: none; }
+.allocationLegendRow strong { color: #213d46; font-size: 12px; }
+.allocationLegendRow > span:last-child { color: #84969f; }
+.allocationHint { margin: 8px 0 0; color: #81949b; font-size: 10px; line-height: 1.5; }
+.panel { border-color: var(--line); border-radius: 16px; box-shadow: 0 5px 22px #1b485209; }
+.panelHead h2 { color: var(--ink); font-size: 18px; }
+.save, .start button:first-child { background: #087b83; border-radius: 9px; }
+.save:hover, .start button:first-child:hover { background: #066871; }
+.ghost, .start button:last-child { border-color: #d7e3e6; color: #285663; }
+.start { background: radial-gradient(circle at 85% 20%, #e0f3f1, #fff 55%); border-color: var(--line); border-radius: 18px; }
+.start h1 { color: #143743; }
+.startQuote { display: block; margin-top: 28px; padding-top: 18px; border-top: 1px solid #dce9e9; color: #335d66; font-size: 13px; text-decoration: none; }
+.startQuote span { color: #7a949b; font-size: 11px; }
+.quoteStrip { display: flex; align-items: center; gap: 12px; padding: 13px 18px; border: 1px solid #e2ecea; border-radius: 12px; background: #f1f8f6; }
+.quoteStrip > span { color: #137b75; font-size: 9px; font-weight: 850; letter-spacing: .11em; white-space: nowrap; }
+.quoteStrip p { margin: 0; color: #315d62; font-size: 12px; font-weight: 650; }
+.quoteStrip a { margin-left: auto; color: #668a8c; font-size: 10px; white-space: nowrap; text-decoration: none; }
+@media (max-width: 1100px) {
+  .summaryGrid { grid-template-columns: 1fr; }
+  .totalCard { min-height: 180px; }
+}
+@media (max-width: 600px) {
+  .allocationCard { padding: 18px; }
+  .allocationBody { grid-template-columns: 1fr; gap: 7px; }
+  .allocationChart { width: 190px; }
+  .allocationLegend { width: 100%; }
+  .totalCard { min-height: 165px; }
+  .totalCard strong { font-size: 32px; margin: 17px 0 10px; }
+  .totalCard span { max-width: none; }
+  .quoteStrip { align-items: flex-start; flex-wrap: wrap; gap: 5px 10px; }
+  .quoteStrip p { order: 2; width: 100%; }
+  .quoteStrip a { margin-left: auto; }
+}
+.vizDisclosure { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 19px; border: 1px solid #dfe9e9; border-radius: 12px; background: #fff; }
+.vizDisclosure > div { display: grid; gap: 3px; }
+.vizDisclosure strong { color: #21424d; font-size: 12px; }
+.vizDisclosure span { color: #789099; font-size: 10px; }
+.vizDisclosure button { display: inline-flex; align-items: center; gap: 7px; flex: none; border: 0; background: #e9f5f2; color: #177b76; border-radius: 8px; padding: 8px 10px; font-size: 11px; font-weight: 750; }
+.vizDisclosure button[aria-expanded="true"] svg { transform: rotate(180deg); }
+@media (max-width: 600px) {
+  .vizDisclosure { align-items: flex-start; flex-direction: column; }
+}
+.builder input, .builder select { font-size: 12px; color: #294650; }
+.settings label, .bucket label, .rule label { font-size: 11px; color: #607a85; }
+.heading p, .start p { font-size: 13px; }
+.start small { font-size: 11px; }
+.ghost, .save, .start button { font-size: 12px; }
+.bucketName { font-weight: 650 !important; }

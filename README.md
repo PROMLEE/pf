@@ -27,3 +27,5 @@ pnpm dev:web
 ## Vercel 배포
 
 GitHub 저장소를 Vercel에 연결하고 **Root Directory**를 `apps/web`으로 설정합니다. 빌드 명령은 `pnpm build`입니다. 프로젝트의 Production 환경 변수에 `DATABASE_URL`, `AUTH_SECRET`, `NEXTAUTH_URL`, `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `KIS_APP_KEY`, `KIS_APP_SECRET`을 설정합니다. `NEXTAUTH_URL`에는 실제 배포 주소(`https://...`)를 넣고 카카오·네이버 개발자 콘솔에 각 서비스의 `/api/auth/callback/kakao`, `/api/auth/callback/naver` 주소를 등록합니다. 환경 변수 값과 계좌 캡처는 Git에 올리지 않습니다.
+
+화면 글꼴은 [SUIT Variable](https://github.com/sun-typeface/SUIT)을 자체 호스팅합니다. 라이선스 전문은 `apps/web/public/fonts/SUIT-LICENSE.txt`에 있습니다.

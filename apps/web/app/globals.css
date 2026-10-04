@@ -1,6 +1,6 @@
 @font-face {
-  font-family: "Pretendard";
-  src: url("/fonts/PretendardVariable.woff2") format("woff2");
+  font-family: "SUIT Variable";
+  src: url("/fonts/SUIT-Variable.woff2") format("woff2");
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
@@ -8,12 +8,12 @@
 
 :root {
   color-scheme: light;
-  --ink: #18243b;
-  --muted: #8994a6;
-  --line: #e9edf2;
-  --navy: #101a2d;
-  --blue: #3068ec;
-  --bg: #f5f7fa;
+  --ink: #162b36;
+  --muted: #728594;
+  --line: #dde7ea;
+  --navy: #102f3b;
+  --blue: #087b83;
+  --bg: #f4f7f7;
 }
 
 * {
@@ -27,7 +27,8 @@ body {
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: "SUIT Variable", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 button,
 input,
@@ -48,5 +49,11 @@ select {
 input:focus,
 select:focus {
   border-color: var(--blue) !important;
-  box-shadow: 0 0 0 3px #3068ec18;
+  box-shadow: 0 0 0 3px #087b8324;
+}
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #3fb8b0;
+  outline-offset: 3px;
 }

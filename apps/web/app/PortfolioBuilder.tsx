@@ -43,13 +43,13 @@ const won = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 const fmt = (value: number) => `${won.format(value)}원`;
 const pct = (value: number) => `${value.toFixed(1)}%`;
 const colors = [
-  "#4B72E8",
-  "#24A88B",
-  "#895FE0",
-  "#DBA83E",
-  "#E08045",
-  "#D75F77",
-  "#4D98BD",
+  "#177C88",
+  "#42A994",
+  "#6986B3",
+  "#CBA664",
+  "#D88975",
+  "#9D7FA8",
+  "#618F9F",
 ];
 
 function emptyPortfolio(): Portfolio {
@@ -368,6 +368,7 @@ export default function PortfolioBuilder({
   const [manualValue, setManualValue] = useState("");
   const [manualBucketId, setManualBucketId] = useState("");
   const [trendKey, setTrendKey] = useState("__TOTAL__");
+  const [show3d, setShow3d] = useState(false);
   const [rebalanceMode, setRebalanceMode] = useState<"trade" | "add-only">(
     "trade",
   );
@@ -716,6 +717,9 @@ export default function PortfolioBuilder({
           예시 비중은 자유롭게 수정할 수 있습니다. 저장하기 전까지 계정에
           반영되지 않습니다.
         </small>
+        <a className={styles.startQuote} href="https://www.berkshirehathaway.com/letters/2013ltr.pdf" target="_blank" rel="noreferrer">
+          “가격은 지불하는 것, 가치는 얻는 것.” <span>— 벤저민 그레이엄</span>
+        </a>
       </div>
     );
 
@@ -764,7 +768,22 @@ export default function PortfolioBuilder({
         <PortfolioVisuals portfolio={draft} holdings={holdings} />
       </div>
 
-      <Portfolio3D portfolio={draft} holdings={holdings} />
+      <div className={styles.vizDisclosure}>
+        <div>
+          <strong>자산 지도를 더 자세히 보고 싶나요?</strong>
+          <span>종목·포트·증권사별 비중을 3D로 탐색할 수 있습니다.</span>
+        </div>
+        <button type="button" aria-expanded={show3d} onClick={() => setShow3d((value) => !value)}>
+          {show3d ? "3D 분석 접기" : "3D 분석 열기"} <ChevronDown size={16} />
+        </button>
+      </div>
+      {show3d && <Portfolio3D portfolio={draft} holdings={holdings} />}
+
+      <div className={styles.quoteStrip}>
+        <span>INVESTMENT PRINCIPLE</span>
+        <p>“가격은 지불하는 것, 가치는 얻는 것.”</p>
+        <a href="https://www.berkshirehathaway.com/letters/2013ltr.pdf" target="_blank" rel="noreferrer">벤저민 그레이엄 ↗</a>
+      </div>
 
       <section className={styles.panel}>
         <div className={styles.panelHead}>

@@ -101,11 +101,11 @@ export function portfolioValues(portfolio: Portfolio, holdings: Holding[]) {
 }
 
 export const EXAMPLE_BUCKETS: Omit<Bucket, "id">[] = [
-  { name: "미국 지수", targetPercent: 35, color: "#4B72E8" },
-  { name: "한국 지수", targetPercent: 25, color: "#24A88B" },
-  { name: "우량주", targetPercent: 20, color: "#895FE0" },
-  { name: "금", targetPercent: 10, color: "#DBA83E" },
-  { name: "비트코인", targetPercent: 10, color: "#E08045" },
+  { name: "미국 지수", targetPercent: 35, color: "#177C88" },
+  { name: "한국 지수", targetPercent: 25, color: "#42A994" },
+  { name: "우량주", targetPercent: 20, color: "#6986B3" },
+  { name: "금", targetPercent: 10, color: "#CBA664" },
+  { name: "비트코인", targetPercent: 10, color: "#D88975" },
 ];
 
 export const EXAMPLE_RULES: {
