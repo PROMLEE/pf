@@ -805,6 +805,36 @@
 .totalCard small { color: #a9cfd0; font-size: 12px; }
 .totalCard strong { margin: 27px 0 16px; font-size: clamp(29px, 3vw, 43px); }
 .totalCard span { max-width: 240px; margin-top: auto; font-size: 12px; line-height: 1.6; color: #c3d8dc; }
+.totalInsight { display: grid; gap: 5px; padding: 13px 0; border-top: 1px solid #ffffff28; border-bottom: 1px solid #ffffff28; }
+.totalInsight b { font-size: 15px; color: #fff; }
+.totalInsight span { margin: 0; color: #b9d9d9; font-size: 12px; }
+.dataStatus { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 16px; padding: 10px 14px; border: 1px solid #dce8e8; border-radius: 10px; background: #f4f9f9; color: #5b727c; font-size: 11px; }
+.dataStatus strong { color: #153e46; }
+.dataStatus em { color: #b45d48; font-style: normal; font-weight: 700; }
+.cashBudget { display: flex; align-items: center; gap: 12px; margin: 0 0 13px; color: #536b78; font-size: 11px; font-weight: 700; }
+.cashBudget input { max-width: 210px; }
+.exclusions { margin-bottom: 14px; border: 1px solid #e1e9eb; border-radius: 8px; }
+.exclusions summary, .flowDetails summary { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 11px 12px; color: #476773; font-size: 11px; font-weight: 750; }
+.exclusions summary svg, .flowDetails summary svg { margin-left: auto; }
+.exclusions[open] summary svg, .flowDetails[open] summary svg { transform: rotate(180deg); }
+.exclusions > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; max-height: 150px; overflow: auto; padding: 0 12px 12px; }
+.exclusions label { display: flex; align-items: center; gap: 6px; color: #596c77; font-size: 10px; }
+.exclusions input { width: auto; }
+.previewSummary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-top: 12px; padding: 12px; border-radius: 8px; background: #f0f7f6; color: #37616c; font-size: 11px; }
+.previewSummary strong { color: #164d54; }
+.performanceSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 13px; }
+.performanceSummary > div { display: grid; gap: 6px; border: 1px solid #e4ebee; border-radius: 8px; padding: 11px; }
+.performanceSummary small { color: #788a94; font-size: 10px; }
+.performanceSummary strong { color: #23444f; font-size: 13px; }
+.performanceSummary p { grid-column: 1 / -1; margin: 0; color: #84949e; font-size: 10px; line-height: 1.5; }
+.flowDetails { margin-top: 14px; border-top: 1px solid #e7ecef; }
+.flowDetails .help { padding: 0 12px; }
+.flowForm { display: grid; grid-template-columns: 125px 85px 1fr 1.2fr 65px; gap: 7px; padding: 0 12px 12px; }
+.flowForm button { border: 0; border-radius: 7px; background: #147b7f; color: white; font-size: 11px; font-weight: 750; }
+.flowForm button:disabled { opacity: .5; }
+.flowList { display: grid; gap: 4px; max-height: 170px; overflow: auto; padding: 0 12px 12px; }
+.flowList > div { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #edf1f2; padding: 6px 0; color: #667983; font-size: 10px; }
+.flowList strong { margin-left: auto; color: #244d56; font-size: 11px; }
 .allocationCard {
   min-width: 0;
   border: 1px solid var(--line);
@@ -829,14 +859,16 @@
 .allocationCenter strong { color: #153340; font-size: 29px; line-height: 1.1; }
 .allocationCenter small { margin-left: 2px; font-size: 10px; font-weight: 600; }
 .allocationLegend { min-width: 0; }
-.allocationLegendHead, .allocationLegendRow { display: grid; grid-template-columns: minmax(70px, 1fr) 52px 52px; align-items: center; gap: 7px; }
+.allocationLegendHead, .allocationLegendRow { display: grid; grid-template-columns: minmax(70px, 1fr) 44px 44px 52px; align-items: center; gap: 7px; }
 .allocationLegendHead { padding: 0 0 7px; border-bottom: 1px solid #ecf1f2; color: #8ea0a9; font-size: 10px; }
-.allocationLegendHead span:not(:first-child), .allocationLegendRow > span:last-child, .allocationLegendRow strong { text-align: right; }
+.allocationLegendHead span:not(:first-child), .allocationLegendRow > span:not(:first-child), .allocationLegendRow strong { text-align: right; }
 .allocationLegendRow { min-height: 27px; font-size: 11px; }
 .allocationLegendRow > span:first-child { min-width: 0; display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .allocationLegendRow i { width: 8px; height: 8px; border-radius: 3px; flex: none; }
 .allocationLegendRow strong { color: #213d46; font-size: 12px; }
 .allocationLegendRow > span:last-child { color: #84969f; }
+.allocationLegendRow .allocationUnder { color: #bd4050 !important; font-weight: 750; }
+.allocationLegendRow .allocationOver { color: #326ac2 !important; font-weight: 750; }
 .allocationHint { margin: 8px 0 0; color: #81949b; font-size: 10px; line-height: 1.5; }
 .panel { border-color: var(--line); border-radius: 16px; box-shadow: 0 5px 22px #1b485209; }
 .panelHead h2 { color: var(--ink); font-size: 18px; }
@@ -856,6 +888,11 @@
   .totalCard { min-height: 180px; }
 }
 @media (max-width: 600px) {
+  .performanceSummary { grid-template-columns: 1fr; }
+  .flowForm { grid-template-columns: 1fr 1fr; }
+  .flowForm input:nth-child(4) { grid-column: 1 / -1; }
+  .flowForm button { min-height: 34px; }
+  .cashBudget { align-items: flex-start; flex-direction: column; }
   .allocationCard { padding: 18px; }
   .allocationBody { grid-template-columns: 1fr; gap: 7px; }
   .allocationChart { width: 190px; }

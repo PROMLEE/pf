@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import type {
   Assignment,
   Bucket,
+  CashFlow,
   ManualAsset,
   Portfolio,
   Rule,
@@ -10,7 +11,18 @@ import type {
 import { db } from "./db";
 
 type Client = Pick<PoolClient, "query">;
-type PlanRow = { title: string; usd_krw: string; tolerance_percent: string };
+type PlanRow = {
+  title: string;
+  usd_krw: string;
+  usd_krw_updated_at: Date;
+  tolerance_percent: string;
+};
+type CashFlowRow = {
+  id: string;
+  flow_date: string;
+  amount_krw: string;
+  note: string;
+};
 type BucketRow = {
   id: string;
   name: string;
@@ -52,7 +64,7 @@ export async function listPortfolio(
   client: Client = db(),
 ): Promise<Portfolio | null> {
   const plan = await client.query<PlanRow>(
-    `select title, usd_krw, tolerance_percent from portfolio.plans where user_id = $1`,
+    `select title, usd_krw, usd_krw_updated_at, tolerance_percent from portfolio.plans where user_id = $1`,
     [userId],
   );
   if (!plan.rows[0]) return null;
@@ -78,9 +90,14 @@ export async function listPortfolio(
        from portfolio.snapshots where user_id = $1 order by snapshot_date, bucket_key`,
     [userId],
   );
+  const cashFlows = await client.query<CashFlowRow>(
+    `select id, flow_date::text, amount_krw, note from portfolio.cash_flows where user_id = $1 order by flow_date desc, created_at desc`,
+    [userId],
+  );
   return {
     title: plan.rows[0].title,
     usdKrw: Number(plan.rows[0].usd_krw),
+    usdKrwUpdatedAt: plan.rows[0].usd_krw_updated_at.toISOString(),
     tolerancePercent: Number(plan.rows[0].tolerance_percent),
     buckets: buckets.rows.map(
       (row): Bucket => ({
@@ -130,6 +147,14 @@ export async function listPortfolio(
           row.target_percent === null ? null : Number(row.target_percent),
       }),
     ),
+    cashFlows: cashFlows.rows.map(
+      (row): CashFlow => ({
+        id: row.id,
+        date: row.flow_date,
+        amountKrw: Number(row.amount_krw),
+        note: row.note,
+      }),
+    ),
   };
 }
 
@@ -141,6 +166,7 @@ export async function savePortfolio(userId: string, input: Portfolio) {
       `insert into portfolio.plans (user_id, title, usd_krw, tolerance_percent)
        values ($1,$2,$3,$4)
        on conflict (user_id) do update set title = excluded.title, usd_krw = excluded.usd_krw,
+         usd_krw_updated_at = case when portfolio.plans.usd_krw is distinct from excluded.usd_krw then now() else portfolio.plans.usd_krw_updated_at end,
          tolerance_percent = excluded.tolerance_percent, updated_at = now()`,
       [userId, input.title, input.usdKrw, input.tolerancePercent],
     );
@@ -236,6 +262,33 @@ export async function savePortfolio(userId: string, input: Portfolio) {
   } finally {
     client.release();
   }
+}
+
+export async function addCashFlow(userId: string, flow: CashFlow) {
+  const client = await db().connect();
+  try {
+    await client.query("begin");
+    await client.query(
+      `insert into portfolio.cash_flows (id, user_id, flow_date, amount_krw, note) values ($1,$2,$3,$4,$5)`,
+      [flow.id, userId, flow.date, flow.amountKrw, flow.note],
+    );
+    const result = await listPortfolio(userId, client);
+    await client.query("commit");
+    return result;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteCashFlow(userId: string, flowId: string) {
+  const result = await db().query(
+    `delete from portfolio.cash_flows where user_id = $1 and id = $2`,
+    [userId, flowId],
+  );
+  return result.rowCount === 1;
 }
 
 export async function listRules(userId: string) {

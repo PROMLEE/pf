@@ -40,15 +40,24 @@ export type Snapshot = {
   targetPercent: number | null;
 };
 
+export type CashFlow = {
+  id: string;
+  date: string;
+  amountKrw: number;
+  note: string;
+};
+
 export type Portfolio = {
   title: string;
   usdKrw: number;
+  usdKrwUpdatedAt: string | null;
   tolerancePercent: number;
   buckets: Bucket[];
   rules: Rule[];
   manualAssets: ManualAsset[];
   assignments: Assignment[];
   snapshots: Snapshot[];
+  cashFlows: CashFlow[];
 };
 
 export function holdingValueKrw(holding: Holding, usdKrw: number) {

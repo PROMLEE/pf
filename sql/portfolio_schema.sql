@@ -37,6 +37,7 @@ create table if not exists portfolio.plans (
   user_id text primary key references public."User"("userId") on delete cascade,
   title text not null check (length(btrim(title)) between 1 and 80),
   usd_krw numeric(16, 4) not null check (usd_krw > 0),
+  usd_krw_updated_at timestamptz not null default now(),
   tolerance_percent numeric(5, 2) not null default 5 check (tolerance_percent between 0 and 100),
   updated_at timestamptz not null default now()
 );
@@ -110,9 +111,21 @@ create table if not exists portfolio.snapshots (
 );
 create index if not exists snapshots_user_bucket_date_idx on portfolio.snapshots (user_id, bucket_key, snapshot_date desc);
 
+create table if not exists portfolio.cash_flows (
+  id uuid primary key,
+  user_id text not null references public."User"("userId") on delete cascade,
+  flow_date date not null,
+  amount_krw numeric(24, 2) not null check (amount_krw <> 0),
+  note text not null default '' check (length(note) <= 120),
+  created_at timestamptz not null default now()
+);
+create index if not exists cash_flows_user_date_idx
+  on portfolio.cash_flows (user_id, flow_date desc, created_at desc);
+
 alter table portfolio.plans enable row level security;
 alter table portfolio.buckets enable row level security;
 alter table portfolio.manual_assets enable row level security;
 alter table portfolio.rules enable row level security;
 alter table portfolio.snapshots enable row level security;
-revoke all on portfolio.plans, portfolio.buckets, portfolio.manual_assets, portfolio.rules, portfolio.snapshots from public, anon, authenticated;
+alter table portfolio.cash_flows enable row level security;
+revoke all on portfolio.plans, portfolio.buckets, portfolio.manual_assets, portfolio.rules, portfolio.snapshots, portfolio.cash_flows from public, anon, authenticated;

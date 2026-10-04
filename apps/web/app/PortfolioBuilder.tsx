@@ -23,6 +23,7 @@ import {
   type Portfolio,
   type Rule,
 } from "./portfolio-model";
+import { needsAdjustment, rebalance } from "./rebalance";
 import styles from "./portfolio.module.css";
 
 type Candidate = {
@@ -42,6 +43,24 @@ type Props = {
 const won = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 const fmt = (value: number) => `${won.format(value)}원`;
 const pct = (value: number) => `${value.toFixed(1)}%`;
+const kstDate = () =>
+  new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+const timeLabel = (value: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(value))
+    : "확인 안 됨";
 const colors = [
   "#177C88",
   "#42A994",
@@ -56,233 +75,14 @@ function emptyPortfolio(): Portfolio {
   return {
     title: "나의 투자 포트폴리오",
     usdKrw: 1400,
+    usdKrwUpdatedAt: null,
     tolerancePercent: 5,
     buckets: [],
     rules: [],
     manualAssets: [],
     assignments: [],
     snapshots: [],
-  };
-}
-
-function bucketFor(holding: Holding, plan: Portfolio) {
-  const assignment = plan.assignments.find(
-    (item) => item.holdingId === holding.id,
-  );
-  return assignment?.source === "manual"
-    ? assignment.bucketId
-    : (plan.rules.find(
-        (rule) =>
-          rule.market === holding.market && rule.symbol === holding.symbol,
-      )?.bucketId ?? null);
-}
-
-function needsAdjustment(
-  target: number,
-  current: number,
-  currentPercent: number,
-  tolerance: number,
-) {
-  return (
-    (target > 0 && current === 0) ||
-    Math.abs(target - currentPercent) > tolerance
-  );
-}
-
-function suggestions(
-  plan: Portfolio,
-  holdings: Holding[],
-  mode: "trade" | "add-only",
-) {
-  const { values, unassigned, total, missingPrices } = portfolioValues(
-    plan,
-    holdings,
-  );
-  const withinRange = plan.buckets.every((bucket) => {
-    const currentPercent =
-      total > 0 ? ((values.get(bucket.id) ?? 0) / total) * 100 : 0;
-    return !needsAdjustment(
-      bucket.targetPercent,
-      values.get(bucket.id) ?? 0,
-      currentPercent,
-      plan.tolerancePercent,
-    );
-  });
-  const impossibleWithoutSelling =
-    mode === "add-only" &&
-    !withinRange &&
-    plan.buckets.some(
-      (bucket) =>
-        bucket.targetPercent === 0 && (values.get(bucket.id) ?? 0) > 0,
-    );
-  const targetTotal =
-    mode === "add-only" &&
-    !withinRange &&
-    !impossibleWithoutSelling &&
-    unassigned === 0 &&
-    missingPrices === 0
-      ? Math.max(
-          total,
-          ...plan.buckets
-            .filter((bucket) => bucket.targetPercent > 0)
-            .map(
-              (bucket) =>
-                (values.get(bucket.id) ?? 0) / (bucket.targetPercent / 100),
-            ),
-        )
-      : total;
-  const items = plan.buckets.map((bucket) => {
-    const current = values.get(bucket.id) ?? 0;
-    const currentPercent = total > 0 ? (current / total) * 100 : 0;
-    const gapPercent = bucket.targetPercent - currentPercent;
-    const gap = (targetTotal * bucket.targetPercent) / 100 - current;
-    if (total <= 0)
-      return {
-        bucket,
-        current,
-        currentPercent,
-        gapPercent,
-        advice: "가격이 있는 자산을 등록하면 추천이 표시됩니다.",
-      };
-    if (missingPrices > 0)
-      return {
-        bucket,
-        current,
-        currentPercent,
-        gapPercent,
-        advice: `가격이 없는 보유 종목 ${missingPrices}개를 먼저 확인하세요.`,
-      };
-    if (unassigned > 0)
-      return {
-        bucket,
-        current,
-        currentPercent,
-        gapPercent,
-        advice: "미분류 자산을 먼저 포트에 배정하세요.",
-      };
-    if (impossibleWithoutSelling)
-      return {
-        bucket,
-        current,
-        currentPercent,
-        gapPercent,
-        advice: "목표 0%인 자산이 있어 매도 없는 조정은 불가능합니다.",
-      };
-    if (
-      !needsAdjustment(
-        bucket.targetPercent,
-        current,
-        currentPercent,
-        plan.tolerancePercent,
-      )
-    )
-      return {
-        bucket,
-        current,
-        currentPercent,
-        gapPercent,
-        advice: "설정한 허용 오차 안에 있습니다.",
-      };
-    if (mode === "add-only" && gap <= 0)
-      return {
-        bucket,
-        current,
-        currentPercent,
-        gapPercent,
-        advice: "신규 매수 없이 현재 수량을 유지하세요.",
-      };
-
-    const owned = holdings
-      .filter((row) => bucketFor(row, plan) === bucket.id)
-      .filter((row) => (row.currentPrice ?? row.capturedPrice) !== null);
-    if (mode === "trade" && gap < 0) {
-      let remaining = -gap;
-      const steps: string[] = [];
-      for (const holding of [...owned].sort(
-        (a, b) =>
-          holdingValueKrw(b, plan.usdKrw) - holdingValueKrw(a, plan.usdKrw),
-      )) {
-        const unit =
-          (holding.currentPrice ?? holding.capturedPrice ?? 0) *
-          (holding.market === "US" ? plan.usdKrw : 1);
-        if (unit <= 0) continue;
-        const shares = Math.min(
-          Math.floor(holding.quantity),
-          Math.floor(remaining / unit),
-        );
-        if (shares > 0) {
-          steps.push(`${holding.symbol || holding.name} ${shares}주 매도`);
-          remaining -= shares * unit;
-        }
-      }
-      return {
-        bucket,
-        current,
-        currentPercent,
-        gapPercent,
-        advice: steps.length
-          ? steps.join(" · ")
-          : plan.manualAssets.some((asset) => asset.bucketId === bucket.id)
-            ? `약 ${fmt(-gap)} 초과 · 직접 입력 자산의 매도 금액을 검토하세요.`
-            : `약 ${fmt(-gap)} 초과 · 매도 가능한 1주 단위가 없습니다.`,
-      };
-    }
-
-    const rule = plan.rules.find(
-      (item) =>
-        item.bucketId === bucket.id &&
-        (item.manualPrice ??
-          item.quotedPrice ??
-          owned.find((holding) => holding.symbol === item.symbol)
-            ?.currentPrice ??
-          owned.find((holding) => holding.symbol === item.symbol)
-            ?.capturedPrice),
-    );
-    if (!rule)
-      return {
-        bucket,
-        current,
-        currentPercent,
-        gapPercent,
-        advice: /현금|RP|CMA/i.test(bucket.name)
-          ? `약 ${fmt(gap)}을 현금·RP로 보유하고, 실제 잔액을 직접 입력하세요.`
-          : /비트코인|코인/i.test(bucket.name)
-            ? `약 ${fmt(gap)} 부족 · 거래소 보유액을 직접 입력하세요.`
-            : plan.manualAssets.some((asset) => asset.bucketId === bucket.id)
-              ? `약 ${fmt(gap)} 부족 · 직접 입력 자산의 매수 금액을 검토하세요.`
-              : `약 ${fmt(gap)} 부족 · 매수할 종목을 지정하거나 직접 입력 자산을 추가하세요.`,
-      };
-    const matchingHolding = owned.find(
-      (holding) => holding.symbol === rule.symbol,
-    );
-    const unit =
-      (rule.manualPrice ??
-        rule.quotedPrice ??
-        matchingHolding?.currentPrice ??
-        matchingHolding?.capturedPrice ??
-        0) * (rule.market === "US" ? plan.usdKrw : 1);
-    const shares = Math.floor(gap / unit);
-    return {
-      bucket,
-      current,
-      currentPercent,
-      gapPercent,
-      advice:
-        shares > 0
-          ? `${rule.symbol} ${shares}주 매수 · 예상 ${fmt(shares * unit)}`
-          : `약 ${fmt(gap)} 부족 · 선택 종목 1주 미만입니다.`,
-    };
-  });
-  return {
-    items,
-    requiredCash:
-      mode === "add-only" &&
-      !withinRange &&
-      !impossibleWithoutSelling &&
-      unassigned === 0 &&
-      missingPrices === 0
-        ? Math.max(0, targetTotal - total)
-        : 0,
+    cashFlows: [],
   };
 }
 
@@ -372,6 +172,13 @@ export default function PortfolioBuilder({
   const [rebalanceMode, setRebalanceMode] = useState<"trade" | "add-only">(
     "trade",
   );
+  const [cashInput, setCashInput] = useState("");
+  const [excludedHoldingIds, setExcludedHoldingIds] = useState<string[]>([]);
+  const [flowDate, setFlowDate] = useState(kstDate);
+  const [flowAmount, setFlowAmount] = useState("");
+  const [flowKind, setFlowKind] = useState<"deposit" | "withdrawal">("deposit");
+  const [flowNote, setFlowNote] = useState("");
+  const [flowSaving, setFlowSaving] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -654,6 +461,70 @@ export default function PortfolioBuilder({
       onNotice(error instanceof Error ? error.message : "기록하지 못했습니다.");
     }
   }
+  async function saveFlow() {
+    if (dirty) return onNotice("포트폴리오를 먼저 저장해 주세요.");
+    const amount = Number(flowAmount);
+    if (
+      !flowDate ||
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !Number.isInteger(amount)
+    )
+      return onNotice("입출금 날짜와 원화 금액을 확인해 주세요.");
+    setFlowSaving(true);
+    try {
+      const response = await fetch("/api/portfolio/cash-flows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: flowDate,
+          amountKrw: flowKind === "deposit" ? amount : -amount,
+          note: flowNote,
+        }),
+      });
+      const payload = (await response.json()) as {
+        portfolio?: Portfolio;
+        message?: string;
+      };
+      if (!response.ok || !payload.portfolio)
+        throw new Error(payload.message || "저장하지 못했습니다.");
+      setDraft(payload.portfolio);
+      setFlowAmount("");
+      setFlowNote("");
+      onNotice("입출금 내역을 저장했습니다.");
+    } catch (error) {
+      onNotice(
+        error instanceof Error
+          ? error.message
+          : "입출금 내역을 저장하지 못했습니다.",
+      );
+    } finally {
+      setFlowSaving(false);
+    }
+  }
+  async function removeFlow(id: string) {
+    if (dirty) return onNotice("변경 내용을 먼저 저장해 주세요.");
+    try {
+      const response = await fetch(
+        `/api/portfolio/cash-flows?id=${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+      );
+      const payload = (await response.json()) as {
+        portfolio?: Portfolio;
+        message?: string;
+      };
+      if (!response.ok || !payload.portfolio)
+        throw new Error(payload.message || "삭제하지 못했습니다.");
+      setDraft(payload.portfolio);
+      onNotice("입출금 내역을 삭제했습니다.");
+    } catch (error) {
+      onNotice(
+        error instanceof Error
+          ? error.message
+          : "입출금 내역을 삭제하지 못했습니다.",
+      );
+    }
+  }
 
   const values = useMemo(
     () => (draft ? portfolioValues(draft, holdings) : null),
@@ -662,9 +533,25 @@ export default function PortfolioBuilder({
   const advice = useMemo(
     () =>
       draft
-        ? suggestions(draft, holdings, rebalanceMode)
-        : { items: [], requiredCash: 0 },
-    [draft, holdings, rebalanceMode],
+        ? rebalance(
+            draft,
+            holdings,
+            rebalanceMode,
+            cashInput.trim() && Number.isFinite(Number(cashInput))
+              ? Math.min(1e15, Math.max(0, Number(cashInput)))
+              : null,
+            new Set(excludedHoldingIds),
+          )
+        : {
+            items: [],
+            trades: [],
+            requiredCash: 0,
+            residualCash: 0,
+            newCash: 0,
+            projectedUnassignedPercent: 0,
+            ready: false,
+          },
+    [draft, holdings, rebalanceMode, cashInput, excludedHoldingIds],
   );
   const rebalanceReady = Boolean(
     values &&
@@ -673,13 +560,15 @@ export default function PortfolioBuilder({
       values.missingPrices === 0,
   );
   const actionItems = rebalanceReady
-    ? advice.items.filter((item) =>
-        needsAdjustment(
-          item.bucket.targetPercent,
-          item.current,
-          item.currentPercent,
-          draft?.tolerancePercent ?? 0,
-        ),
+    ? advice.items.filter(
+        (item) =>
+          advice.trades.some((trade) => trade.bucketId === item.bucket.id) ||
+          needsAdjustment(
+            item.bucket.targetPercent,
+            item.current,
+            item.currentPercent,
+            draft?.tolerancePercent ?? 0,
+          ),
       )
     : [];
   const inRangeCount = rebalanceReady
@@ -693,6 +582,56 @@ export default function PortfolioBuilder({
       .map((point) => ({ date: point.date, value: point.valueKrw })) ?? [];
   const trendColor =
     draft?.buckets.find((bucket) => bucket.id === trendKey)?.color ?? "#4B72E8";
+  const driftItems = advice.items
+    .filter((item) =>
+      needsAdjustment(
+        item.bucket.targetPercent,
+        item.current,
+        item.currentPercent,
+        draft?.tolerancePercent ?? 0,
+      ),
+    )
+    .sort((a, b) => Math.abs(b.gapPercent) - Math.abs(a.gapPercent));
+  const priceFromQuote = holdings.filter(
+    (holding) =>
+      holding.currentPrice !== null && holding.quoteCheckedAt !== null,
+  ).length;
+  const priceFromCapture = holdings.filter(
+    (holding) =>
+      holding.currentPrice === null && holding.capturedPrice !== null,
+  ).length;
+  const latestQuote =
+    holdings
+      .map((holding) => holding.quoteCheckedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? null;
+  const oldestCapture =
+    holdings
+      .filter(
+        (holding) =>
+          holding.currentPrice === null && holding.capturedPrice !== null,
+      )
+      .map((holding) => holding.capturedAt)
+      .sort()[0] ?? null;
+  const totalHistory =
+    draft?.snapshots.filter((point) => point.bucketKey === "__TOTAL__") ?? [];
+  const firstPoint = totalHistory[0];
+  const lastPoint = totalHistory.at(-1);
+  const periodFlow =
+    draft?.cashFlows
+      .filter(
+        (flow) =>
+          firstPoint &&
+          lastPoint &&
+          flow.date > firstPoint.date &&
+          flow.date <= lastPoint.date,
+      )
+      .reduce((sum, flow) => sum + flow.amountKrw, 0) ?? 0;
+  const adjustedChange =
+    firstPoint && lastPoint && firstPoint.date !== lastPoint.date
+      ? lastPoint.valueKrw - firstPoint.valueKrw - periodFlow
+      : null;
 
   if (loading)
     return (
@@ -717,7 +656,12 @@ export default function PortfolioBuilder({
           예시 비중은 자유롭게 수정할 수 있습니다. 저장하기 전까지 계정에
           반영되지 않습니다.
         </small>
-        <a className={styles.startQuote} href="https://www.berkshirehathaway.com/letters/2013ltr.pdf" target="_blank" rel="noreferrer">
+        <a
+          className={styles.startQuote}
+          href="https://www.berkshirehathaway.com/letters/2013ltr.pdf"
+          target="_blank"
+          rel="noreferrer"
+        >
           “가격은 지불하는 것, 가치는 얻는 것.” <span>— 벤저민 그레이엄</span>
         </a>
       </div>
@@ -755,6 +699,18 @@ export default function PortfolioBuilder({
         <section className={styles.totalCard}>
           <small>총 평가액</small>
           <strong>{fmt(values?.total ?? 0)}</strong>
+          <div className={styles.totalInsight}>
+            <b>
+              {rebalanceReady
+                ? `${driftItems.length}개 포트 조정 필요`
+                : "배정·가격 확인 필요"}
+            </b>
+            <span>
+              {driftItems[0]
+                ? `${driftItems[0].bucket.name} ${driftItems[0].gapPercent > 0 ? "+" : ""}${driftItems[0].gapPercent.toFixed(1)}%p`
+                : "목표 비중 안에 있습니다"}
+            </span>
+          </div>
           <span>
             {holdings.length}개 보유 항목 · {draft.buckets.length}개 포트
             {(values?.unassigned ?? 0) > 0
@@ -768,12 +724,34 @@ export default function PortfolioBuilder({
         <PortfolioVisuals portfolio={draft} holdings={holdings} />
       </div>
 
+      <div className={styles.dataStatus} aria-label="평가 데이터 기준 시각">
+        <strong>평가 기준</strong>
+        <span>
+          KIS 가격 {priceFromQuote}개 · 최근 확인 {timeLabel(latestQuote)}
+        </span>
+        <span>
+          캡처 가격 {priceFromCapture}개
+          {oldestCapture ? ` · 가장 오래된 ${timeLabel(oldestCapture)}` : ""}
+        </span>
+        <span>
+          수동 환율 USD {won.format(draft.usdKrw)}원 ·{" "}
+          {timeLabel(draft.usdKrwUpdatedAt)}
+        </span>
+        {(values?.missingPrices ?? 0) > 0 && (
+          <em>가격 없는 종목 {values?.missingPrices}개는 평가액에서 제외</em>
+        )}
+      </div>
+
       <div className={styles.vizDisclosure}>
         <div>
           <strong>자산 지도를 더 자세히 보고 싶나요?</strong>
           <span>종목·포트·증권사별 비중을 3D로 탐색할 수 있습니다.</span>
         </div>
-        <button type="button" aria-expanded={show3d} onClick={() => setShow3d((value) => !value)}>
+        <button
+          type="button"
+          aria-expanded={show3d}
+          onClick={() => setShow3d((value) => !value)}
+        >
           {show3d ? "3D 분석 접기" : "3D 분석 열기"} <ChevronDown size={16} />
         </button>
       </div>
@@ -782,7 +760,13 @@ export default function PortfolioBuilder({
       <div className={styles.quoteStrip}>
         <span>INVESTMENT PRINCIPLE</span>
         <p>“가격은 지불하는 것, 가치는 얻는 것.”</p>
-        <a href="https://www.berkshirehathaway.com/letters/2013ltr.pdf" target="_blank" rel="noreferrer">벤저민 그레이엄 ↗</a>
+        <a
+          href="https://www.berkshirehathaway.com/letters/2013ltr.pdf"
+          target="_blank"
+          rel="noreferrer"
+        >
+          벤저민 그레이엄 ↗
+        </a>
       </div>
 
       <section className={styles.panel}>
@@ -815,7 +799,7 @@ export default function PortfolioBuilder({
               />
             </label>
             <label>
-              USD → KRW 기준환율
+              USD → KRW 기준환율 (직접 입력)
               <input
                 type="number"
                 min="100"
@@ -879,7 +863,10 @@ export default function PortfolioBuilder({
                     />
                   </div>
                   <small>
-                    현재 {pct(currentPercent)} · {fmt(current)}
+                    현재 {pct(currentPercent)} · 목표 차이{" "}
+                    {currentPercent - bucket.targetPercent > 0 ? "+" : ""}
+                    {(currentPercent - bucket.targetPercent).toFixed(1)}%p ·{" "}
+                    {fmt(current)}
                   </small>
                 </div>
                 <label>
@@ -1165,6 +1152,7 @@ export default function PortfolioBuilder({
             <input
               type="number"
               min="0"
+              max="1000000000000000"
               value={asset.valueKrw}
               aria-label={`${asset.name} 평가액`}
               onChange={(event) =>
@@ -1237,11 +1225,52 @@ export default function PortfolioBuilder({
         <p className={styles.methodNote}>
           허용 오차 ±{pct(draft.tolerancePercent)}
           {rebalanceMode === "add-only" && advice.requiredCash > 0
-            ? ` · 목표 비중까지 필요한 신규 자금 약 ${fmt(advice.requiredCash)}`
+            ? ` · 목표 비중까지 이론상 필요한 신규 자금 약 ${fmt(advice.requiredCash)}`
             : ""}
         </p>
+        {rebalanceMode === "add-only" && (
+          <label className={styles.cashBudget}>
+            이번에 투입할 금액 (원)
+            <input
+              type="number"
+              min="0"
+              max="1000000000000000"
+              step="1"
+              value={cashInput}
+              onChange={(event) => setCashInput(event.target.value)}
+              placeholder="비우면 이론상 필요 금액"
+            />
+          </label>
+        )}
+        <details className={styles.exclusions}>
+          <summary>
+            이번 조정에서 제외할 보유 종목 {excludedHoldingIds.length}개{" "}
+            <ChevronDown size={14} />
+          </summary>
+          <div>
+            {holdings.map((holding) => (
+              <label key={holding.id}>
+                <input
+                  type="checkbox"
+                  checked={excludedHoldingIds.includes(holding.id)}
+                  onChange={(event) =>
+                    setExcludedHoldingIds((ids) =>
+                      event.target.checked
+                        ? [...ids, holding.id]
+                        : ids.filter((id) => id !== holding.id),
+                    )
+                  }
+                />
+                {holding.broker} · {holding.name} (
+                {holding.symbol || "코드 없음"})
+              </label>
+            ))}
+            {!holdings.length && <small>제외할 보유 종목이 없습니다.</small>}
+          </div>
+        </details>
         <p className={styles.help}>
-          예상 수량입니다. 주문 전 호가·수수료·가용 현금을 확인하세요.
+          예상 수량은 1주 단위이며 수수료·세금·환전 비용은 포함하지 않습니다.
+          계좌별 주문 가능 금액도 확인하세요.
         </p>
         {!rebalanceReady ? (
           <p className={styles.rebalanceStatus}>
@@ -1261,12 +1290,18 @@ export default function PortfolioBuilder({
             </p>
             <div className={styles.adviceList}>
               {actionItems.map((item) => {
-                const action =
-                  item.gapPercent > 0
-                    ? "add"
-                    : rebalanceMode === "trade"
-                      ? "sell"
-                      : "hold";
+                const itemTrades = advice.trades.filter(
+                  (trade) => trade.bucketId === item.bucket.id,
+                );
+                const action = itemTrades.some((trade) => trade.side === "buy")
+                  ? "add"
+                  : itemTrades.some((trade) => trade.side === "sell")
+                    ? "sell"
+                    : item.gapPercent > 0
+                      ? "add"
+                      : rebalanceMode === "trade"
+                        ? "sell"
+                        : "hold";
                 return (
                   <div
                     key={item.bucket.id}
@@ -1289,13 +1324,30 @@ export default function PortfolioBuilder({
                       </strong>
                       <small>
                         목표와 차이 {item.gapPercent > 0 ? "+" : ""}
-                        {item.gapPercent.toFixed(1)}%p
+                        {item.gapPercent.toFixed(1)}%p · 조정 후 예상{" "}
+                        {pct(item.projectedPercent)}
                       </small>
                     </div>
                     <p>{item.advice}</p>
                   </div>
                 );
               })}
+            </div>
+            <div className={styles.previewSummary}>
+              <strong>조정 후 미리보기</strong>
+              <span>
+                제안{" "}
+                {advice.trades.filter((trade) => trade.side === "buy").length}건
+                매수 ·{" "}
+                {advice.trades.filter((trade) => trade.side === "sell").length}
+                건 매도
+              </span>
+              <span>
+                남는 자금 약 {fmt(advice.residualCash)}
+                {advice.projectedUnassignedPercent > 0
+                  ? ` · 전체의 ${pct(advice.projectedUnassignedPercent)}`
+                  : ""}
+              </span>
             </div>
           </>
         )}
@@ -1305,7 +1357,7 @@ export default function PortfolioBuilder({
         <div className={styles.panelHead}>
           <div>
             <span>05 · HISTORY</span>
-            <h2>자산 추이</h2>
+            <h2>자산 기록</h2>
           </div>
           <button className={styles.ghost} onClick={record} disabled={dirty}>
             <Check size={15} /> 오늘 기록
@@ -1328,6 +1380,111 @@ export default function PortfolioBuilder({
           <small>하루 한 기록 · 같은 날에는 최신 값으로 갱신</small>
         </div>
         <Trend points={history} color={trendColor} />
+        {trendKey === "__TOTAL__" && (
+          <div className={styles.performanceSummary}>
+            <div>
+              <small>기록 기간의 평가액 변화</small>
+              <strong>
+                {adjustedChange === null
+                  ? "기록 2일 이상 필요"
+                  : fmt(
+                      (lastPoint?.valueKrw ?? 0) - (firstPoint?.valueKrw ?? 0),
+                    )}
+              </strong>
+            </div>
+            <div>
+              <small>같은 기간 순입금</small>
+              <strong>{adjustedChange === null ? "—" : fmt(periodFlow)}</strong>
+            </div>
+            <div>
+              <small>순입금 제외 증감</small>
+              <strong>
+                {adjustedChange === null ? "—" : fmt(adjustedChange)}
+              </strong>
+            </div>
+            <p>
+              순입금 제외 증감은 평가액 변화에서 기록한 입출금을 뺀
+              참고값입니다. 신규 자산 등록·수량 수정, 배당·수수료·환율 변동도
+              영향을 줍니다. 투자 수익률은 아닙니다.
+            </p>
+          </div>
+        )}
+        <details className={styles.flowDetails}>
+          <summary>
+            입출금 기록 {draft.cashFlows.length}건 <ChevronDown size={15} />
+          </summary>
+          <p className={styles.help}>
+            계좌 밖에서 들어오거나 나간 자금만 기록하세요. 계좌 간 이동은 합산
+            범위에 따라 중복되지 않게 입력해야 합니다.
+          </p>
+          <div className={styles.flowForm}>
+            <input
+              type="date"
+              value={flowDate}
+              onChange={(event) => setFlowDate(event.target.value)}
+              aria-label="입출금 날짜"
+            />
+            <select
+              value={flowKind}
+              onChange={(event) =>
+                setFlowKind(event.target.value as "deposit" | "withdrawal")
+              }
+              aria-label="입출금 구분"
+            >
+              <option value="deposit">입금</option>
+              <option value="withdrawal">출금</option>
+            </select>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={flowAmount}
+              onChange={(event) => setFlowAmount(event.target.value)}
+              placeholder="금액 (원)"
+              aria-label="입출금 금액"
+            />
+            <input
+              value={flowNote}
+              onChange={(event) => setFlowNote(event.target.value)}
+              maxLength={120}
+              placeholder="메모 (선택)"
+              aria-label="입출금 메모"
+            />
+            <button
+              type="button"
+              onClick={saveFlow}
+              disabled={flowSaving || dirty}
+            >
+              {flowSaving ? "저장 중" : "기록"}
+            </button>
+          </div>
+          <div className={styles.flowList}>
+            {draft.cashFlows.map((flow) => (
+              <div key={flow.id}>
+                <span>
+                  {flow.date} ·{" "}
+                  {flow.note || (flow.amountKrw > 0 ? "입금" : "출금")}
+                </span>
+                <strong>
+                  {flow.amountKrw > 0 ? "+" : ""}
+                  {fmt(flow.amountKrw)}
+                </strong>
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  onClick={() => removeFlow(flow.id)}
+                  disabled={dirty}
+                  aria-label={`${flow.date} 입출금 삭제`}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {!draft.cashFlows.length && (
+              <small>기록된 입출금이 없습니다.</small>
+            )}
+          </div>
+        </details>
       </section>
     </div>
   );
