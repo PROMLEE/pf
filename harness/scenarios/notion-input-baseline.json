@@ -1,0 +1,8 @@
+{
+  "name": "notion-input-baseline",
+  "fixture": "notion-investment-assets.json",
+  "notes": [
+    "Uses sample portfolio amounts",
+    "Used as baseline during early product iteration"
+  ]
+}

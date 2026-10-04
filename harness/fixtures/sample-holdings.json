@@ -1,0 +1,20 @@
+{
+  "asOf": "2026-01-01",
+  "holdings": [
+    {
+      "symbol": "AAPL",
+      "assetClass": "equity",
+      "marketValue": 15000000
+    },
+    {
+      "symbol": "BND",
+      "assetClass": "bond",
+      "marketValue": 7000000
+    },
+    {
+      "symbol": "KRW",
+      "assetClass": "cash",
+      "marketValue": 3000000
+    }
+  ]
+}

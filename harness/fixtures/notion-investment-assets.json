@@ -1,0 +1,101 @@
+{
+  "source": {
+    "type": "sample-notion-csv",
+    "csvPath": "example/notion-investment-assets.csv"
+  },
+  "summary": {
+    "totalCurrent": 10000000,
+    "totalTarget": 10000000,
+    "holdingCount": 8
+  },
+  "holdings": [
+    {
+      "assetName": "S&P 500",
+      "account": "ISA, 연금저축",
+      "targetPercent": 20,
+      "targetAmount": 2000000,
+      "currentPercent": 21.0,
+      "currentAmount": 2100000,
+      "assetClass": "equity-index",
+      "driftAmount": 100000,
+      "driftPercent": 1.0
+    },
+    {
+      "assetName": "Nasdaq 100 x 2",
+      "account": "ISA",
+      "targetPercent": 20,
+      "targetAmount": 2000000,
+      "currentPercent": 19.0,
+      "currentAmount": 1900000,
+      "assetClass": "equity-index",
+      "driftAmount": -100000,
+      "driftPercent": -1.0
+    },
+    {
+      "assetName": "현금 (RP)",
+      "account": "네이버 RP",
+      "targetPercent": 15,
+      "targetAmount": 1500000,
+      "currentPercent": 16.0,
+      "currentAmount": 1600000,
+      "assetClass": "cash",
+      "driftAmount": 100000,
+      "driftPercent": 1.0
+    },
+    {
+      "assetName": "우량주",
+      "account": "미래에셋",
+      "targetPercent": 20,
+      "targetAmount": 2000000,
+      "currentPercent": 19.0,
+      "currentAmount": 1900000,
+      "assetClass": "equity-stock",
+      "driftAmount": -100000,
+      "driftPercent": -1.0
+    },
+    {
+      "assetName": "성장주",
+      "account": "ISA",
+      "targetPercent": 5,
+      "targetAmount": 500000,
+      "currentPercent": 5.5,
+      "currentAmount": 550000,
+      "assetClass": "equity-stock",
+      "driftAmount": 50000,
+      "driftPercent": 0.5
+    },
+    {
+      "assetName": "금",
+      "account": "ISA",
+      "targetPercent": 5,
+      "targetAmount": 500000,
+      "currentPercent": 4.5,
+      "currentAmount": 450000,
+      "assetClass": "commodity",
+      "driftAmount": -50000,
+      "driftPercent": -0.5
+    },
+    {
+      "assetName": "Kospi 200",
+      "account": "연금저축",
+      "targetPercent": 10,
+      "targetAmount": 1000000,
+      "currentPercent": 9.5,
+      "currentAmount": 950000,
+      "assetClass": "equity-index",
+      "driftAmount": -50000,
+      "driftPercent": -0.5
+    },
+    {
+      "assetName": "비트코인",
+      "account": "빗썸",
+      "targetPercent": 5,
+      "targetAmount": 500000,
+      "currentPercent": 5.5,
+      "currentAmount": 550000,
+      "assetClass": "crypto",
+      "driftAmount": 50000,
+      "driftPercent": 0.5
+    }
+  ]
+}

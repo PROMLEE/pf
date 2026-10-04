@@ -1,0 +1,19 @@
+{
+  "name": "portfolio-foundation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Investment portfolio classification and allocation management workspace",
+  "scripts": {
+    "dev:web": "pnpm --dir ./apps/web dev",
+    "build:web": "pnpm --dir ./apps/web build",
+    "start:web": "pnpm --dir ./apps/web start",
+    "dev:api": "echo \"TODO: wire api app runner\"",
+    "test": "echo \"TODO: add test runner\"",
+    "harness:validate": "node ./harness/validate.mjs",
+    "harness:import:notion": "node ./harness/import-notion.mjs",
+    "harness:validate:notion": "node ./harness/validate-notion.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

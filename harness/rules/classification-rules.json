@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "match": "*.KS",
+      "assetClass": "equity"
+    },
+    {
+      "match": "*.KQ",
+      "assetClass": "equity"
+    },
+    {
+      "match": "*",
+      "assetClass": "other"
+    }
+  ]
+}

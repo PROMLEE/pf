@@ -1,0 +1,21 @@
+{
+  "name": "allocation-baseline",
+  "inputFixture": "sample-holdings.json",
+  "target": [
+    {
+      "assetClass": "equity",
+      "targetPercent": 60
+    },
+    {
+      "assetClass": "bond",
+      "targetPercent": 30
+    },
+    {
+      "assetClass": "cash",
+      "targetPercent": 10
+    }
+  ],
+  "expectations": {
+    "maxDriftPercent": 5
+  }
+}

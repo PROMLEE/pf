@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# logs
+*.log
+
+# env
+.env
+.env.*
+!.env.example
+
+# build output
+dist/
+build/
+.next/
+coverage/
+*.traineddata
+
+# misc
+.DS_Store
