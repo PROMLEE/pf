@@ -146,6 +146,35 @@ export async function removeHolding(userId: string, id: string) {
   }
 }
 
+export async function updateHoldingAmounts(
+  userId: string,
+  id: string,
+  quantity: number,
+  averageCost: number | null,
+) {
+  const client = await db().connect();
+  try {
+    await client.query("begin");
+    const result = await client.query(
+      `update portfolio.holdings
+       set quantity = $3, average_cost = $4, updated_at = now()
+       where user_id = $1 and id = $2`,
+      [userId, id, quantity, averageCost],
+    );
+    if (result.rowCount !== 1)
+      throw new Error("수정할 자산을 찾지 못했습니다.");
+    await recordSnapshot(userId, client);
+    const rows = await select(client, userId);
+    await client.query("commit");
+    return rows;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function updateHoldingInstrument(
   userId: string,
   id: string,

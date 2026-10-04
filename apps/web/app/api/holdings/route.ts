@@ -5,6 +5,7 @@ import {
   addHoldings,
   listHoldings,
   removeHolding,
+  updateHoldingAmounts,
   updateHoldingInstrument,
 } from "../../../lib/holdings-db";
 
@@ -159,11 +160,43 @@ export async function PATCH(request: Request) {
   try {
     const body = (await request.json()) as {
       id?: string;
+      quantity?: number;
+      averageCost?: number | null;
       market?: "KR" | "US";
       name?: string;
       symbol?: string;
       exchange?: string | null;
     };
+    if (body.quantity !== undefined) {
+      if (
+        !body.id ||
+        !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(body.id) ||
+        typeof body.quantity !== "number" ||
+        !Number.isFinite(body.quantity) ||
+        body.quantity <= 0 ||
+        body.quantity >= 1e12 ||
+        Math.abs(body.quantity - Math.round(body.quantity * 1e6) / 1e6) >
+          1e-9 ||
+        body.averageCost === undefined ||
+        (body.averageCost !== null &&
+          (typeof body.averageCost !== "number" ||
+            !Number.isFinite(body.averageCost) ||
+            body.averageCost <= 0 ||
+            body.averageCost >= 1e12))
+      )
+        return NextResponse.json(
+          { message: "보유 수량과 매입단가를 확인해 주세요" },
+          { status: 400 },
+        );
+      return NextResponse.json({
+        holdings: await updateHoldingAmounts(
+          userId,
+          body.id,
+          body.quantity,
+          body.averageCost,
+        ),
+      });
+    }
     if (
       !body.id ||
       !/^[0-9a-f-]{36}$/i.test(body.id) ||
@@ -193,6 +226,11 @@ export async function PATCH(request: Request) {
       }),
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "수정할 자산을 찾지 못했습니다."
+    )
+      return NextResponse.json({ message: error.message }, { status: 404 });
     if ((error as { code?: string }).code === "23505") {
       return NextResponse.json(
         { message: "같은 계좌에 이미 등록된 종목 코드입니다" },
@@ -200,7 +238,7 @@ export async function PATCH(request: Request) {
       );
     }
     return NextResponse.json(
-      { message: "종목 코드를 저장하지 못했습니다" },
+      { message: "자산 정보를 저장하지 못했습니다" },
       { status: 500 },
     );
   }

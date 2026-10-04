@@ -16,6 +16,8 @@ type PlanRow = {
   title: string;
   usd_krw: string;
   usd_krw_updated_at: Date;
+  usd_krw_mode: "auto" | "manual";
+  usd_krw_rate_date: string | null;
   tolerance_percent: string;
 };
 type CashFlowRow = {
@@ -46,6 +48,7 @@ type ManualRow = {
   bucket_id: string | null;
   name: string;
   value_krw: string;
+  value_usd: string | null;
 };
 type CryptoRow = {
   id: string;
@@ -75,7 +78,7 @@ export async function listPortfolio(
   client: Client = db(),
 ): Promise<Portfolio | null> {
   const plan = await client.query<PlanRow>(
-    `select title, usd_krw, usd_krw_updated_at, tolerance_percent from portfolio.plans where user_id = $1`,
+    `select title, usd_krw, usd_krw_updated_at, usd_krw_mode, usd_krw_rate_date::text as usd_krw_rate_date, tolerance_percent from portfolio.plans where user_id = $1`,
     [userId],
   );
   if (!plan.rows[0]) return null;
@@ -89,7 +92,7 @@ export async function listPortfolio(
     [userId],
   );
   const manualAssets = await client.query<ManualRow>(
-    `select id, bucket_id, name, value_krw from portfolio.manual_assets where user_id = $1 order by name`,
+    `select id, bucket_id, name, value_krw, value_usd from portfolio.manual_assets where user_id = $1 order by name`,
     [userId],
   );
   const cryptoAssets = await client.query<CryptoRow>(
@@ -114,6 +117,8 @@ export async function listPortfolio(
     title: plan.rows[0].title,
     usdKrw: Number(plan.rows[0].usd_krw),
     usdKrwUpdatedAt: plan.rows[0].usd_krw_updated_at.toISOString(),
+    usdKrwMode: plan.rows[0].usd_krw_mode,
+    usdKrwRateDate: plan.rows[0].usd_krw_rate_date,
     tolerancePercent: Number(plan.rows[0].tolerance_percent),
     buckets: buckets.rows.map(
       (row): Bucket => ({
@@ -144,6 +149,7 @@ export async function listPortfolio(
         bucketId: row.bucket_id,
         name: row.name,
         valueKrw: Number(row.value_krw),
+        valueUsd: row.value_usd === null ? null : Number(row.value_usd),
       }),
     ),
     cryptoAssets: cryptoAssets.rows.map(
@@ -192,12 +198,20 @@ export async function savePortfolio(userId: string, input: Portfolio) {
   try {
     await client.query("begin");
     await client.query(
-      `insert into portfolio.plans (user_id, title, usd_krw, tolerance_percent)
-       values ($1,$2,$3,$4)
+      `insert into portfolio.plans (user_id, title, usd_krw, usd_krw_mode, usd_krw_rate_date, tolerance_percent)
+       values ($1,$2,$3,$4,$5,$6)
        on conflict (user_id) do update set title = excluded.title, usd_krw = excluded.usd_krw,
-         usd_krw_updated_at = case when portfolio.plans.usd_krw is distinct from excluded.usd_krw then now() else portfolio.plans.usd_krw_updated_at end,
+         usd_krw_updated_at = case when portfolio.plans.usd_krw is distinct from excluded.usd_krw or portfolio.plans.usd_krw_mode is distinct from excluded.usd_krw_mode then now() else portfolio.plans.usd_krw_updated_at end,
+         usd_krw_mode = excluded.usd_krw_mode, usd_krw_rate_date = excluded.usd_krw_rate_date,
          tolerance_percent = excluded.tolerance_percent, updated_at = now()`,
-      [userId, input.title, input.usdKrw, input.tolerancePercent],
+      [
+        userId,
+        input.title,
+        input.usdKrw,
+        input.usdKrwMode,
+        input.usdKrwRateDate,
+        input.tolerancePercent,
+      ],
     );
     const previousPrices = await client.query<{
       market: string;
@@ -293,9 +307,18 @@ export async function savePortfolio(userId: string, input: Portfolio) {
     }
     for (const asset of input.manualAssets) {
       await client.query(
-        `insert into portfolio.manual_assets (id, user_id, bucket_id, name, value_krw)
-         values ($1,$2,$3,$4,$5)`,
-        [asset.id, userId, asset.bucketId, asset.name, asset.valueKrw],
+        `insert into portfolio.manual_assets (id, user_id, bucket_id, name, value_krw, value_usd)
+         values ($1,$2,$3,$4,$5,$6)`,
+        [
+          asset.id,
+          userId,
+          asset.bucketId,
+          asset.name,
+          asset.valueUsd === null
+            ? asset.valueKrw
+            : asset.valueUsd * input.usdKrw,
+          asset.valueUsd,
+        ],
       );
     }
     for (const asset of input.cryptoAssets) {
@@ -321,6 +344,34 @@ export async function savePortfolio(userId: string, input: Portfolio) {
     const saved = await listPortfolio(userId, client);
     await client.query("commit");
     return saved;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function updateAutomaticFx(
+  userId: string,
+  rate: number,
+  rateDate: string,
+) {
+  const client = await db().connect();
+  try {
+    await client.query("begin");
+    const updated = await client.query(
+      `update portfolio.plans
+       set usd_krw = $2, usd_krw_rate_date = $3,
+           usd_krw_updated_at = now(), updated_at = now()
+       where user_id = $1 and usd_krw_mode = 'auto'
+         and (usd_krw_rate_date is null or usd_krw_rate_date <= $3::date)
+         and (usd_krw is distinct from $2::numeric or usd_krw_rate_date is distinct from $3::date)`,
+      [userId, rate, rateDate],
+    );
+    if (updated.rowCount) await recordSnapshot(userId, client);
+    await client.query("commit");
+    return Boolean(updated.rowCount);
   } catch (error) {
     await client.query("rollback");
     throw error;
@@ -434,8 +485,9 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
   const manualAssets = await client.query<{
     bucket_id: string | null;
     value_krw: string;
+    value_usd: string | null;
   }>(
-    `select bucket_id, value_krw from portfolio.manual_assets where user_id = $1`,
+    `select bucket_id, value_krw, value_usd from portfolio.manual_assets where user_id = $1`,
     [userId],
   );
   const cryptoAssets = await client.query<{
@@ -463,7 +515,12 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
     );
   }
   for (const row of manualAssets.rows)
-    add(row.bucket_id, Number(row.value_krw));
+    add(
+      row.bucket_id,
+      row.value_usd === null
+        ? Number(row.value_krw)
+        : Number(row.value_usd) * fx,
+    );
   for (const row of cryptoAssets.rows)
     add(
       row.bucket_id,

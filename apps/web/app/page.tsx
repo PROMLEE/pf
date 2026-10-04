@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, Fragment, useEffect, useMemo, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
   ArrowRight,
@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -84,6 +85,10 @@ export default function PortfolioPage() {
     Record<string, Instrument[]>
   >({});
   const [savedResolvingId, setSavedResolvingId] = useState<string | null>(null);
+  const [editingHoldingId, setEditingHoldingId] = useState<string | null>(null);
+  const [holdingQuantity, setHoldingQuantity] = useState("");
+  const [holdingCost, setHoldingCost] = useState("");
+  const [holdingSaving, setHoldingSaving] = useState(false);
 
   useEffect(() => {
     if (authStatus !== "authenticated") return;
@@ -331,6 +336,48 @@ export default function PortfolioPage() {
       );
     } finally {
       setSavedResolvingId(null);
+    }
+  }
+
+  function beginHoldingEdit(row: Holding) {
+    setEditingHoldingId(row.id);
+    setHoldingQuantity(String(row.quantity));
+    setHoldingCost(row.averageCost === null ? "" : String(row.averageCost));
+  }
+
+  async function saveHoldingAmounts() {
+    if (!editingHoldingId) return;
+    const quantity = Number(holdingQuantity);
+    const averageCost = holdingCost.trim() === "" ? null : Number(holdingCost);
+    if (
+      !Number.isFinite(quantity) ||
+      quantity <= 0 ||
+      Math.abs(quantity - Math.round(quantity * 1e6) / 1e6) > 1e-9 ||
+      (averageCost !== null &&
+        (!Number.isFinite(averageCost) || averageCost <= 0))
+    )
+      return setNotice(
+        "수량은 소수점 6자리까지, 매입단가는 양수로 입력해 주세요.",
+      );
+    setHoldingSaving(true);
+    try {
+      const result = await data<{ holdings: Holding[] }>(
+        await fetch("/api/holdings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingHoldingId, quantity, averageCost }),
+        }),
+      );
+      setHoldings(result.holdings);
+      setQuoteVersion((version) => version + 1);
+      setEditingHoldingId(null);
+      setNotice("보유 수량과 매입단가를 저장했습니다.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "자산을 수정하지 못했습니다.",
+      );
+    } finally {
+      setHoldingSaving(false);
     }
   }
 
@@ -738,6 +785,7 @@ export default function PortfolioPage() {
               onNotice={setNotice}
               onRefreshQuotes={refreshQuotes}
               onImport={() => go("import")}
+              onEditHoldings={() => go("holdings")}
             />
           )}
           {view === "overview" && (
@@ -967,96 +1015,152 @@ export default function PortfolioPage() {
                   shown.map((row) => {
                     const price = row.currentPrice ?? row.capturedPrice;
                     return (
-                      <div className={styles.holdingRow} key={row.id}>
-                        <div className={styles.holdingName}>
-                          <span className={styles.assetIcon}>{row.market}</span>
+                      <Fragment key={row.id}>
+                        <div className={styles.holdingRow}>
+                          <div className={styles.holdingName}>
+                            <span className={styles.assetIcon}>
+                              {row.market}
+                            </span>
+                            <div>
+                              <strong>{row.name}</strong>
+                              <small>
+                                {row.broker} · {row.account} ·{" "}
+                                {row.symbol || "코드 미확인"}
+                              </small>
+                              <button
+                                type="button"
+                                className={styles.savedCodeButton}
+                                disabled={savedResolvingId === row.id}
+                                onClick={() => resolveSavedInstrument(row)}
+                              >
+                                {savedResolvingId === row.id
+                                  ? "확인 중"
+                                  : "KIS 코드 확인"}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.savedCodeButton}
+                                onClick={() => beginHoldingEdit(row)}
+                              >
+                                <Pencil size={11} /> 수량·매입단가 수정
+                              </button>
+                              {savedInstrumentMatches[row.id]?.length ? (
+                                <select
+                                  className={styles.savedInstrumentSelect}
+                                  defaultValue=""
+                                  aria-label={`${row.name} 종목 코드 후보`}
+                                  onChange={(event) => {
+                                    const item = savedInstrumentMatches[
+                                      row.id
+                                    ].find(
+                                      (candidate) =>
+                                        `${candidate.symbol}|${candidate.exchange}` ===
+                                        event.target.value,
+                                    );
+                                    if (item) applySavedInstrument(row, item);
+                                  }}
+                                >
+                                  <option value="">후보를 선택하세요</option>
+                                  {savedInstrumentMatches[row.id].map(
+                                    (item) => (
+                                      <option
+                                        key={`${item.symbol}|${item.exchange}`}
+                                        value={`${item.symbol}|${item.exchange}`}
+                                      >
+                                        {item.name} · {item.symbol} (
+                                        {item.exchange})
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              ) : null}
+                            </div>
+                          </div>
                           <div>
-                            <strong>{row.name}</strong>
+                            <label>수량</label>
+                            {won.format(row.quantity)}주
+                          </div>
+                          <div>
+                            <label>가격</label>
+                            {price === null ? "—" : money(price, row.market)}
                             <small>
-                              {row.broker} · {row.account} ·{" "}
-                              {row.symbol || "코드 미확인"}
+                              {row.currentPrice === null
+                                ? "캡처 기준"
+                                : row.quoteLabel}
                             </small>
+                          </div>
+                          <strong>
+                            <label>평가</label>
+                            {price === null
+                              ? "—"
+                              : money(valueOf(row), row.market)}
+                          </strong>
+                          <strong
+                            className={
+                              gainOf(row) === null
+                                ? ""
+                                : gainOf(row)! >= 0
+                                  ? styles.gainPositive
+                                  : styles.gainNegative
+                            }
+                          >
+                            <label>손익</label>
+                            {gainOf(row) === null
+                              ? "—"
+                              : signedMoney(gainOf(row)!, row.market)}
+                          </strong>
+                          <button
+                            className={styles.deleteButton}
+                            aria-label={`${row.name} 삭제`}
+                            onClick={() => removeHolding(row.id)}
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
+                        {editingHoldingId === row.id && (
+                          <div className={styles.holdingEdit}>
+                            <label>
+                              보유 수량
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.000001"
+                                value={holdingQuantity}
+                                onChange={(event) =>
+                                  setHoldingQuantity(event.target.value)
+                                }
+                              />
+                            </label>
+                            <label>
+                              주당 매입단가 (
+                              {row.market === "US" ? "USD" : "KRW"})
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.000001"
+                                value={holdingCost}
+                                onChange={(event) =>
+                                  setHoldingCost(event.target.value)
+                                }
+                                placeholder="모르면 비워두기"
+                              />
+                            </label>
                             <button
                               type="button"
-                              className={styles.savedCodeButton}
-                              disabled={savedResolvingId === row.id}
-                              onClick={() => resolveSavedInstrument(row)}
+                              onClick={saveHoldingAmounts}
+                              disabled={holdingSaving}
                             >
-                              {savedResolvingId === row.id
-                                ? "확인 중"
-                                : "KIS 코드 확인"}
+                              {holdingSaving ? "저장 중" : "저장"}
                             </button>
-                            {savedInstrumentMatches[row.id]?.length ? (
-                              <select
-                                className={styles.savedInstrumentSelect}
-                                defaultValue=""
-                                aria-label={`${row.name} 종목 코드 후보`}
-                                onChange={(event) => {
-                                  const item = savedInstrumentMatches[
-                                    row.id
-                                  ].find(
-                                    (candidate) =>
-                                      `${candidate.symbol}|${candidate.exchange}` ===
-                                      event.target.value,
-                                  );
-                                  if (item) applySavedInstrument(row, item);
-                                }}
-                              >
-                                <option value="">후보를 선택하세요</option>
-                                {savedInstrumentMatches[row.id].map((item) => (
-                                  <option
-                                    key={`${item.symbol}|${item.exchange}`}
-                                    value={`${item.symbol}|${item.exchange}`}
-                                  >
-                                    {item.name} · {item.symbol} ({item.exchange}
-                                    )
-                                  </option>
-                                ))}
-                              </select>
-                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => setEditingHoldingId(null)}
+                            >
+                              취소
+                            </button>
                           </div>
-                        </div>
-                        <div>
-                          <label>수량</label>
-                          {won.format(row.quantity)}주
-                        </div>
-                        <div>
-                          <label>가격</label>
-                          {price === null ? "—" : money(price, row.market)}
-                          <small>
-                            {row.currentPrice === null
-                              ? "캡처 기준"
-                              : row.quoteLabel}
-                          </small>
-                        </div>
-                        <strong>
-                          <label>평가</label>
-                          {price === null
-                            ? "—"
-                            : money(valueOf(row), row.market)}
-                        </strong>
-                        <strong
-                          className={
-                            gainOf(row) === null
-                              ? ""
-                              : gainOf(row)! >= 0
-                                ? styles.gainPositive
-                                : styles.gainNegative
-                          }
-                        >
-                          <label>손익</label>
-                          {gainOf(row) === null
-                            ? "—"
-                            : signedMoney(gainOf(row)!, row.market)}
-                        </strong>
-                        <button
-                          className={styles.deleteButton}
-                          aria-label={`${row.name} 삭제`}
-                          onClick={() => removeHolding(row.id)}
-                        >
-                          <X size={18} />
-                        </button>
-                      </div>
+                        )}
+                      </Fragment>
                     );
                   })
                 ) : (

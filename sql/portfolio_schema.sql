@@ -38,9 +38,13 @@ create table if not exists portfolio.plans (
   title text not null check (length(btrim(title)) between 1 and 80),
   usd_krw numeric(16, 4) not null check (usd_krw > 0),
   usd_krw_updated_at timestamptz not null default now(),
+  usd_krw_mode text not null default 'manual' check (usd_krw_mode in ('auto', 'manual')),
+  usd_krw_rate_date date,
   tolerance_percent numeric(5, 2) not null default 5 check (tolerance_percent between 0 and 100),
   updated_at timestamptz not null default now()
 );
+alter table portfolio.plans add column if not exists usd_krw_mode text not null default 'manual' check (usd_krw_mode in ('auto', 'manual'));
+alter table portfolio.plans add column if not exists usd_krw_rate_date date;
 
 create table if not exists portfolio.buckets (
   id uuid primary key,
@@ -92,11 +96,13 @@ create table if not exists portfolio.manual_assets (
   bucket_id uuid,
   name text not null check (length(btrim(name)) between 1 and 100),
   value_krw numeric(24, 2) not null check (value_krw >= 0),
+  value_usd numeric(24, 6) check (value_usd is null or value_usd >= 0),
   updated_at timestamptz not null default now(),
   constraint manual_assets_bucket_owner_fkey
     foreign key (user_id, bucket_id) references portfolio.buckets (user_id, id)
     on delete set null (bucket_id)
 );
+alter table portfolio.manual_assets add column if not exists value_usd numeric(24, 6) check (value_usd is null or value_usd >= 0);
 create index if not exists manual_assets_user_bucket_idx on portfolio.manual_assets (user_id, bucket_id);
 
 create table if not exists portfolio.crypto_assets (

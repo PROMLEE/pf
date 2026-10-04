@@ -6,7 +6,9 @@ import {
   listCryptoAssets,
   recordSnapshot,
   savePortfolio,
+  updateAutomaticFx,
 } from "../../../lib/portfolio-db";
+import { fetchUsdKrwReference } from "../../../lib/fx";
 import {
   listKrwCryptoMarkets,
   refreshStoredCryptoQuotes,
@@ -38,6 +40,13 @@ function valid(input: Portfolio) {
     !Number.isFinite(input.usdKrw) ||
     input.usdKrw < 100 ||
     input.usdKrw > 100000
+  )
+    return false;
+  if (
+    !["auto", "manual"].includes(input.usdKrwMode) ||
+    (input.usdKrwRateDate !== null &&
+      (typeof input.usdKrwRateDate !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(input.usdKrwRateDate)))
   )
     return false;
   if (
@@ -146,6 +155,16 @@ function valid(input: Portfolio) {
       asset.valueKrw > 1e15
     )
       return false;
+    if (
+      asset.valueUsd !== null &&
+      (typeof asset.valueUsd !== "number" ||
+        !Number.isFinite(asset.valueUsd) ||
+        asset.valueUsd < 0 ||
+        asset.valueUsd > 1e12 ||
+        Math.abs(asset.valueUsd - Math.round(asset.valueUsd * 1e6) / 1e6) >
+          1e-9)
+    )
+      return false;
     assetIds.add(asset.id);
   }
 
@@ -200,7 +219,18 @@ export async function GET() {
       { status: 401 },
     );
   try {
-    return NextResponse.json({ portfolio: await listPortfolio(userId) });
+    let portfolio = await listPortfolio(userId);
+    let fxWarning: string | null = null;
+    if (portfolio?.usdKrwMode === "auto") {
+      try {
+        const reference = await fetchUsdKrwReference();
+        if (await updateAutomaticFx(userId, reference.rate, reference.date))
+          portfolio = await listPortfolio(userId);
+      } catch {
+        fxWarning = "환율 자동 조회에 실패해 마지막 저장 환율을 사용합니다.";
+      }
+    }
+    return NextResponse.json({ portfolio, fxWarning });
   } catch {
     return NextResponse.json(
       { message: "포트폴리오를 불러오지 못했습니다" },
@@ -231,6 +261,30 @@ export async function PUT(request: Request) {
         },
         { status: 400 },
       );
+    let fxWarning: string | null = null;
+    if (input.usdKrwMode === "auto") {
+      try {
+        const reference = await fetchUsdKrwReference();
+        const previous = await listPortfolio(userId);
+        if (
+          previous?.usdKrwRateDate &&
+          previous.usdKrwRateDate > reference.date
+        ) {
+          input.usdKrw = previous.usdKrw;
+          input.usdKrwRateDate = previous.usdKrwRateDate;
+        } else {
+          input.usdKrw = reference.rate;
+          input.usdKrwRateDate = reference.date;
+        }
+      } catch {
+        const previous = await listPortfolio(userId);
+        if (previous) {
+          input.usdKrw = previous.usdKrw;
+          input.usdKrwRateDate = previous.usdKrwRateDate;
+        }
+        fxWarning = "자동 환율 조회에 실패해 마지막 저장 환율을 유지했습니다.";
+      }
+    } else input.usdKrwRateDate = null;
     const existingCodes = new Set(await listCryptoAssets(userId));
     const newCodes = input.cryptoAssets
       .map((asset) => asset.marketCode)
@@ -267,7 +321,7 @@ export async function PUT(request: Request) {
           "포트폴리오는 저장했지만 가상자산 시세는 갱신하지 못했습니다. 가격 갱신을 다시 눌러 주세요.";
       }
     }
-    return NextResponse.json({ portfolio, quoteWarning });
+    return NextResponse.json({ portfolio, quoteWarning, fxWarning });
   } catch (error) {
     return NextResponse.json(
       {

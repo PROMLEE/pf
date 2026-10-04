@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   Plus,
+  Pencil,
   RefreshCw,
   Search,
   Trash2,
@@ -19,6 +20,7 @@ import {
   EXAMPLE_RULES,
   cryptoAssetValueKrw,
   holdingValueKrw,
+  manualAssetValueKrw,
   portfolioValues,
   type Bucket,
   type Portfolio,
@@ -41,6 +43,7 @@ type Props = {
   onNotice: (message: string) => void;
   onRefreshQuotes: () => Promise<void>;
   onImport: () => void;
+  onEditHoldings: () => void;
 };
 const won = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 const fmt = (value: number) => `${won.format(value)}원`;
@@ -78,6 +81,8 @@ function emptyPortfolio(): Portfolio {
     title: "나의 투자 포트폴리오",
     usdKrw: 1400,
     usdKrwUpdatedAt: null,
+    usdKrwMode: "auto",
+    usdKrwRateDate: null,
     tolerancePercent: 5,
     buckets: [],
     rules: [],
@@ -155,6 +160,7 @@ export default function PortfolioBuilder({
   onNotice,
   onRefreshQuotes,
   onImport,
+  onEditHoldings,
 }: Props) {
   const [draft, setDraft] = useState<Portfolio | null>(null);
   const [loading, setLoading] = useState(true);
@@ -169,6 +175,7 @@ export default function PortfolioBuilder({
   const [lookingUp, setLookingUp] = useState(false);
   const [manualName, setManualName] = useState("");
   const [manualValue, setManualValue] = useState("");
+  const [manualCurrency, setManualCurrency] = useState<"KRW" | "USD">("KRW");
   const [manualBucketId, setManualBucketId] = useState("");
   const [cryptoQuery, setCryptoQuery] = useState("");
   const [cryptoCandidates, setCryptoCandidates] = useState<CryptoMarket[]>([]);
@@ -200,11 +207,13 @@ export default function PortfolioBuilder({
         const payload = (await response.json()) as {
           portfolio?: Portfolio;
           message?: string;
+          fxWarning?: string | null;
         };
         if (!response.ok)
           throw new Error(
             payload.message || "포트폴리오를 불러오지 못했습니다.",
           );
+        if (payload.fxWarning) onNotice(payload.fxWarning);
         return payload.portfolio ?? null;
       })
       .then((portfolio) => {
@@ -437,7 +446,7 @@ export default function PortfolioBuilder({
       return onNotice("수동 자산 이름을 입력해 주세요.");
     const value = Number(manualValue);
     if (!Number.isFinite(value) || value < 0)
-      return onNotice("평가금액을 확인해 주세요.");
+      return onNotice("자산 금액을 확인해 주세요.");
     change({
       ...draft,
       manualAssets: [
@@ -446,7 +455,8 @@ export default function PortfolioBuilder({
           id: crypto.randomUUID(),
           bucketId: manualBucketId || null,
           name: manualName.trim(),
-          valueKrw: value,
+          valueKrw: manualCurrency === "USD" ? value * draft.usdKrw : value,
+          valueUsd: manualCurrency === "USD" ? value : null,
         },
       ],
     });
@@ -525,9 +535,7 @@ export default function PortfolioBuilder({
     setCryptoQuery("");
     setCryptoQuantity("");
     setCryptoCandidates([]);
-    onNotice(
-      "가상자산을 추가했습니다. 저장하면 빗썸 원화 시세를 조회합니다.",
-    );
+    onNotice("가상자산을 추가했습니다. 저장하면 빗썸 원화 시세를 조회합니다.");
   }
   function assign(holdingId: string, value: string) {
     if (!draft) return;
@@ -562,6 +570,7 @@ export default function PortfolioBuilder({
         portfolio?: Portfolio;
         message?: string;
         quoteWarning?: string | null;
+        fxWarning?: string | null;
       };
       if (!response.ok || !payload.portfolio)
         throw new Error(payload.message || "저장하지 못했습니다.");
@@ -575,7 +584,8 @@ export default function PortfolioBuilder({
           ((await holdingsResponse.json()) as { holdings: Holding[] }).holdings,
         );
       onNotice(
-        payload.quoteWarning ?? "포트폴리오와 오늘의 평가액을 저장했습니다.",
+        [payload.fxWarning, payload.quoteWarning].filter(Boolean).join(" ") ||
+          "포트폴리오와 오늘의 평가액을 저장했습니다.",
       );
     } catch (error) {
       onNotice(
@@ -877,8 +887,11 @@ export default function PortfolioBuilder({
           {oldestCapture ? ` · 가장 오래된 ${timeLabel(oldestCapture)}` : ""}
         </span>
         <span>
-          수동 환율 USD {won.format(draft.usdKrw)}원 ·{" "}
-          {timeLabel(draft.usdKrwUpdatedAt)}
+          {draft.usdKrwMode === "auto" ? "자동 기준환율" : "직접 입력 환율"} USD{" "}
+          {won.format(draft.usdKrw)}원 ·{" "}
+          {draft.usdKrwMode === "auto"
+            ? `ECB ${draft.usdKrwRateDate ?? "기준일 확인 안 됨"}`
+            : timeLabel(draft.usdKrwUpdatedAt)}
         </span>
         {draft.cryptoAssets.length > 0 && (
           <span>
@@ -963,12 +976,29 @@ export default function PortfolioBuilder({
               />
             </label>
             <label>
-              USD → KRW 기준환율 (직접 입력)
+              환율 적용 방식
+              <select
+                value={draft.usdKrwMode}
+                onChange={(event) =>
+                  change({
+                    ...draft,
+                    usdKrwMode: event.target.value as "auto" | "manual",
+                    usdKrwRateDate: null,
+                  })
+                }
+              >
+                <option value="auto">자동 · ECB 일일 기준환율</option>
+                <option value="manual">직접 입력</option>
+              </select>
+            </label>
+            <label>
+              USD → KRW 환율 (1달러당 원)
               <input
                 type="number"
                 min="100"
                 step="0.01"
                 value={draft.usdKrw}
+                disabled={draft.usdKrwMode === "auto"}
                 onChange={(event) =>
                   change({ ...draft, usdKrw: Number(event.target.value) })
                 }
@@ -1219,6 +1249,9 @@ export default function PortfolioBuilder({
           </span>
         </summary>
         <div className={styles.assignmentActions}>
+          <button className={styles.ghost} onClick={onEditHoldings}>
+            <Pencil size={15} /> 주식 수량·매입단가 수정
+          </button>
           <button className={styles.ghost} onClick={onImport}>
             <Camera size={15} /> 캡처 가져오기
           </button>
@@ -1437,7 +1470,7 @@ export default function PortfolioBuilder({
         ))}
         <div className={styles.subHead}>
           <h3>기타 직접 입력 자산</h3>
-          <small>현금·RP 등 원화 평가액을 직접 관리하는 자산</small>
+          <small>원화 금액이나 달러 수량을 직접 관리하는 자산</small>
         </div>
         {draft.manualAssets.some((asset) =>
           /비트코인|bitcoin|BTC/i.test(asset.name),
@@ -1459,9 +1492,19 @@ export default function PortfolioBuilder({
             min="0"
             value={manualValue}
             onChange={(event) => setManualValue(event.target.value)}
-            placeholder="평가액 (원)"
-            aria-label="직접 입력 평가액"
+            placeholder={manualCurrency === "USD" ? "달러 금액" : "평가액 (원)"}
+            aria-label="직접 입력 자산 금액"
           />
+          <select
+            value={manualCurrency}
+            onChange={(event) =>
+              setManualCurrency(event.target.value as "KRW" | "USD")
+            }
+            aria-label="직접 입력 자산 통화"
+          >
+            <option value="KRW">원화</option>
+            <option value="USD">달러</option>
+          </select>
           <select
             value={manualBucketId || draft.buckets[0]?.id || ""}
             onChange={(event) => setManualBucketId(event.target.value)}
@@ -1484,19 +1527,30 @@ export default function PortfolioBuilder({
               type="number"
               min="0"
               max="1000000000000000"
-              value={asset.valueKrw}
-              aria-label={`${asset.name} 평가액`}
+              value={asset.valueUsd ?? asset.valueKrw}
+              aria-label={`${asset.name} ${asset.valueUsd === null ? "원화 평가액" : "달러 금액"}`}
               onChange={(event) =>
                 change({
                   ...draft,
                   manualAssets: draft.manualAssets.map((item) =>
                     item.id === asset.id
-                      ? { ...item, valueKrw: Number(event.target.value) }
+                      ? item.valueUsd === null
+                        ? { ...item, valueKrw: Number(event.target.value) }
+                        : {
+                            ...item,
+                            valueUsd: Number(event.target.value),
+                            valueKrw: Number(event.target.value) * draft.usdKrw,
+                          }
                       : item,
                   ),
                 })
               }
             />
+            <small>
+              {asset.valueUsd === null
+                ? "KRW"
+                : `USD · ${fmt(manualAssetValueKrw(asset, draft.usdKrw))}`}
+            </small>
             <select
               value={asset.bucketId ?? ""}
               aria-label={`${asset.name} 포트`}

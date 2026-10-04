@@ -24,7 +24,12 @@ export type ManualAsset = {
   bucketId: string | null;
   name: string;
   valueKrw: number;
+  valueUsd: number | null;
 };
+
+export function manualAssetValueKrw(asset: ManualAsset, usdKrw: number) {
+  return asset.valueUsd === null ? asset.valueKrw : asset.valueUsd * usdKrw;
+}
 
 export type CryptoAsset = {
   id: string;
@@ -62,6 +67,8 @@ export type Portfolio = {
   title: string;
   usdKrw: number;
   usdKrwUpdatedAt: string | null;
+  usdKrwMode: "auto" | "manual";
+  usdKrwRateDate: string | null;
   tolerancePercent: number;
   buckets: Bucket[];
   rules: Rule[];
@@ -111,13 +118,11 @@ export function portfolioValues(portfolio: Portfolio, holdings: Holding[]) {
     }
   }
   for (const asset of portfolio.manualAssets) {
+    const value = manualAssetValueKrw(asset, portfolio.usdKrw);
     if (asset.bucketId && values.has(asset.bucketId)) {
-      values.set(
-        asset.bucketId,
-        (values.get(asset.bucketId) ?? 0) + asset.valueKrw,
-      );
+      values.set(asset.bucketId, (values.get(asset.bucketId) ?? 0) + value);
     } else {
-      unassigned += asset.valueKrw;
+      unassigned += value;
     }
   }
   for (const asset of portfolio.cryptoAssets) {

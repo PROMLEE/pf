@@ -5,6 +5,7 @@ import type { Holding } from "./holdings";
 import {
   cryptoAssetValueKrw,
   holdingValueKrw,
+  manualAssetValueKrw,
   portfolioValues,
   type Portfolio,
 } from "./portfolio-model";
@@ -76,7 +77,8 @@ function chartItems(mode: Mode, portfolio: Portfolio, holdings: Holding[]) {
     groups.set(key, {
       key,
       name: mode === "broker" ? "직접 입력" : asset.name,
-      value: (existing?.value ?? 0) + asset.valueKrw,
+      value:
+        (existing?.value ?? 0) + manualAssetValueKrw(asset, portfolio.usdKrw),
       color: "#9d7fa8",
     });
   }

@@ -255,6 +255,8 @@
 .assignmentActions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 8px;
 }
 .advancedSettings {
@@ -279,7 +281,7 @@
 }
 .settings {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 1.5fr 1.4fr 1fr 0.8fr;
   gap: 12px;
   padding: 8px 0 16px;
   border-bottom: 1px solid #edf0f5;
@@ -520,7 +522,7 @@
 }
 .manualForm {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr 80px;
+  grid-template-columns: 1.2fr 1fr 80px 1fr 80px;
   gap: 8px;
 }
 .cryptoSearch { display: grid; grid-template-columns: minmax(0, 1fr) 80px; gap: 8px; margin-bottom: 8px; }
@@ -539,7 +541,7 @@
 .cryptoRow > b { color: #176d73; font-size: 11px; text-align: right; }
 .manualRow {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr 80px;
+  grid-template-columns: 1.2fr 1fr 1fr 1fr 36px;
   gap: 8px;
   align-items: center;
   margin-top: 8px;
@@ -547,6 +549,7 @@
 .manualRow button {
   justify-self: start;
 }
+.manualRow small { color: #82979c; font-size: 10px; }
 .adviceList {
   display: grid;
   gap: 0;
@@ -784,6 +787,8 @@
   .manualRow strong {
     grid-column: 1 / -1;
   }
+  .manualRow small { grid-column: 2; grid-row: 2; }
+  .manualRow button { grid-column: 3; grid-row: 2; }
   .advice {
     align-items: flex-start;
     flex-wrap: wrap;
