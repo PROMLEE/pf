@@ -49,6 +49,7 @@ type Props = {
   quoteError: string;
   onImport: () => void;
   onEditHoldings: () => void;
+  onManageOtherAsset: (kind: "crypto" | "manual", id: string) => void;
   onNavigate: (
     screen: "strategy" | "allocation" | "rebalance" | "history",
   ) => void;
@@ -179,10 +180,12 @@ function AssetList({
   investments,
   manualAssets,
   usdKrw,
+  onManageOtherAsset,
 }: {
   investments: AssetSummaryRow[];
   manualAssets: Portfolio["manualAssets"];
   usdKrw: number;
+  onManageOtherAsset: Props["onManageOtherAsset"];
 }) {
   return (
     <>
@@ -215,6 +218,18 @@ function AssetList({
                       ? "매입가 정보 없음"
                       : `${asset.gain > 0 ? "+" : ""}${fmt(asset.gain)} (${asset.gainPercent === null ? "—" : `${asset.gainPercent > 0 ? "+" : ""}${pct(asset.gainPercent)}`})`}
                   </small>
+                  {asset.id.startsWith("crypto:") && (
+                    <button
+                      type="button"
+                      className={styles.assetEditLink}
+                      aria-label={`${asset.name} 보유 수량 수정`}
+                      onClick={() =>
+                        onManageOtherAsset("crypto", asset.id.slice(7))
+                      }
+                    >
+                      수량 수정 <Pencil size={11} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -241,6 +256,14 @@ function AssetList({
                 </div>
                 <div className={styles.mobileAssetValue}>
                   <strong>{fmt(manualAssetValueKrw(asset, usdKrw))}</strong>
+                  <button
+                    type="button"
+                    className={styles.assetEditLink}
+                    aria-label={`${asset.name} 금액 수정`}
+                    onClick={() => onManageOtherAsset("manual", asset.id)}
+                  >
+                    금액 수정 <Pencil size={11} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -263,6 +286,7 @@ export default function PortfolioBuilder({
   quoteError,
   onImport,
   onEditHoldings,
+  onManageOtherAsset,
   onNavigate,
   onDirtyChange,
 }: Props) {
@@ -1282,6 +1306,7 @@ export default function PortfolioBuilder({
               investments={mobileInvestments}
               manualAssets={draft.manualAssets}
               usdKrw={draft.usdKrw}
+              onManageOtherAsset={onManageOtherAsset}
             />
           </section>
           <div className={styles.desktopLiveStatus} role="status">
@@ -1359,13 +1384,14 @@ export default function PortfolioBuilder({
                     <h2>보유 자산</h2>
                   </div>
                   <button type="button" onClick={onEditHoldings}>
-                    자산 수정 <ArrowRight size={14} />
+                    주식 수정 <ArrowRight size={14} />
                   </button>
                 </div>
                 <AssetList
                   investments={mobileInvestments}
                   manualAssets={draft.manualAssets}
                   usdKrw={draft.usdKrw}
+                  onManageOtherAsset={onManageOtherAsset}
                 />
               </section>
             </div>
@@ -1922,7 +1948,11 @@ export default function PortfolioBuilder({
               </button>
             </div>
             {draft.cryptoAssets.map((asset) => (
-              <div className={styles.cryptoRow} key={asset.id}>
+              <div
+                className={styles.cryptoRow}
+                id={`edit-crypto-${asset.id}`}
+                key={asset.id}
+              >
                 <div>
                   <strong>{asset.name}</strong>
                   <small>
@@ -2053,7 +2083,11 @@ export default function PortfolioBuilder({
               </button>
             </div>
             {draft.manualAssets.map((asset) => (
-              <div className={styles.manualRow} key={asset.id}>
+              <div
+                className={styles.manualRow}
+                id={`edit-manual-${asset.id}`}
+                key={asset.id}
+              >
                 <strong>{asset.name}</strong>
                 <input
                   type="number"
@@ -2123,6 +2157,13 @@ export default function PortfolioBuilder({
             ))}
           </details>
         </>
+      )}
+      {screen === "allocation" && dirty && (
+        <div className={styles.mobileSaveBar}>
+          <button type="button" onClick={save} disabled={saving}>
+            {saving ? "저장 중" : "변경 내용 저장"}
+          </button>
+        </div>
       )}
       {screen === "rebalance" && (
         <>

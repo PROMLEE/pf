@@ -79,6 +79,10 @@ export default function PortfolioPage() {
   const { data: session, status: authStatus } = useSession();
   const [view, setView] = useState<View>("portfolio");
   const [portfolioDirty, setPortfolioDirty] = useState(false);
+  const [pendingAssetEditor, setPendingAssetEditor] = useState<{
+    kind: "crypto" | "manual";
+    id: string;
+  } | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
@@ -204,6 +208,26 @@ export default function PortfolioPage() {
     setMenuOpen(false);
     setNotice("");
   }
+
+  function editOtherAsset(kind: "crypto" | "manual", id: string) {
+    setPendingAssetEditor({ kind, id });
+    go("allocation");
+  }
+
+  useEffect(() => {
+    if (view !== "allocation" || !pendingAssetEditor) return;
+    const frame = window.requestAnimationFrame(() => {
+      const row = document.getElementById(
+        `edit-${pendingAssetEditor.kind}-${pendingAssetEditor.id}`,
+      );
+      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+      row?.querySelector<HTMLInputElement>("input")?.focus({
+        preventScroll: true,
+      });
+      setPendingAssetEditor(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [view, pendingAssetEditor]);
 
   async function importCapture(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -732,7 +756,7 @@ export default function PortfolioPage() {
   const nav = [
     { id: "portfolio" as View, label: "대시보드", Icon: LayoutDashboard },
     { id: "holdings" as View, label: "보유 자산", Icon: Wallet },
-    { id: "edit" as View, label: "자산 수정", Icon: Pencil },
+    { id: "edit" as View, label: "주식 수정", Icon: Pencil },
     { id: "strategy" as View, label: "목표 설계", Icon: Settings2 },
     { id: "allocation" as View, label: "자산 배정", Icon: Wallet },
     { id: "rebalance" as View, label: "리밸런싱", Icon: RefreshCw },
@@ -878,6 +902,7 @@ export default function PortfolioPage() {
               quoteError={quoteError}
               onImport={() => go("import")}
               onEditHoldings={() => go("edit")}
+              onManageOtherAsset={editOtherAsset}
               onNavigate={go}
               onDirtyChange={setPortfolioDirty}
             />
@@ -889,7 +914,7 @@ export default function PortfolioPage() {
                   <span className={styles.kicker}>
                     {view === "edit" ? "EDIT ASSETS" : "MY ASSETS"}
                   </span>
-                  <h1>{view === "edit" ? "자산 수정" : "보유 자산"}</h1>
+                  <h1>{view === "edit" ? "주식 수정" : "보유 자산"}</h1>
                   <p>
                     {view === "edit"
                       ? "보유 수량, 매입단가와 시세 조회용 종목코드를 관리하세요."
@@ -900,7 +925,7 @@ export default function PortfolioPage() {
                   className={styles.primaryButton}
                   onClick={() => go(view === "edit" ? "holdings" : "edit")}
                 >
-                  {view === "edit" ? "보유 자산으로" : "자산 수정"}{" "}
+                  {view === "edit" ? "보유 자산으로" : "주식 수정"}{" "}
                   <ArrowRight size={17} />
                 </button>
               </div>
