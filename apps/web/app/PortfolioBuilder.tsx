@@ -55,6 +55,9 @@ type Props = {
   onDirtyChange: (dirty: boolean) => void;
 };
 const won = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
+const quantityFormat = new Intl.NumberFormat("ko-KR", {
+  maximumFractionDigits: 8,
+});
 const fmt = (value: number) => `${won.format(value)}원`;
 const pct = (value: number) => `${value.toFixed(1)}%`;
 const kstDate = () =>
@@ -966,6 +969,78 @@ export default function PortfolioBuilder({
         .sort((a, b) => b.value - a.value)
         .slice(0, 3)
     : [];
+  const mobileStockGroups = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      market: Market;
+      symbol: string;
+      quantity: number;
+      value: number;
+      gain: number;
+      cost: number;
+      missingPrice: boolean;
+      missingCost: boolean;
+      capturedOnly: boolean;
+    }
+  >();
+  for (const holding of holdings) {
+    const id = holding.symbol
+      ? `${holding.market}:${holding.exchange ?? ""}:${holding.symbol.toUpperCase()}`
+      : `holding:${holding.id}`;
+    const group = mobileStockGroups.get(id) ?? {
+      id,
+      name: holding.name,
+      market: holding.market,
+      symbol: holding.symbol,
+      quantity: 0,
+      value: 0,
+      gain: 0,
+      cost: 0,
+      missingPrice: false,
+      missingCost: false,
+      capturedOnly: false,
+    };
+    const price = holding.currentPrice ?? holding.capturedPrice;
+    const rate = holding.market === "US" ? (draft?.usdKrw ?? 0) : 1;
+    group.quantity += holding.quantity;
+    group.capturedOnly ||= holding.currentPrice === null;
+    group.missingPrice ||= price === null;
+    group.missingCost ||= holding.averageCost === null;
+    if (price !== null) group.value += holding.quantity * price * rate;
+    if (holding.averageCost !== null) {
+      group.cost += holding.averageCost * holding.quantity * rate;
+      if (price !== null) {
+        group.gain += (price - holding.averageCost) * holding.quantity * rate;
+      }
+    }
+    mobileStockGroups.set(id, group);
+  }
+  const mobileInvestments = draft
+    ? [
+        ...[...mobileStockGroups.values()].map((group) => ({
+          id: group.id,
+          name: group.name,
+          detail: `${group.symbol || group.market} · ${quantityFormat.format(group.quantity)}주${group.capturedOnly ? " · 캡처 기준" : ""}`,
+          value: group.missingPrice ? null : group.value,
+          gain: group.missingPrice || group.missingCost ? null : group.gain,
+          gainPercent:
+            group.missingPrice || group.missingCost || group.cost === 0
+              ? null
+              : (group.gain / group.cost) * 100,
+        })),
+        ...draft.cryptoAssets.map((asset) => ({
+          id: `crypto:${asset.id}`,
+          name: asset.name,
+          detail: `${asset.marketCode} · ${quantityFormat.format(asset.quantity)}개`,
+          value:
+            asset.quotedPriceKrw === null ? null : cryptoAssetValueKrw(asset),
+          gain: null as number | null,
+          gainPercent: null as number | null,
+        })),
+      ].sort((a, b) => (b.value ?? -1) - (a.value ?? -1))
+    : [];
   const latestCryptoQuote = draft?.cryptoAssets
     .map((asset) => asset.quoteCheckedAt)
     .filter((date): date is string => Boolean(date))
@@ -1160,6 +1235,69 @@ export default function PortfolioBuilder({
             {(quoteError || fxRefreshError) && (
               <div className={styles.mobileDataError}>
                 {quoteError || fxRefreshError}
+              </div>
+            )}
+            <div className={styles.mobileAssetGroup}>
+              <h2>
+                투자 <span>{mobileInvestments.length}</span>
+              </h2>
+              {mobileInvestments.length ? (
+                <div className={styles.mobileAssetList}>
+                  {mobileInvestments.map((asset) => (
+                    <div className={styles.mobileAssetRow} key={asset.id}>
+                      <div className={styles.mobileAssetName}>
+                        <strong>{asset.name}</strong>
+                        <small>{asset.detail}</small>
+                      </div>
+                      <div className={styles.mobileAssetValue}>
+                        <strong>
+                          {asset.value === null ? "—" : fmt(asset.value)}
+                        </strong>
+                        <small
+                          className={
+                            asset.gain === null
+                              ? ""
+                              : asset.gain >= 0
+                                ? styles.mobileUp
+                                : styles.mobileDown
+                          }
+                        >
+                          {asset.gain === null
+                            ? "매입가 정보 없음"
+                            : `${asset.gain > 0 ? "+" : ""}${fmt(asset.gain)} (${asset.gainPercent === null ? "—" : `${asset.gainPercent > 0 ? "+" : ""}${pct(asset.gainPercent)}`})`}
+                        </small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.mobileAssetEmpty}>
+                  등록된 투자 종목이 없습니다.
+                </p>
+              )}
+            </div>
+            {draft.manualAssets.length > 0 && (
+              <div className={styles.mobileAssetGroup}>
+                <h2>
+                  현금·기타 <span>{draft.manualAssets.length}</span>
+                </h2>
+                <div className={styles.mobileAssetList}>
+                  {draft.manualAssets.map((asset) => (
+                    <div className={styles.mobileAssetRow} key={asset.id}>
+                      <div className={styles.mobileAssetName}>
+                        <strong>{asset.name}</strong>
+                        <small>
+                          {asset.valueUsd === null ? "원화" : "미국 달러"}
+                        </small>
+                      </div>
+                      <div className={styles.mobileAssetValue}>
+                        <strong>
+                          {fmt(manualAssetValueKrw(asset, draft.usdKrw))}
+                        </strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </section>

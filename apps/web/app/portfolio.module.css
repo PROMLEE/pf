@@ -1060,6 +1060,20 @@
   .mobileMetricNote p { max-width: 42ch; margin: 8px 0 0; }
   .mobileQuoteTime { display: flex; align-items: center; gap: 8px; margin-top: 34px; color: #a9b8ba; font-size: 11px; }
   .mobileDataError { margin-top: 12px; color: #e9b28d; font-size: 11px; }
+  .mobileAssetGroup { margin-top: 30px; }
+  .mobileAssetGroup h2 { display: flex; align-items: baseline; gap: 7px; margin: 0 0 8px; color: #f4f7f6; font-size: 17px; font-weight: 750; }
+  .mobileAssetGroup h2 span { color: #839395; font-size: 12px; font-weight: 500; }
+  .mobileAssetList { display: grid; }
+  .mobileAssetRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 72px; border-bottom: 1px solid #252e30; }
+  .mobileAssetName, .mobileAssetValue { display: grid; gap: 5px; min-width: 0; }
+  .mobileAssetName strong { overflow: hidden; color: #edf2f1; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+  .mobileAssetName small { overflow: hidden; color: #839395; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+  .mobileAssetValue { justify-items: end; text-align: right; }
+  .mobileAssetValue strong { color: #f5f7f7; font-size: 13px; font-weight: 750; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mobileAssetValue small { color: #839395; font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mobileAssetValue .mobileUp { color: #ff6d79; }
+  .mobileAssetValue .mobileDown { color: #69a0ff; }
+  .mobileAssetEmpty { padding: 16px 0; color: #91a0a2; font-size: 12px; }
   .mobileSpinning { animation: mobileSpin 1.4s linear infinite; }
   @keyframes mobileSpin { to { transform: rotate(360deg); } }
 }
