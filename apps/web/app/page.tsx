@@ -35,6 +35,7 @@ import {
   recognizeHoldings,
 } from "./holdings";
 import PortfolioBuilder from "./PortfolioBuilder";
+import AssetIcon from "./AssetIcon";
 import styles from "./page.module.css";
 
 type View =
@@ -1023,9 +1024,11 @@ export default function PortfolioPage() {
                       <Fragment key={row.id}>
                         <div className={styles.holdingRow}>
                           <div className={styles.holdingName}>
-                            <span className={styles.assetIcon}>
-                              {row.market}
-                            </span>
+                            <AssetIcon
+                              kind="stock"
+                              symbol={row.symbol}
+                              name={row.name}
+                            />
                             <div>
                               <strong>{row.name}</strong>
                               <small>

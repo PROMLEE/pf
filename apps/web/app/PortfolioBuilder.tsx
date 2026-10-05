@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Holding, Market } from "./holdings";
+import AssetIcon from "./AssetIcon";
 import Portfolio3D from "./Portfolio3D";
 import PortfolioVisuals from "./PortfolioVisuals";
 import {
@@ -169,6 +170,8 @@ function Trend({
 
 type AssetSummaryRow = {
   id: string;
+  kind: "stock" | "crypto";
+  symbol: string;
   name: string;
   detail: string;
   value: number | null;
@@ -197,9 +200,16 @@ function AssetList({
           <div className={styles.mobileAssetList}>
             {investments.map((asset) => (
               <div className={styles.mobileAssetRow} key={asset.id}>
-                <div className={styles.mobileAssetName}>
-                  <strong>{asset.name}</strong>
-                  <small>{asset.detail}</small>
+                <div className={styles.mobileAssetIdentity}>
+                  <AssetIcon
+                    kind={asset.kind}
+                    symbol={asset.symbol}
+                    name={asset.name}
+                  />
+                  <div className={styles.mobileAssetName}>
+                    <strong>{asset.name}</strong>
+                    <small>{asset.detail}</small>
+                  </div>
                 </div>
                 <div className={styles.mobileAssetValue}>
                   <strong>
@@ -248,11 +258,18 @@ function AssetList({
           <div className={styles.mobileAssetList}>
             {manualAssets.map((asset) => (
               <div className={styles.mobileAssetRow} key={asset.id}>
-                <div className={styles.mobileAssetName}>
-                  <strong>{asset.name}</strong>
-                  <small>
-                    {asset.valueUsd === null ? "원화" : "미국 달러"}
-                  </small>
+                <div className={styles.mobileAssetIdentity}>
+                  <AssetIcon
+                    kind="cash"
+                    symbol={asset.valueUsd === null ? "KRW" : "USD"}
+                    name={asset.name}
+                  />
+                  <div className={styles.mobileAssetName}>
+                    <strong>{asset.name}</strong>
+                    <small>
+                      {asset.valueUsd === null ? "원화" : "미국 달러"}
+                    </small>
+                  </div>
                 </div>
                 <div className={styles.mobileAssetValue}>
                   <strong>{fmt(manualAssetValueKrw(asset, usdKrw))}</strong>
@@ -1086,6 +1103,8 @@ export default function PortfolioBuilder({
     ? [
         ...[...mobileStockGroups.values()].map((group) => ({
           id: group.id,
+          kind: "stock" as const,
+          symbol: group.symbol,
           name: group.name,
           detail: `${group.symbol || group.market} · ${quantityFormat.format(group.quantity)}주${group.capturedOnly ? " · 캡처 기준" : ""}`,
           value: group.missingPrice ? null : group.value,
@@ -1097,6 +1116,8 @@ export default function PortfolioBuilder({
         })),
         ...draft.cryptoAssets.map((asset) => ({
           id: `crypto:${asset.id}`,
+          kind: "crypto" as const,
+          symbol: asset.marketCode,
           name: asset.name,
           detail: `${asset.marketCode} · ${quantityFormat.format(asset.quantity)}개`,
           value:

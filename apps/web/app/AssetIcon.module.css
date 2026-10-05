@@ -1,0 +1,34 @@
+.icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.logo {
+  background: #fff;
+  border: 1px solid #dfe7e9;
+}
+
+.logo img {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+}
+
+.badge {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.badge span {
+  max-width: 32px;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
