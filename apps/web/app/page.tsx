@@ -806,7 +806,9 @@ export default function PortfolioPage() {
           </button>
         </div>
       </aside>
-      <div className={styles.workspace}>
+      <div
+        className={`${styles.workspace} ${view === "portfolio" ? styles.mobileHomeWorkspace : ""}`}
+      >
         <header className={styles.topbar}>
           <button
             className={styles.menuButton}
@@ -1526,17 +1528,28 @@ export default function PortfolioPage() {
           PORTFOLIO · 개인 자산 관리를 위한 공간
         </footer>
       </div>
-      <nav className={styles.mobileNav}>
-        {nav.slice(0, 4).map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            className={view === id ? styles.mobileActive : ""}
-            onClick={() => go(id)}
-          >
-            <Icon size={21} />
-            <span>{label}</span>
-          </button>
-        ))}
+      <nav
+        className={`${styles.mobileNav} ${view === "portfolio" ? styles.mobileHomeNav : ""}`}
+        aria-label="모바일 주요 메뉴"
+      >
+        {(["portfolio", "holdings", "allocation"] as View[]).map((id) => {
+          const item = nav.find((entry) => entry.id === id)!;
+          const { label, Icon } = item;
+          return (
+            <button
+              key={id}
+              className={view === id ? styles.mobileActive : ""}
+              onClick={() => go(id)}
+            >
+              <Icon size={21} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+        <button onClick={() => setMenuOpen(true)} aria-label="전체 메뉴 열기">
+          <Menu size={21} />
+          <span>전체</span>
+        </button>
       </nav>
     </div>
   );

@@ -913,6 +913,14 @@ export default function PortfolioBuilder({
   const changeSincePrevious = previousPoint
     ? (values?.total ?? 0) - previousPoint.valueKrw - flowsSincePrevious
     : null;
+  const yesterdayKey = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const dailyChange =
+    previousPoint?.date === yesterdayKey ? changeSincePrevious : null;
   const assetGroups = draft
     ? [
         {
@@ -1031,7 +1039,9 @@ export default function PortfolioBuilder({
     );
 
   return (
-    <div className={styles.builder}>
+    <div
+      className={`${styles.builder} ${screen === "dashboard" ? styles.homeBuilder : ""}`}
+    >
       <div className={styles.heading}>
         <div>
           <span>{titles[0]}</span>
@@ -1061,6 +1071,98 @@ export default function PortfolioBuilder({
 
       {screen === "dashboard" && (
         <>
+          <section className={styles.mobileDashboard} aria-label="내 자산 요약">
+            <div className={styles.mobileDashboardTop}>
+              <span>총 평가액</span>
+              <button
+                type="button"
+                aria-label="가격 새로고침"
+                onClick={refresh}
+                disabled={refreshing || quotesRefreshing}
+              >
+                <RefreshCw
+                  size={18}
+                  className={
+                    refreshing || quotesRefreshing ? styles.mobileSpinning : ""
+                  }
+                />
+              </button>
+            </div>
+            <div className={styles.mobileTotal}>
+              {won.format(values?.total ?? 0)}
+              <span>원</span>
+            </div>
+            <div className={styles.mobileMetricList}>
+              <div>
+                <span>
+                  전체 평가손익 <small>확인분</small>
+                </span>
+                <strong
+                  className={
+                    knownGains.value >= 0 ? styles.mobileUp : styles.mobileDown
+                  }
+                >
+                  {knownGains.count
+                    ? `${knownGains.value > 0 ? "+" : ""}${fmt(knownGains.value)}`
+                    : "—"}
+                </strong>
+              </div>
+              <div>
+                <span>
+                  당일 손익 <small>기록 기준</small>
+                </span>
+                <strong
+                  className={
+                    (dailyChange ?? 0) >= 0
+                      ? styles.mobileUp
+                      : styles.mobileDown
+                  }
+                >
+                  {dailyChange === null
+                    ? "—"
+                    : `${dailyChange > 0 ? "+" : ""}${fmt(dailyChange)}`}
+                </strong>
+              </div>
+              <div>
+                <span>
+                  전체 수익률 <small>확인분</small>
+                </span>
+                <strong
+                  className={
+                    knownGains.value >= 0 ? styles.mobileUp : styles.mobileDown
+                  }
+                >
+                  {knownGains.cost > 0
+                    ? `${knownGains.value > 0 ? "+" : ""}${pct((knownGains.value / knownGains.cost) * 100)}`
+                    : "—"}
+                </strong>
+              </div>
+            </div>
+            <details className={styles.mobileMetricNote}>
+              <summary>손익 집계 기준</summary>
+              <p>
+                전체 손익은 매입단가가 확인된 주식 {knownGains.count}/
+                {holdings.length}개 기준입니다. 가상자산·현금의 매입원가는
+                포함되지 않습니다.
+                {dailyChange === null
+                  ? " 전일 자산 기록이 없어 당일 손익을 계산할 수 없습니다."
+                  : " 당일 손익은 전일 기록에서 등록된 입출금을 제외한 추정치입니다."}
+              </p>
+            </details>
+            <div className={styles.mobileQuoteTime}>
+              <span
+                className={quotesRefreshing ? styles.livePulse : styles.liveDot}
+              />
+              {quotesRefreshing
+                ? "시세 갱신 중"
+                : `최근 시세 ${timeLabel(latestPriceTime)}`}
+            </div>
+            {(quoteError || fxRefreshError) && (
+              <div className={styles.mobileDataError}>
+                {quoteError || fxRefreshError}
+              </div>
+            )}
+          </section>
           <div className={styles.liveStatus} role="status">
             <span
               className={quotesRefreshing ? styles.livePulse : styles.liveDot}

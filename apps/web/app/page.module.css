@@ -1692,3 +1692,37 @@
 }
 
 .navGroup > span:not(:first-child) { padding-top: 15px; }
+
+@media (max-width: 760px) {
+  .mobileHomeWorkspace {
+    background: #111516;
+  }
+  .mobileHomeWorkspace .topbar {
+    background: #111516;
+    border-color: #111516;
+    color: #c7d0d1;
+  }
+  .mobileHomeWorkspace .topbar strong {
+    color: #f4f6f6;
+  }
+  .mobileHomeWorkspace .content {
+    min-height: calc(100dvh - 68px);
+    padding: 0 18px calc(80px + env(safe-area-inset-bottom));
+    background: #111516;
+  }
+  .mobileHomeWorkspace .notice {
+    background: #252d2f;
+    color: #e6eeee;
+    border-color: #394649;
+  }
+  .mobileHomeNav {
+    background: #181d1f;
+    border-color: #30383a;
+  }
+  .mobileHomeNav button {
+    color: #8f9d9f;
+  }
+  .mobileHomeNav .mobileActive {
+    color: #63d7b3;
+  }
+}
