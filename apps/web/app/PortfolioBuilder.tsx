@@ -76,6 +76,7 @@ const timeLabel = (value: string | null) =>
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        hourCycle: "h23",
       }).format(new Date(value))
     : "확인 안 됨";
 const colors = [
@@ -162,6 +163,91 @@ function Trend({
         </p>
       )}
     </div>
+  );
+}
+
+type AssetSummaryRow = {
+  id: string;
+  name: string;
+  detail: string;
+  value: number | null;
+  gain: number | null;
+  gainPercent: number | null;
+};
+
+function AssetList({
+  investments,
+  manualAssets,
+  usdKrw,
+}: {
+  investments: AssetSummaryRow[];
+  manualAssets: Portfolio["manualAssets"];
+  usdKrw: number;
+}) {
+  return (
+    <>
+      <div className={styles.mobileAssetGroup}>
+        <h2>
+          투자 <span>{investments.length}</span>
+        </h2>
+        {investments.length ? (
+          <div className={styles.mobileAssetList}>
+            {investments.map((asset) => (
+              <div className={styles.mobileAssetRow} key={asset.id}>
+                <div className={styles.mobileAssetName}>
+                  <strong>{asset.name}</strong>
+                  <small>{asset.detail}</small>
+                </div>
+                <div className={styles.mobileAssetValue}>
+                  <strong>
+                    {asset.value === null ? "—" : fmt(asset.value)}
+                  </strong>
+                  <small
+                    className={
+                      asset.gain === null
+                        ? ""
+                        : asset.gain >= 0
+                          ? styles.mobileUp
+                          : styles.mobileDown
+                    }
+                  >
+                    {asset.gain === null
+                      ? "매입가 정보 없음"
+                      : `${asset.gain > 0 ? "+" : ""}${fmt(asset.gain)} (${asset.gainPercent === null ? "—" : `${asset.gainPercent > 0 ? "+" : ""}${pct(asset.gainPercent)}`})`}
+                  </small>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className={styles.mobileAssetEmpty}>
+            등록된 투자 종목이 없습니다.
+          </p>
+        )}
+      </div>
+      {manualAssets.length > 0 && (
+        <div className={styles.mobileAssetGroup}>
+          <h2>
+            현금·기타 <span>{manualAssets.length}</span>
+          </h2>
+          <div className={styles.mobileAssetList}>
+            {manualAssets.map((asset) => (
+              <div className={styles.mobileAssetRow} key={asset.id}>
+                <div className={styles.mobileAssetName}>
+                  <strong>{asset.name}</strong>
+                  <small>
+                    {asset.valueUsd === null ? "원화" : "미국 달러"}
+                  </small>
+                </div>
+                <div className={styles.mobileAssetValue}>
+                  <strong>{fmt(manualAssetValueKrw(asset, usdKrw))}</strong>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -924,51 +1010,6 @@ export default function PortfolioBuilder({
   }).format(new Date(Date.now() - 24 * 60 * 60 * 1000));
   const dailyChange =
     previousPoint?.date === yesterdayKey ? changeSincePrevious : null;
-  const assetGroups = draft
-    ? [
-        {
-          label: "국내 주식",
-          value: holdings
-            .filter((holding) => holding.market === "KR")
-            .reduce(
-              (sum, holding) => sum + holdingValueKrw(holding, draft.usdKrw),
-              0,
-            ),
-        },
-        {
-          label: "미국 주식",
-          value: holdings
-            .filter((holding) => holding.market === "US")
-            .reduce(
-              (sum, holding) => sum + holdingValueKrw(holding, draft.usdKrw),
-              0,
-            ),
-        },
-        {
-          label: "가상자산",
-          value: draft.cryptoAssets.reduce(
-            (sum, asset) => sum + cryptoAssetValueKrw(asset),
-            0,
-          ),
-        },
-        {
-          label: "현금·기타",
-          value: draft.manualAssets.reduce(
-            (sum, asset) => sum + manualAssetValueKrw(asset, draft.usdKrw),
-            0,
-          ),
-        },
-      ]
-    : [];
-  const topHoldings = draft
-    ? holdings
-        .map((holding) => ({
-          holding,
-          value: holdingValueKrw(holding, draft.usdKrw),
-        }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 3)
-    : [];
   const mobileStockGroups = new Map<
     string,
     {
@@ -1136,11 +1177,11 @@ export default function PortfolioBuilder({
             <button className={styles.save} onClick={save} disabled={saving}>
               {saving ? "저장 중" : "변경 내용 저장"}
             </button>
-          ) : (
+          ) : screen !== "dashboard" ? (
             <span className={styles.saved}>
               <Check size={15} /> 저장됨
             </span>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -1237,253 +1278,168 @@ export default function PortfolioBuilder({
                 {quoteError || fxRefreshError}
               </div>
             )}
-            <div className={styles.mobileAssetGroup}>
-              <h2>
-                투자 <span>{mobileInvestments.length}</span>
-              </h2>
-              {mobileInvestments.length ? (
-                <div className={styles.mobileAssetList}>
-                  {mobileInvestments.map((asset) => (
-                    <div className={styles.mobileAssetRow} key={asset.id}>
-                      <div className={styles.mobileAssetName}>
-                        <strong>{asset.name}</strong>
-                        <small>{asset.detail}</small>
-                      </div>
-                      <div className={styles.mobileAssetValue}>
-                        <strong>
-                          {asset.value === null ? "—" : fmt(asset.value)}
-                        </strong>
-                        <small
-                          className={
-                            asset.gain === null
-                              ? ""
-                              : asset.gain >= 0
-                                ? styles.mobileUp
-                                : styles.mobileDown
-                          }
-                        >
-                          {asset.gain === null
-                            ? "매입가 정보 없음"
-                            : `${asset.gain > 0 ? "+" : ""}${fmt(asset.gain)} (${asset.gainPercent === null ? "—" : `${asset.gainPercent > 0 ? "+" : ""}${pct(asset.gainPercent)}`})`}
-                        </small>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className={styles.mobileAssetEmpty}>
-                  등록된 투자 종목이 없습니다.
-                </p>
-              )}
-            </div>
-            {draft.manualAssets.length > 0 && (
-              <div className={styles.mobileAssetGroup}>
-                <h2>
-                  현금·기타 <span>{draft.manualAssets.length}</span>
-                </h2>
-                <div className={styles.mobileAssetList}>
-                  {draft.manualAssets.map((asset) => (
-                    <div className={styles.mobileAssetRow} key={asset.id}>
-                      <div className={styles.mobileAssetName}>
-                        <strong>{asset.name}</strong>
-                        <small>
-                          {asset.valueUsd === null ? "원화" : "미국 달러"}
-                        </small>
-                      </div>
-                      <div className={styles.mobileAssetValue}>
-                        <strong>
-                          {fmt(manualAssetValueKrw(asset, draft.usdKrw))}
-                        </strong>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <AssetList
+              investments={mobileInvestments}
+              manualAssets={draft.manualAssets}
+              usdKrw={draft.usdKrw}
+            />
           </section>
-          <div className={styles.liveStatus} role="status">
+          <div className={styles.desktopLiveStatus} role="status">
             <span
               className={quotesRefreshing ? styles.livePulse : styles.liveDot}
             />
-            <strong>
-              {quotesRefreshing ? "시세 갱신 중" : "최근 시세 확인"}
-            </strong>
-            <span>{timeLabel(latestPriceTime)}</span>
-            <small>주식 약 5분 · 빗썸 약 1분 간격 자동 조회</small>
-            {quoteError && <em>{quoteError} · 저장된 가격 표시 중</em>}
-            {fxRefreshError && <em>{fxRefreshError}</em>}
+            <span>
+              {quotesRefreshing
+                ? "시세 갱신 중"
+                : `최근 시세 ${timeLabel(latestPriceTime)}`}
+            </span>
+            <span>주식 약 5분 · 빗썸 약 1분 간격</span>
+            {(quoteError || fxRefreshError) && (
+              <em>{quoteError || fxRefreshError}</em>
+            )}
           </div>
-          <div className={styles.keyMetrics}>
-            <div className={styles.keyMetric}>
-              <span>총 평가액</span>
-              <strong>{fmt(values?.total ?? 0)}</strong>
-              <small>{draft.title}</small>
-            </div>
-            <div className={styles.keyMetric}>
-              <span>주식 평가손익</span>
-              <strong
-                className={
-                  knownGains.value >= 0 ? styles.profitUp : styles.profitDown
-                }
-              >
-                {knownGains.count
-                  ? `${knownGains.value > 0 ? "+" : ""}${fmt(knownGains.value)}`
-                  : "—"}
-              </strong>
-              <small>
-                {knownGains.cost > 0
-                  ? `${knownGains.value >= 0 ? "+" : ""}${pct((knownGains.value / knownGains.cost) * 100)} · `
-                  : ""}
-                매입단가 확인 {knownGains.count}/{holdings.length}개 · USD 현재
-                환율 환산, 환차손익 제외
-              </small>
-            </div>
-            <div className={styles.keyMetric}>
-              <span>이전 기록 대비 순자산 변화</span>
-              <strong
-                className={
-                  (changeSincePrevious ?? 0) >= 0
-                    ? styles.profitUp
-                    : styles.profitDown
-                }
-              >
-                {changeSincePrevious === null
-                  ? "—"
-                  : `${changeSincePrevious > 0 ? "+" : ""}${fmt(changeSincePrevious)}`}
-              </strong>
-              <small>
-                {previousPoint
-                  ? `${previousPoint.date} 기록 대비 · 입출금 제외`
-                  : "이전 날짜의 기록이 쌓이면 표시됩니다"}
-              </small>
-            </div>
-          </div>
-          <div className={styles.summaryGrid}>
-            <section className={styles.totalCard}>
-              <small>목표 비중 점검</small>
-              <strong>
-                {rebalanceReady
-                  ? `${driftItems.length}개 조정 필요`
-                  : "배정·가격 확인 필요"}
-              </strong>
-              <div className={styles.totalInsight}>
-                <span>
-                  {driftItems[0]
-                    ? `${driftItems[0].bucket.name} ${driftItems[0].gapPercent > 0 ? "+" : ""}${driftItems[0].gapPercent.toFixed(1)}%p`
-                    : "목표 비중 안에 있습니다"}
-                </span>
-              </div>
-              <span>
-                {holdings.length + draft.cryptoAssets.length}개 보유 항목 ·{" "}
-                {draft.buckets.length}개 포트
-                {(values?.unassigned ?? 0) > 0
-                  ? ` · 미분류 ${fmt(values?.unassigned ?? 0)}`
-                  : ""}
-                {(values?.missingPrices ?? 0) > 0
-                  ? ` · 가격 미확인 ${values?.missingPrices}개`
-                  : ""}
-              </span>
-            </section>
-            <PortfolioVisuals portfolio={draft} holdings={holdings} />
-          </div>
-
-          <div className={styles.dashboardDetails}>
-            <section>
-              <h2>자산 종류별 평가액</h2>
-              {assetGroups.map((group) => (
-                <div key={group.label}>
-                  <span>{group.label}</span>
-                  <strong>{fmt(group.value)}</strong>
-                </div>
-              ))}
-            </section>
-            <section>
-              <h2>비중이 큰 주식</h2>
-              {topHoldings.length ? (
-                topHoldings.map(({ holding, value }) => (
-                  <div key={holding.id}>
-                    <span>{holding.name}</span>
-                    <strong>{fmt(value)}</strong>
+          <div className={styles.desktopOverview}>
+            <div className={styles.desktopPrimary}>
+              <div className={styles.desktopMetricGrid}>
+                <section className={styles.desktopTotal}>
+                  <span>총 평가액</span>
+                  <strong>{fmt(values?.total ?? 0)}</strong>
+                  <small>{draft.title}</small>
+                </section>
+                <section className={styles.desktopGain}>
+                  <div>
+                    <span>
+                      전체 평가손익 <small>확인분</small>
+                    </span>
+                    <strong
+                      className={
+                        knownGains.value >= 0
+                          ? styles.profitUp
+                          : styles.profitDown
+                      }
+                    >
+                      {knownGains.count
+                        ? `${knownGains.value > 0 ? "+" : ""}${fmt(knownGains.value)}`
+                        : "—"}
+                    </strong>
+                    <small>
+                      {knownGains.cost > 0
+                        ? `${knownGains.value > 0 ? "+" : ""}${pct((knownGains.value / knownGains.cost) * 100)} · `
+                        : ""}
+                      매입단가 확인 {knownGains.count}/{holdings.length}개
+                    </small>
                   </div>
-                ))
-              ) : (
-                <p>보유 주식을 추가하면 표시됩니다.</p>
-              )}
-              <button onClick={onEditHoldings}>
-                자산 관리 <ArrowRight size={15} />
-              </button>
-            </section>
-          </div>
-
-          <details className={styles.dataDetails}>
-            <summary>
-              가격·환율 기준 보기 <ChevronDown size={15} />
-            </summary>
-            <div
-              className={styles.dataStatus}
-              aria-label="평가 데이터 기준 시각"
-            >
-              <strong>평가 기준</strong>
-              <span>
-                KIS 가격 {priceFromQuote}개 · 최근 확인 {timeLabel(latestQuote)}
-              </span>
-              <span>
-                캡처 가격 {priceFromCapture}개
-                {oldestCapture
-                  ? ` · 가장 오래된 ${timeLabel(oldestCapture)}`
-                  : ""}
-              </span>
-              <span>
-                {draft.usdKrwMode === "auto"
-                  ? "자동 기준환율"
-                  : "직접 입력 환율"}{" "}
-                USD {won.format(draft.usdKrw)}원 ·{" "}
-                {draft.usdKrwMode === "auto"
-                  ? `ECB ${draft.usdKrwRateDate ?? "기준일 확인 안 됨"}`
-                  : timeLabel(draft.usdKrwUpdatedAt)}
-              </span>
-              {draft.cryptoAssets.length > 0 && (
-                <span>
-                  빗썸 원화 시세{" "}
-                  {
-                    draft.cryptoAssets.filter(
-                      (asset) => asset.quotedPriceKrw !== null,
-                    ).length
-                  }
-                  /{draft.cryptoAssets.length}개 · 최근 조회{" "}
-                  {timeLabel(
-                    draft.cryptoAssets
-                      .map((asset) => asset.quoteCheckedAt)
-                      .filter((value): value is string => Boolean(value))
-                      .sort()
-                      .at(-1) ?? null,
-                  )}
-                </span>
-              )}
-              {cryptoRefreshError && (
-                <em>{cryptoRefreshError} · 마지막 저장 가격을 표시 중</em>
-              )}
-              {(values?.missingPrices ?? 0) > 0 && (
-                <em>
-                  가격 없는 자산 {values?.missingPrices}개는 평가액에서 제외
-                </em>
-              )}
+                  <div>
+                    <span>
+                      당일 손익 <small>기록 기준</small>
+                    </span>
+                    <strong
+                      className={
+                        (dailyChange ?? 0) >= 0
+                          ? styles.profitUp
+                          : styles.profitDown
+                      }
+                    >
+                      {dailyChange === null
+                        ? "—"
+                        : `${dailyChange > 0 ? "+" : ""}${fmt(dailyChange)}`}
+                    </strong>
+                    <small>
+                      {dailyChange === null
+                        ? "전일 기록이 없어 계산할 수 없습니다"
+                        : "전일 기록 대비 · 등록된 입출금 제외"}
+                    </small>
+                  </div>
+                </section>
+              </div>
+              <section className={styles.desktopAssetPanel}>
+                <div className={styles.desktopSectionHead}>
+                  <div>
+                    <span>MY ASSETS</span>
+                    <h2>보유 자산</h2>
+                  </div>
+                  <button type="button" onClick={onEditHoldings}>
+                    자산 수정 <ArrowRight size={14} />
+                  </button>
+                </div>
+                <AssetList
+                  investments={mobileInvestments}
+                  manualAssets={draft.manualAssets}
+                  usdKrw={draft.usdKrw}
+                />
+              </section>
             </div>
-          </details>
-
-          <div className={styles.screenLinks}>
-            <button onClick={() => onNavigate("strategy")}>
-              목표 비중 편집 <ArrowRight size={16} />
-            </button>
-            <button onClick={() => onNavigate("allocation")}>
-              자산 배정 <ArrowRight size={16} />
-            </button>
-            <button onClick={() => onNavigate("rebalance")}>
-              리밸런싱 보기 <ArrowRight size={16} />
-            </button>
-            <button onClick={() => onNavigate("history")}>
-              자산 추이 <ArrowRight size={16} />
-            </button>
+            <aside className={styles.desktopSide} aria-label="포트폴리오 구성">
+              <PortfolioVisuals portfolio={draft} holdings={holdings} />
+              <section className={styles.desktopTarget}>
+                <div>
+                  <span>목표 비중 점검</span>
+                  <strong>
+                    {rebalanceReady
+                      ? `${driftItems.length}개 조정 필요`
+                      : "배정·가격 확인 필요"}
+                  </strong>
+                  <small>
+                    {!rebalanceReady
+                      ? "미분류 자산과 시세를 확인하세요"
+                      : driftItems[0]
+                        ? `${driftItems[0].bucket.name} ${driftItems[0].gapPercent > 0 ? "+" : ""}${driftItems[0].gapPercent.toFixed(1)}%p`
+                        : "목표 비중 안에 있습니다"}
+                  </small>
+                </div>
+                <button type="button" onClick={() => onNavigate("rebalance")}>
+                  리밸런싱 보기 <ArrowRight size={15} />
+                </button>
+              </section>
+              <details className={styles.dataDetails}>
+                <summary>
+                  가격·환율 기준 보기 <ChevronDown size={15} />
+                </summary>
+                <div
+                  className={styles.dataStatus}
+                  aria-label="평가 데이터 기준 시각"
+                >
+                  <strong>평가 기준</strong>
+                  <span>
+                    KIS 가격 {priceFromQuote}개 · 최근 확인{" "}
+                    {timeLabel(latestQuote)}
+                  </span>
+                  <span>
+                    캡처 가격 {priceFromCapture}개
+                    {oldestCapture
+                      ? ` · 가장 오래된 ${timeLabel(oldestCapture)}`
+                      : ""}
+                  </span>
+                  <span>
+                    {draft.usdKrwMode === "auto"
+                      ? "자동 기준환율"
+                      : "직접 입력 환율"}{" "}
+                    USD {won.format(draft.usdKrw)}원
+                  </span>
+                  {draft.cryptoAssets.length > 0 && (
+                    <span>
+                      빗썸 원화 시세{" "}
+                      {
+                        draft.cryptoAssets.filter(
+                          (asset) => asset.quotedPriceKrw !== null,
+                        ).length
+                      }
+                      /{draft.cryptoAssets.length}개
+                    </span>
+                  )}
+                  {cryptoRefreshError && <em>{cryptoRefreshError}</em>}
+                  {(values?.missingPrices ?? 0) > 0 && (
+                    <em>
+                      가격 없는 자산 {values?.missingPrices}개는 평가액에서 제외
+                    </em>
+                  )}
+                </div>
+              </details>
+              <p className={styles.desktopMetricNote}>
+                평가손익은 매입단가가 확인된 주식 기준이며 환차손익은 포함하지
+                않습니다. 당일 손익은 전일 자산 기록을 바탕으로 한 추정치입니다.
+              </p>
+            </aside>
           </div>
         </>
       )}
