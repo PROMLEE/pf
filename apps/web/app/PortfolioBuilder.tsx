@@ -172,6 +172,8 @@ type AssetSummaryRow = {
   id: string;
   kind: "stock" | "crypto";
   symbol: string;
+  market?: Market;
+  exchange?: string | null;
   name: string;
   detail: string;
   value: number | null;
@@ -205,6 +207,8 @@ function AssetList({
                     kind={asset.kind}
                     symbol={asset.symbol}
                     name={asset.name}
+                    market={asset.market}
+                    exchange={asset.exchange}
                   />
                   <div className={styles.mobileAssetName}>
                     <strong>{asset.name}</strong>
@@ -1058,6 +1062,7 @@ export default function PortfolioBuilder({
       name: string;
       market: Market;
       symbol: string;
+      exchange: string | null;
       quantity: number;
       value: number;
       gain: number;
@@ -1076,6 +1081,7 @@ export default function PortfolioBuilder({
       name: holding.name,
       market: holding.market,
       symbol: holding.symbol,
+      exchange: holding.exchange ?? null,
       quantity: 0,
       value: 0,
       gain: 0,
@@ -1105,6 +1111,8 @@ export default function PortfolioBuilder({
           id: group.id,
           kind: "stock" as const,
           symbol: group.symbol,
+          market: group.market,
+          exchange: group.exchange,
           name: group.name,
           detail: `${group.symbol || group.market} · ${quantityFormat.format(group.quantity)}주${group.capturedOnly ? " · 캡처 기준" : ""}`,
           value: group.missingPrice ? null : group.value,

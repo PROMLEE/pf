@@ -1028,6 +1028,8 @@ export default function PortfolioPage() {
                               kind="stock"
                               symbol={row.symbol}
                               name={row.name}
+                              market={row.market}
+                              exchange={row.exchange}
                             />
                             <div>
                               <strong>{row.name}</strong>

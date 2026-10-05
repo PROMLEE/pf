@@ -1,34 +1,52 @@
 .icon {
+  position: relative;
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   overflow: hidden;
-  border-radius: 50%;
+  border-radius: 11px;
 }
 
 .logo {
+  border: 1px solid #e3e8ea;
   background: #fff;
-  border: 1px solid #dfe7e9;
-}
-
-.logo img {
-  width: 25px;
-  height: 25px;
-  object-fit: contain;
 }
 
 .badge {
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
+  border: 1px solid #d9e4e7;
+  background: #eaf1f2;
+  color: #315965;
 }
 
-.badge span {
-  max-width: 32px;
+.cash {
+  border-color: #e8dcca;
+  background: #f6eee2;
+  color: #956925;
+}
+
+.fallback {
+  max-width: 35px;
   overflow: hidden;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: -0.05em;
   text-overflow: clip;
   white-space: nowrap;
+}
+
+.icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.pendingImage {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+.visibleImage {
+  display: block;
 }
