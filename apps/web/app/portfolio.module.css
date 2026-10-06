@@ -458,6 +458,19 @@
   gap: 6px;
   margin-top: 15px;
 }
+.ownedRulesHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 17px;
+  color: #526a78;
+  font-size: 11px;
+}
+.ownedRulesHead span { color: #91a0b0; font-size: 10px; }
+.ownedRulesHead + .rules { margin-top: 8px; }
+.ownedRulesHead + .ruleForm { margin-top: 8px; }
+.ruleFixCode { margin-left: auto; border: 0; background: none; color: #2874a2; font-size: 10px; font-weight: 700; cursor: pointer; }
 .rule {
   display: flex;
   align-items: center;

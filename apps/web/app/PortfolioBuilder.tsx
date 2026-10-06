@@ -672,6 +672,39 @@ export default function PortfolioBuilder({
       `${candidate.name} 종목을 자동 배정 규칙에 추가했습니다. 저장하면 같은 코드의 보유 종목이 배정됩니다.`,
     );
   }
+  function addOwnedRule(holding: Holding, bucketId: string) {
+    if (!draft || !bucketId) return;
+    if (
+      draft.rules.some(
+        (rule) =>
+          rule.market === holding.market && rule.symbol === holding.symbol,
+      )
+    )
+      return;
+    change({
+      ...draft,
+      rules: [
+        ...draft.rules,
+        {
+          id: crypto.randomUUID(),
+          bucketId,
+          market: holding.market,
+          symbol: holding.symbol,
+          exchange:
+            holding.exchange &&
+            (holding.market === "KR"
+              ? ["KOSPI", "KOSDAQ"].includes(holding.exchange)
+              : ["NAS", "NYS", "AMS"].includes(holding.exchange))
+              ? holding.exchange
+              : null,
+          name: holding.name,
+          manualPrice: null,
+          quotedPrice: null,
+          quoteCheckedAt: null,
+        },
+      ],
+    });
+  }
   function addManualAsset() {
     if (!draft || !manualName.trim())
       return onNotice("수동 자산 이름을 입력해 주세요.");
@@ -1168,6 +1201,36 @@ export default function PortfolioBuilder({
       .filter((date): date is string => Boolean(date))
       .sort()
       .at(-1) ?? null;
+  const ruleKeys = new Set(
+    draft?.rules.map((rule) => `${rule.market}:${rule.symbol}`),
+  );
+  const manuallyAssignedIds = new Set(
+    draft?.assignments
+      .filter((assignment) => assignment.source === "manual")
+      .map((assignment) => assignment.holdingId),
+  );
+  const manuallyAssignedSymbols = new Set(
+    holdings
+      .filter((holding) => manuallyAssignedIds.has(holding.id))
+      .map((holding) => `${holding.market}:${holding.symbol}`),
+  );
+  const ownedWithoutRules = Array.from(
+    new Map(
+      holdings
+        .filter(
+          (holding) => !ruleKeys.has(`${holding.market}:${holding.symbol}`),
+        )
+        .map(
+          (holding) =>
+            [
+              holding.symbol
+                ? `${holding.market}:${holding.symbol}`
+                : `missing:${holding.id}`,
+              holding,
+            ] as const,
+        ),
+    ).values(),
+  );
   const titles = {
     dashboard: [
       "MY PORTFOLIO",
@@ -1684,17 +1747,86 @@ export default function PortfolioBuilder({
             <summary className={styles.panelHead}>
               <div>
                 <span>02 · INSTRUMENTS</span>
-                <h2>종목코드별 자동 배정</h2>
+                <h2>종목별 포트 배정</h2>
               </div>
               <span className={styles.collapseMeta}>
-                {draft.rules.length}개 규칙 <ChevronDown size={16} />
+                보유 {holdings.length}개 · 규칙 {draft.rules.length}개{" "}
+                <ChevronDown size={16} />
               </span>
             </summary>
             <p className={styles.help}>
-              같은 시장·종목코드의 보유 자산을 선택한 포트에 모읍니다. 아래 규칙
-              목록에서 포트를 바로 바꿀 수 있습니다. 시세 조회가 어려운 종목만
-              임시 가격을 입력하세요.
+              보유 종목은 자동으로 표시됩니다. 포트를 선택하면 같은
+              시장·종목코드의 자산에 규칙이 적용됩니다. 이미 지정한 종목은 아래
+              배정 규칙에서 수정하세요. 자산 배정에서 직접 지정한 종목은 직접
+              배정이 우선합니다.
             </p>
+            <div className={styles.ownedRulesHead}>
+              <strong>보유 종목 · 자동 규칙 없음</strong>
+              <span>{ownedWithoutRules.length}종목</span>
+            </div>
+            {ownedWithoutRules.length ? (
+              <div className={styles.rules}>
+                {ownedWithoutRules.map((holding) => {
+                  const validSymbol =
+                    holding.market === "KR"
+                      ? /^[0-9A-Z]{6}$/.test(holding.symbol)
+                      : /^[A-Z.]{1,10}$/.test(holding.symbol);
+                  return (
+                    <div
+                      key={`${holding.market}:${holding.symbol || holding.id}`}
+                      className={styles.rule}
+                    >
+                      <span className={styles.dot} />
+                      <strong>{holding.name}</strong>
+                      <small>
+                        {holding.market} · {holding.symbol || "코드 미확인"}
+                        {manuallyAssignedSymbols.has(
+                          `${holding.market}:${holding.symbol}`,
+                        )
+                          ? " · 직접 배정 우선"
+                          : ""}
+                      </small>
+                      {validSymbol ? (
+                        <label className={styles.ruleBucket}>
+                          <select
+                            value=""
+                            aria-label={`${holding.name} 포트 선택`}
+                            onChange={(event) =>
+                              addOwnedRule(holding, event.target.value)
+                            }
+                          >
+                            <option value="">포트 선택</option>
+                            {draft.buckets.map((bucket) => (
+                              <option key={bucket.id} value={bucket.id}>
+                                {bucket.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.ruleFixCode}
+                          onClick={onEditHoldings}
+                        >
+                          코드 확인
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className={styles.help}>
+                {holdings.length
+                  ? "보유 종목에 필요한 배정 규칙이 모두 등록되었습니다."
+                  : "보유 종목이 없습니다. 캡처 가져오기에서 자산을 등록하세요."}
+              </p>
+            )}
+            <div className={styles.ownedRulesHead}>
+              <strong>새 종목 검색</strong>
+              <span>아직 보유하지 않은 종목도 추가할 수 있습니다</span>
+            </div>
             <div className={styles.ruleForm}>
               <select
                 value={ruleBucketId || draft.buckets[0]?.id || ""}
@@ -1747,6 +1879,10 @@ export default function PortfolioBuilder({
                 ))}
               </div>
             )}
+            <div className={styles.ownedRulesHead}>
+              <strong>배정 규칙</strong>
+              <span>{draft.rules.length}개</span>
+            </div>
             <div className={styles.rules}>
               {draft.rules.map((rule) => (
                 <div key={rule.id} className={styles.rule}>
