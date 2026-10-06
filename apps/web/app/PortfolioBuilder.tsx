@@ -324,7 +324,6 @@ export default function PortfolioBuilder({
   const [ruleMarket, setRuleMarket] = useState<Market>("KR");
   const [ruleQuery, setRuleQuery] = useState("");
   const [ruleBucketId, setRuleBucketId] = useState("");
-  const [rulePrice, setRulePrice] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [lookingUp, setLookingUp] = useState(false);
   const [manualName, setManualName] = useState("");
@@ -650,9 +649,6 @@ export default function PortfolioBuilder({
       return onNotice(
         "이 종목코드는 이미 다른 포트의 자동 배정 규칙에 있습니다.",
       );
-    const price = rulePrice.trim() ? Number(rulePrice) : null;
-    if (price !== null && (!Number.isFinite(price) || price <= 0))
-      return onNotice("기준 가격을 확인해 주세요.");
     change({
       ...draft,
       rules: [
@@ -664,7 +660,7 @@ export default function PortfolioBuilder({
           symbol: candidate.symbol,
           exchange: candidate.exchange,
           name: candidate.name,
-          manualPrice: price,
+          manualPrice: null,
           quotedPrice: null,
           quoteCheckedAt: null,
         },
@@ -672,7 +668,6 @@ export default function PortfolioBuilder({
     });
     setCandidates([]);
     setRuleQuery("");
-    setRulePrice("");
     onNotice(
       `${candidate.name} 종목을 자동 배정 규칙에 추가했습니다. 저장하면 같은 코드의 보유 종목이 배정됩니다.`,
     );
@@ -1696,9 +1691,9 @@ export default function PortfolioBuilder({
               </span>
             </summary>
             <p className={styles.help}>
-              종목코드가 일치하는 보유 종목을 저장할 때 자동으로 분류합니다.
-              국내 기준가는 원, 미국 기준가는 달러입니다. 원하는 종목은 아래에서
-              직접 다른 포트로 옮길 수 있습니다.
+              같은 시장·종목코드의 보유 자산을 선택한 포트에 모읍니다. 아래 규칙
+              목록에서 포트를 바로 바꿀 수 있습니다. 시세 조회가 어려운 종목만
+              임시 가격을 입력하세요.
             </p>
             <div className={styles.ruleForm}>
               <select
@@ -1731,15 +1726,6 @@ export default function PortfolioBuilder({
                 }}
                 placeholder="종목명 또는 종목코드"
                 aria-label="종목 검색어"
-              />
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={rulePrice}
-                onChange={(event) => setRulePrice(event.target.value)}
-                placeholder="기준 가격(선택)"
-                aria-label="기준 가격"
               />
               <button onClick={lookup} disabled={lookingUp}>
                 <Search size={15} /> {lookingUp ? "검색 중" : "KIS 검색"}
@@ -1775,41 +1761,66 @@ export default function PortfolioBuilder({
                   />
                   <strong>{rule.name || rule.symbol}</strong>
                   <small>
-                    {rule.market} · {rule.symbol} ·{" "}
-                    {
-                      draft.buckets.find(
-                        (bucket) => bucket.id === rule.bucketId,
-                      )?.name
-                    }
+                    {rule.market} · {rule.symbol}
                   </small>
-                  <label>
-                    기준가{" "}
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={rule.manualPrice ?? ""}
-                      placeholder={
-                        rule.quotedPrice ? String(rule.quotedPrice) : "미입력"
-                      }
+                  <label className={styles.ruleBucket}>
+                    <select
+                      value={rule.bucketId}
+                      aria-label={`${rule.name || rule.symbol} 배정 포트`}
                       onChange={(event) =>
                         change({
                           ...draft,
-                          rules: draft.rules.map(
-                            (item): Rule =>
-                              item.id === rule.id
-                                ? {
-                                    ...item,
-                                    manualPrice: event.target.value
-                                      ? Number(event.target.value)
-                                      : null,
-                                  }
-                                : item,
+                          rules: draft.rules.map((item) =>
+                            item.id === rule.id
+                              ? { ...item, bucketId: event.target.value }
+                              : item,
                           ),
                         })
                       }
-                    />
+                    >
+                      {draft.buckets.map((bucket) => (
+                        <option key={bucket.id} value={bucket.id}>
+                          {bucket.name}
+                        </option>
+                      ))}
+                    </select>
                   </label>
+                  <details className={styles.ruleAdvanced}>
+                    <summary>
+                      임시 가격
+                      {rule.manualPrice
+                        ? ` ${won.format(rule.manualPrice)}`
+                        : ""}
+                    </summary>
+                    <label>
+                      시세가 없을 때 매수 수량 계산용 ·{" "}
+                      {rule.market === "KR" ? "원" : "달러"}
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={rule.manualPrice ?? ""}
+                        placeholder="비워두면 자동 시세 사용"
+                        aria-label={`${rule.name || rule.symbol} 임시 가격`}
+                        onChange={(event) =>
+                          change({
+                            ...draft,
+                            rules: draft.rules.map(
+                              (item): Rule =>
+                                item.id === rule.id
+                                  ? {
+                                      ...item,
+                                      manualPrice: event.target.value
+                                        ? Number(event.target.value)
+                                        : null,
+                                    }
+                                  : item,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                  </details>
                   <button
                     className={styles.iconButton}
                     aria-label={`${rule.symbol} 규칙 삭제`}
