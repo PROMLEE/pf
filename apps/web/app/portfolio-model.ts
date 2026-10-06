@@ -37,6 +37,7 @@ export type CryptoAsset = {
   marketCode: string;
   name: string;
   quantity: number;
+  averageCostKrw: number | null;
   quotedPriceKrw: number | null;
   quoteCheckedAt: string | null;
   lastTradeAt: string | null;

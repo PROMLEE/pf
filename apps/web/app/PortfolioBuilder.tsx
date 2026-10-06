@@ -236,12 +236,12 @@ function AssetList({
                     <button
                       type="button"
                       className={styles.assetEditLink}
-                      aria-label={`${asset.name} 보유 수량 수정`}
+                      aria-label={`${asset.name} 보유 수량과 매입단가 수정`}
                       onClick={() =>
                         onManageOtherAsset("crypto", asset.id.slice(7))
                       }
                     >
-                      수량 수정 <Pencil size={11} />
+                      수량·매입가 수정 <Pencil size={11} />
                     </button>
                   )}
                 </div>
@@ -337,6 +337,7 @@ export default function PortfolioBuilder({
     null,
   );
   const [cryptoQuantity, setCryptoQuantity] = useState("");
+  const [cryptoCost, setCryptoCost] = useState("");
   const [cryptoBucketId, setCryptoBucketId] = useState("");
   const [lookingUpCrypto, setLookingUpCrypto] = useState(false);
   const [cryptoRefreshError, setCryptoRefreshError] = useState("");
@@ -728,6 +729,7 @@ export default function PortfolioBuilder({
     if (!draft || !cryptoSelected)
       return onNotice("빗썸 원화마켓을 먼저 선택해 주세요.");
     const quantity = Number(cryptoQuantity);
+    const averageCostKrw = cryptoCost.trim() === "" ? null : Number(cryptoCost);
     if (
       !Number.isFinite(quantity) ||
       quantity <= 0 ||
@@ -735,6 +737,13 @@ export default function PortfolioBuilder({
       Math.round(quantity * 1e12) !== quantity * 1e12
     )
       return onNotice("보유 수량을 소수점 12자리 이내로 입력해 주세요.");
+    if (
+      averageCostKrw !== null &&
+      (!Number.isFinite(averageCostKrw) ||
+        averageCostKrw <= 0 ||
+        averageCostKrw >= 1e12)
+    )
+      return onNotice("코인당 매입단가는 양수로 입력해 주세요.");
     if (
       draft.cryptoAssets.some(
         (asset) => asset.marketCode === cryptoSelected.marketCode,
@@ -760,6 +769,7 @@ export default function PortfolioBuilder({
           marketCode: cryptoSelected.marketCode,
           name: cryptoSelected.name,
           quantity,
+          averageCostKrw,
           quotedPriceKrw: null,
           quoteCheckedAt: null,
           lastTradeAt: null,
@@ -769,6 +779,7 @@ export default function PortfolioBuilder({
     setCryptoSelected(null);
     setCryptoQuery("");
     setCryptoQuantity("");
+    setCryptoCost("");
     setCryptoCandidates([]);
     onNotice("가상자산을 추가했습니다. 저장하면 빗썸 원화 시세를 조회합니다.");
   }
@@ -1036,6 +1047,15 @@ export default function PortfolioBuilder({
     },
     { value: 0, cost: 0, count: 0 },
   );
+  for (const asset of draft?.cryptoAssets ?? []) {
+    if (asset.quotedPriceKrw !== null && asset.averageCostKrw !== null) {
+      knownGains.value +=
+        (asset.quotedPriceKrw - asset.averageCostKrw) * asset.quantity;
+      knownGains.cost += asset.averageCostKrw * asset.quantity;
+      knownGains.count++;
+    }
+  }
+  const gainEligibleCount = holdings.length + (draft?.cryptoAssets.length ?? 0);
   const previousPoint = [...totalHistory]
     .reverse()
     .find((point) => point.date < kstDate());
@@ -1130,8 +1150,16 @@ export default function PortfolioBuilder({
           detail: `${asset.marketCode} · ${quantityFormat.format(asset.quantity)}개`,
           value:
             asset.quotedPriceKrw === null ? null : cryptoAssetValueKrw(asset),
-          gain: null as number | null,
-          gainPercent: null as number | null,
+          gain:
+            asset.quotedPriceKrw === null || asset.averageCostKrw === null
+              ? null
+              : (asset.quotedPriceKrw - asset.averageCostKrw) * asset.quantity,
+          gainPercent:
+            asset.quotedPriceKrw === null || asset.averageCostKrw === null
+              ? null
+              : ((asset.quotedPriceKrw - asset.averageCostKrw) /
+                  asset.averageCostKrw) *
+                100,
         })),
       ].sort((a, b) => (b.value ?? -1) - (a.value ?? -1))
     : [];
@@ -1310,9 +1338,9 @@ export default function PortfolioBuilder({
             <details className={styles.mobileMetricNote}>
               <summary>손익 집계 기준</summary>
               <p>
-                전체 손익은 매입단가가 확인된 주식 {knownGains.count}/
-                {holdings.length}개 기준입니다. 가상자산·현금의 매입원가는
-                포함되지 않습니다.
+                전체 손익은 매입단가와 현재가가 확인된 주식·가상자산{" "}
+                {knownGains.count}/{gainEligibleCount}개 기준입니다. 현금은 손익
+                계산에 포함되지 않습니다.
                 {dailyChange === null
                   ? " 전일 자산 기록이 없어 당일 손익을 계산할 수 없습니다."
                   : " 당일 손익은 전일 기록에서 등록된 입출금을 제외한 추정치입니다."}
@@ -1380,7 +1408,7 @@ export default function PortfolioBuilder({
                       {knownGains.cost > 0
                         ? `${knownGains.value > 0 ? "+" : ""}${pct((knownGains.value / knownGains.cost) * 100)} · `
                         : ""}
-                      매입단가 확인 {knownGains.count}/{holdings.length}개
+                      매입단가 확인 {knownGains.count}/{gainEligibleCount}개
                     </small>
                   </div>
                   <div>
@@ -1491,8 +1519,9 @@ export default function PortfolioBuilder({
                 </div>
               </details>
               <p className={styles.desktopMetricNote}>
-                평가손익은 매입단가가 확인된 주식 기준이며 환차손익은 포함하지
-                않습니다. 당일 손익은 전일 자산 기록을 바탕으로 한 추정치입니다.
+                평가손익은 매입단가가 확인된 주식·가상자산 기준이며 환차손익은
+                포함하지 않습니다. 당일 손익은 전일 자산 기록을 바탕으로 한
+                추정치입니다.
               </p>
             </aside>
           </div>
@@ -1954,6 +1983,16 @@ export default function PortfolioBuilder({
                 placeholder="보유 수량"
                 aria-label="가상자산 보유 수량"
               />
+              <input
+                type="number"
+                min="0"
+                max="999999999999"
+                step="any"
+                value={cryptoCost}
+                onChange={(event) => setCryptoCost(event.target.value)}
+                placeholder="코인당 매입가 (원)"
+                aria-label="가상자산 코인당 매입단가 원화"
+              />
               <select
                 value={
                   cryptoBucketId ||
@@ -1997,24 +2036,54 @@ export default function PortfolioBuilder({
                       : ""}
                   </small>
                 </div>
-                <input
-                  type="number"
-                  min="0"
-                  max="999999999999"
-                  step="0.000000000001"
-                  value={asset.quantity}
-                  aria-label={`${asset.name} 보유 수량`}
-                  onChange={(event) =>
-                    change({
-                      ...draft,
-                      cryptoAssets: draft.cryptoAssets.map((item) =>
-                        item.id === asset.id
-                          ? { ...item, quantity: Number(event.target.value) }
-                          : item,
-                      ),
-                    })
-                  }
-                />
+                <label className={styles.cryptoField}>
+                  <span>보유 수량</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="999999999999"
+                    step="0.000000000001"
+                    value={asset.quantity}
+                    aria-label={`${asset.name} 보유 수량`}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        cryptoAssets: draft.cryptoAssets.map((item) =>
+                          item.id === asset.id
+                            ? { ...item, quantity: Number(event.target.value) }
+                            : item,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                <label className={styles.cryptoField}>
+                  <span>코인당 매입가 (원)</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="999999999999"
+                    step="any"
+                    value={asset.averageCostKrw ?? ""}
+                    aria-label={`${asset.name} 코인당 매입단가 원화`}
+                    onChange={(event) =>
+                      change({
+                        ...draft,
+                        cryptoAssets: draft.cryptoAssets.map((item) =>
+                          item.id === asset.id
+                            ? {
+                                ...item,
+                                averageCostKrw:
+                                  event.target.value === ""
+                                    ? null
+                                    : Number(event.target.value),
+                              }
+                            : item,
+                        ),
+                      })
+                    }
+                  />
+                </label>
                 <select
                   value={asset.bucketId ?? ""}
                   aria-label={`${asset.name} 포트`}

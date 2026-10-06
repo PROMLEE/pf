@@ -532,9 +532,11 @@
 .cryptoCandidates button:hover { background: #f3f9f8; }
 .cryptoCandidates strong { color: #244850; font-size: 11px; }
 .cryptoCandidates span { color: #84979b; font-size: 10px; }
-.cryptoForm { display: grid; grid-template-columns: 1.4fr 1fr 1fr 80px; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cryptoForm { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 80px; align-items: center; gap: 8px; margin-bottom: 10px; }
 .cryptoSelection { overflow: hidden; color: #47636b; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.cryptoRow { display: grid; grid-template-columns: 1.35fr 1fr 1fr 105px 24px; align-items: center; gap: 8px; border-top: 1px solid #edf1f1; padding: 10px 0; }
+.cryptoRow { display: grid; grid-template-columns: 1.35fr 1fr 1fr 1fr 105px 24px; align-items: center; gap: 8px; border-top: 1px solid #edf1f1; padding: 10px 0; }
+.cryptoField { display: grid; gap: 4px; min-width: 0; color: #82979c; font-size: 10px; }
+.cryptoField input { width: 100%; min-width: 0; }
 .cryptoRow > div { display: grid; gap: 3px; min-width: 0; }
 .cryptoRow strong { color: #24424b; font-size: 11px; }
 .cryptoRow small { color: #82979c; font-size: 10px; line-height: 1.35; }

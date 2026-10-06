@@ -56,6 +56,7 @@ type CryptoRow = {
   market_code: string;
   name: string;
   quantity: string;
+  average_cost_krw: string | null;
   quoted_price_krw: string | null;
   quote_checked_at: Date | null;
   last_trade_at: Date | null;
@@ -105,7 +106,7 @@ export async function listPortfolio(
       [userId],
     ),
     client.query<CryptoRow>(
-      `select id, bucket_id, market_code, name, quantity, quoted_price_krw, quote_checked_at, last_trade_at
+      `select id, bucket_id, market_code, name, quantity, average_cost_krw, quoted_price_krw, quote_checked_at, last_trade_at
        from portfolio.crypto_assets where user_id = $1 order by name`,
       [userId],
     ),
@@ -169,6 +170,8 @@ export async function listPortfolio(
         marketCode: row.market_code,
         name: row.name,
         quantity: Number(row.quantity),
+        averageCostKrw:
+          row.average_cost_krw === null ? null : Number(row.average_cost_krw),
         quotedPriceKrw:
           row.quoted_price_krw === null ? null : Number(row.quoted_price_krw),
         quoteCheckedAt: row.quote_checked_at?.toISOString() ?? null,
@@ -335,8 +338,8 @@ export async function savePortfolio(userId: string, input: Portfolio) {
       const previous = cryptoPrices.get(asset.marketCode);
       await client.query(
         `insert into portfolio.crypto_assets
-         (id, user_id, bucket_id, market_code, name, quantity, quoted_price_krw, quote_checked_at, last_trade_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+         (id, user_id, bucket_id, market_code, name, quantity, average_cost_krw, quoted_price_krw, quote_checked_at, last_trade_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
         [
           asset.id,
           userId,
@@ -344,6 +347,7 @@ export async function savePortfolio(userId: string, input: Portfolio) {
           asset.marketCode,
           asset.name,
           asset.quantity,
+          asset.averageCostKrw,
           previous?.quoted_price_krw ?? null,
           previous?.quote_checked_at ?? null,
           previous?.last_trade_at ?? null,

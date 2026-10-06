@@ -112,6 +112,7 @@ create table if not exists portfolio.crypto_assets (
   market_code text not null check (market_code ~ '^KRW-[A-Z0-9]{2,20}$'),
   name text not null check (length(btrim(name)) between 1 and 100),
   quantity numeric(24, 12) not null check (quantity > 0),
+  average_cost_krw numeric(24, 8) check (average_cost_krw > 0),
   quoted_price_krw numeric(24, 8) check (quoted_price_krw > 0),
   quote_checked_at timestamptz,
   last_trade_at timestamptz,

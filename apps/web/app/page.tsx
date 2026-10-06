@@ -248,7 +248,11 @@ export default function PortfolioPage() {
         `edit-${pendingAssetEditor.kind}-${pendingAssetEditor.id}`,
       );
       row?.scrollIntoView({ behavior: "smooth", block: "center" });
-      row?.querySelector<HTMLInputElement>("input")?.focus({
+      row?.querySelector<HTMLInputElement>(
+        pendingAssetEditor.kind === "crypto"
+          ? 'input[aria-label*="코인당 매입단가"]'
+          : "input",
+      )?.focus({
         preventScroll: true,
       });
       setPendingAssetEditor(null);
@@ -668,7 +672,7 @@ export default function PortfolioPage() {
   if (authStatus === "loading")
     return (
       <div className={styles.splash}>
-        <span className={styles.logo}>P</span> 자산 화면을 준비하고 있습니다
+        <span className={styles.logo}>P</span> 포트리듬을 준비하고 있습니다
       </div>
     );
 
@@ -677,16 +681,13 @@ export default function PortfolioPage() {
       <div className={styles.authShell}>
         <section className={styles.authVisual}>
           <div className={styles.authBrand}>
-            <span className={styles.logo}>P</span> PORTFOLIO
+            <span className={styles.logo}>P</span> 포트리듬
           </div>
           <div className={styles.authPitch}>
-            <span className={styles.kicker}>
-              YOUR PORTFOLIO, YOUR PRINCIPLES
-            </span>
+            <span className={styles.kicker}>PORT RHYTHM · YOUR ALLOCATION</span>
             <h1>
-              자산을 모으고,
-              <br />
-              투자 원칙을 지키세요.
+              투자는 리듬을 타듯,
+              <br />내 기준으로 꾸준히.
             </h1>
             <p>
               목표 비중을 직접 설계하고 국내·미국 종목을 연결하세요. 현재 비중과
@@ -736,7 +737,7 @@ export default function PortfolioPage() {
               <small>워런 버핏 · 버크셔 해서웨이 1988 주주서한</small>
             </a>
           </div>
-          <small>PERSONAL PORTFOLIO STUDIO</small>
+          <small>PORT RHYTHM · 나만의 투자 비중</small>
         </section>
         <section className={styles.authForm}>
           <div>
@@ -808,8 +809,8 @@ export default function PortfolioPage() {
         <div className={styles.brand}>
           <span className={styles.logo}>P</span>
           <div>
-            <strong>PORTFOLIO</strong>
-            <small>PERSONAL FINANCE</small>
+            <strong>포트리듬</strong>
+            <small>투자는 리듬을 타듯</small>
           </div>
         </div>
         <div className={styles.navGroup}>

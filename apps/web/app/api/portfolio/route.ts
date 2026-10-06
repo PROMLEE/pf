@@ -190,6 +190,14 @@ function valid(input: Portfolio) {
       Math.round(asset.quantity * 1e12) !== asset.quantity * 1e12
     )
       return false;
+    if (
+      asset.averageCostKrw !== null &&
+      (typeof asset.averageCostKrw !== "number" ||
+        !Number.isFinite(asset.averageCostKrw) ||
+        asset.averageCostKrw <= 0 ||
+        asset.averageCostKrw >= 1e12)
+    )
+      return false;
     assetIds.add(asset.id);
     cryptoCodes.add(asset.marketCode);
   }
