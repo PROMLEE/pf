@@ -1522,13 +1522,36 @@ export default function PortfolioBuilder({
                 <Plus size={16} /> 포트 추가
               </button>
             </div>
+            <label className={styles.toleranceControl}>
+              <span>
+                <strong>리밸런싱 허용 오차</strong>
+                <small>
+                  목표 비중과 현재 비중의 차이가 이 값을 넘으면 조정을
+                  추천합니다.
+                </small>
+              </span>
+              <span className={styles.toleranceInput}>
+                ±
+                <input
+                  type="number"
+                  min="0"
+                  max="30"
+                  step="0.1"
+                  value={draft.tolerancePercent}
+                  aria-label="리밸런싱 허용 오차 퍼센트포인트"
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      tolerancePercent: Number(event.target.value),
+                    })
+                  }
+                />
+                %p
+              </span>
+            </label>
             <details className={styles.advancedSettings}>
               <summary>
-                계산 기준{" "}
-                <span>
-                  USD {won.format(draft.usdKrw)}원 · 허용 오차 ±
-                  {pct(draft.tolerancePercent)}
-                </span>
+                환율·기타 설정 <span>USD {won.format(draft.usdKrw)}원</span>
                 <ChevronDown size={15} />
               </summary>
               <div className={styles.settings}>
@@ -1567,22 +1590,6 @@ export default function PortfolioBuilder({
                     disabled={draft.usdKrwMode === "auto"}
                     onChange={(event) =>
                       change({ ...draft, usdKrw: Number(event.target.value) })
-                    }
-                  />
-                </label>
-                <label>
-                  허용 오차 ±%
-                  <input
-                    type="number"
-                    min="0"
-                    max="30"
-                    step="0.1"
-                    value={draft.tolerancePercent}
-                    onChange={(event) =>
-                      change({
-                        ...draft,
-                        tolerancePercent: Number(event.target.value),
-                      })
                     }
                   />
                 </label>
@@ -2438,7 +2445,7 @@ export default function PortfolioBuilder({
               </select>
             </div>
             <p className={styles.methodNote}>
-              허용 오차 ±{pct(draft.tolerancePercent)}
+              허용 오차 ±{draft.tolerancePercent.toFixed(1)}%p
               {rebalanceMode === "add-only" && advice.requiredCash > 0
                 ? ` · 목표 비중까지 이론상 필요한 신규 자금 약 ${fmt(advice.requiredCash)}`
                 : ""}

@@ -262,6 +262,42 @@
 .advancedSettings {
   margin-bottom: 8px;
 }
+.toleranceControl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dfe9ed;
+  border-radius: 10px;
+  background: #f7fafb;
+}
+.toleranceControl > span:first-child {
+  display: grid;
+  gap: 3px;
+}
+.toleranceControl strong {
+  color: #294650;
+  font-size: 12px;
+}
+.toleranceControl small {
+  color: #79909a;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.toleranceInput {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  color: #087b83;
+  font-size: 12px;
+  font-weight: 800;
+}
+.toleranceInput input {
+  width: 70px;
+  text-align: right;
+}
 .advancedSettings > summary {
   display: flex;
   align-items: center;
@@ -281,7 +317,7 @@
 }
 .settings {
   display: grid;
-  grid-template-columns: 1.5fr 1.4fr 1fr 0.8fr;
+  grid-template-columns: 1.5fr 1.4fr 1fr;
   gap: 12px;
   padding: 8px 0 16px;
   border-bottom: 1px solid #edf0f5;
@@ -996,6 +1032,7 @@
   .totalCard { min-height: 180px; }
 }
 @media (max-width: 600px) {
+  .toleranceControl { align-items: flex-start; flex-direction: column; }
   .performanceSummary { grid-template-columns: 1fr; }
   .flowForm { grid-template-columns: 1fr 1fr; }
   .flowForm input:nth-child(4) { grid-column: 1 / -1; }
@@ -1234,6 +1271,8 @@
 }
 
 :global(html[data-theme="dark"]) .builder { color: #e8f1f2; }
+:global(html[data-theme="dark"]) .toleranceControl { background: #24363b; border-color: #3a5056; }
+:global(html[data-theme="dark"]) .toleranceControl strong { color: #e8f1f2; }
 :global(html[data-theme="dark"]) :is(.panel, .marketCard, .allocationCard, .desktopAssetPanel, .desktopGain > div, .desktopTarget, .dashboardDetails section, .trend, .start, .keyMetric, .screenLinks button, .vizDisclosure) { background: #1d2b30; border-color: #34464b; box-shadow: none; }
 :global(html[data-theme="dark"]) :is(.heading h1, .panelHead h2, .subHead h2, .allocationHead h2, .desktopSectionHead h2, .dashboardDetails h2, .desktopTarget strong, .desktopAssetPanel .mobileAssetName strong, .desktopAssetPanel .mobileAssetValue strong, .desktopGain strong, .dashboardDetails section > div strong, .keyMetric strong, .marketCopy strong, .allocationCenter strong, .allocationLegendRow strong, .performanceSummary strong, .flowList strong, .vizDisclosure strong, .start h1, .candidates strong, .cryptoCandidates strong, .cryptoRow strong, .previewSummary strong) { color: #e8f1f2; }
 :global(html[data-theme="dark"]) :is(.heading p, .help, .desktopMetricNote, .desktopLiveStatus, .desktopAssetPanel .mobileAssetName small, .desktopAssetPanel .mobileAssetValue small, .dashboardDetails section > div span, .desktopTarget small, .desktopGain span) { color: #9db3b8; }

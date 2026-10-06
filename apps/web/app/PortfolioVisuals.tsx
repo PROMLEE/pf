@@ -39,6 +39,11 @@ export default function PortfolioVisuals({ portfolio, holdings }: Props) {
         ]
       : []),
   ];
+  const sortedItems = [...items].sort(
+    (a, b) =>
+      (showTarget ? b.target - a.target : b.actual - a.actual) ||
+      a.name.localeCompare(b.name, "ko"),
+  );
   let offset = 0;
 
   return (
@@ -80,7 +85,7 @@ export default function PortfolioVisuals({ portfolio, holdings }: Props) {
           <svg
             viewBox="0 0 120 120"
             role="img"
-            aria-label={`${showTarget ? "목표" : "현재"} 비중: ${items.map((item) => `${item.name} ${percent(showTarget ? item.target : item.actual)}`).join(", ")}`}
+            aria-label={`${showTarget ? "목표" : "현재"} 비중: ${sortedItems.map((item) => `${item.name} ${percent(showTarget ? item.target : item.actual)}`).join(", ")}`}
           >
             <circle
               cx="60"
@@ -90,7 +95,7 @@ export default function PortfolioVisuals({ portfolio, holdings }: Props) {
               stroke="#eaf0f5"
               strokeWidth="13"
             />
-            {items.map((item) => {
+            {sortedItems.map((item) => {
               const share = Math.max(
                 0,
                 showTarget && targetTotal > 100
@@ -135,7 +140,7 @@ export default function PortfolioVisuals({ portfolio, holdings }: Props) {
             <span>{showTarget ? "현재" : "목표"}</span>
             <span>차이</span>
           </div>
-          {items.map((item) => (
+          {sortedItems.map((item) => (
             <div className={styles.allocationLegendRow} key={item.id}>
               <span>
                 <i style={{ background: item.color }} />
