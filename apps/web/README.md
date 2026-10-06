@@ -10,6 +10,8 @@
 
 기존 가상자산에 원화 매입단가를 추가하는 변경은 [sql/portfolio_crypto_average_cost.sql](../../sql/portfolio_crypto_average_cost.sql)에 있습니다. 매입단가를 모르는 기존 자산은 빈 값으로 유지합니다.
 
+KIS 접근 토큰은 [sql/portfolio_kis_token_cache.sql](../../sql/portfolio_kis_token_cache.sql)의 비공개 서버 테이블에 암호화해 보관합니다. 서버가 재시작되거나 Vercel 인스턴스가 바뀌어도 만료 전 토큰을 재사용하며, 만료 후 첫 시세 조회에서만 다시 발급합니다. 이 테이블은 브라우저나 Supabase Data API에 공개하지 않습니다.
+
 기존 DB에 추가할 환율 수정 시각·입출금 기록 테이블 변경은 [sql/portfolio_cash_flows.sql](../../sql/portfolio_cash_flows.sql)에 있습니다. 공유 Supabase 프로젝트에 이미 적용되어 있습니다.
 
 ## 캡처 가져오기

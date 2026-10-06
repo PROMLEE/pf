@@ -3,6 +3,15 @@
 create schema if not exists portfolio;
 revoke all on schema portfolio from public, anon, authenticated;
 
+create table if not exists portfolio.kis_token_cache (
+  cache_key text primary key check (cache_key ~ '^[0-9a-f]{64}$'),
+  token_ciphertext text not null,
+  expires_at timestamptz not null,
+  updated_at timestamptz not null default now()
+);
+alter table portfolio.kis_token_cache enable row level security;
+revoke all on portfolio.kis_token_cache from public, anon, authenticated;
+
 create table if not exists portfolio.holdings (
   id uuid primary key,
   user_id text not null references public."User"("userId") on delete cascade,

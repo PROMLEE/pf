@@ -1,5 +1,12 @@
 import AdmZip from "adm-zip";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from "node:crypto";
 import type { Market } from "../app/holdings";
+import { db } from "./db";
 
 const BASE =
   process.env.KIS_BASE_URL ?? "https://openapi.koreainvestment.com:9443";
@@ -61,39 +68,145 @@ function requireConfiguration() {
     );
 }
 
+function tokenCacheKey() {
+  return createHash("sha256")
+    .update(
+      `kis-token-cache\0${BASE}\0${process.env.KIS_APP_KEY}\0${process.env.KIS_APP_SECRET}`,
+    )
+    .digest("hex");
+}
+
+function tokenEncryptionKey() {
+  return createHash("sha256")
+    .update(
+      `kis-token-encryption\0${process.env.KIS_APP_KEY}\0${process.env.KIS_APP_SECRET}`,
+    )
+    .digest();
+}
+
+function encryptToken(value: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", tokenEncryptionKey(), iv);
+  const encrypted = Buffer.concat([
+    cipher.update(value, "utf8"),
+    cipher.final(),
+  ]);
+  return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString("base64");
+}
+
+function decryptToken(value: string) {
+  const bytes = Buffer.from(value, "base64");
+  if (bytes.length < 29) throw new Error("Invalid cached token");
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    tokenEncryptionKey(),
+    bytes.subarray(0, 12),
+  );
+  decipher.setAuthTag(bytes.subarray(12, 28));
+  return Buffer.concat([
+    decipher.update(bytes.subarray(28)),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+async function issueToken() {
+  const response = await fetch(`${BASE}/oauth2/tokenP`, {
+    method: "POST",
+    headers: { "content-type": "application/json; charset=utf-8" },
+    body: JSON.stringify({
+      grant_type: "client_credentials",
+      appkey: process.env.KIS_APP_KEY,
+      appsecret: process.env.KIS_APP_SECRET,
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+  });
+  const payload = (await response.json().catch(() => ({}))) as {
+    access_token?: string;
+    expires_in?: number | string;
+    access_token_token_expired?: string;
+    msg1?: string;
+  };
+  if (!response.ok || !payload.access_token)
+    throw new Error(
+      payload.msg1 || `한국투자증권 토큰 발급 실패 (${response.status})`,
+    );
+  const now = Date.now();
+  const duration = Number(payload.expires_in);
+  const absolute = payload.access_token_token_expired
+    ? Date.parse(
+        `${payload.access_token_token_expired.replace(" ", "T")}+09:00`,
+      )
+    : NaN;
+  const expiry = Math.min(
+    Number.isFinite(duration) && duration > 0
+      ? now + duration * 1000
+      : Infinity,
+    Number.isFinite(absolute) ? absolute : Infinity,
+  );
+  return {
+    value: payload.access_token,
+    expiresAt: Math.max(
+      now + 1000,
+      (Number.isFinite(expiry) ? expiry : now + 24 * 60 * 60 * 1000) -
+        5 * 60 * 1000,
+    ),
+  };
+}
+
+async function loadOrIssueToken() {
+  const key = tokenCacheKey();
+  const client = await db().connect();
+  try {
+    await client.query("begin");
+    // Serialize token refresh across serverless instances using the same app key.
+    await client.query(
+      "select pg_advisory_xact_lock(1779452331, hashtext($1))",
+      [key],
+    );
+    const existing = await client.query<{
+      token_ciphertext: string;
+      expires_at: Date;
+    }>(
+      `select token_ciphertext, expires_at from portfolio.kis_token_cache where cache_key = $1`,
+      [key],
+    );
+    const row = existing.rows[0];
+    if (row && row.expires_at.getTime() > Date.now()) {
+      try {
+        const value = decryptToken(row.token_ciphertext);
+        cachedToken = { value, expiresAt: row.expires_at.getTime() };
+        await client.query("commit");
+        return value;
+      } catch {
+        // An unreadable entry is replaced by a newly issued token below.
+      }
+    }
+    const issued = await issueToken();
+    await client.query(
+      `insert into portfolio.kis_token_cache (cache_key, token_ciphertext, expires_at)
+       values ($1, $2, $3)
+       on conflict (cache_key) do update set token_ciphertext = excluded.token_ciphertext,
+         expires_at = excluded.expires_at, updated_at = now()`,
+      [key, encryptToken(issued.value), new Date(issued.expiresAt)],
+    );
+    await client.query("commit");
+    cachedToken = issued;
+    return issued.value;
+  } catch (error) {
+    await client.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function token() {
   requireConfiguration();
   if (cachedToken && cachedToken.expiresAt > Date.now())
     return cachedToken.value;
   if (!pendingToken) {
-    pendingToken = (async () => {
-      const response = await fetch(`${BASE}/oauth2/tokenP`, {
-        method: "POST",
-        headers: { "content-type": "application/json; charset=utf-8" },
-        body: JSON.stringify({
-          grant_type: "client_credentials",
-          appkey: process.env.KIS_APP_KEY,
-          appsecret: process.env.KIS_APP_SECRET,
-        }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(10_000),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
-        access_token?: string;
-        expires_in?: number;
-        msg1?: string;
-      };
-      if (!response.ok || !payload.access_token)
-        throw new Error(
-          payload.msg1 || `한국투자증권 토큰 발급 실패 (${response.status})`,
-        );
-      cachedToken = {
-        value: payload.access_token,
-        expiresAt:
-          Date.now() + Math.max(60, (payload.expires_in ?? 3600) - 60) * 1000,
-      };
-      return cachedToken.value;
-    })().finally(() => {
+    pendingToken = loadOrIssueToken().finally(() => {
       pendingToken = null;
     });
   }
