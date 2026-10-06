@@ -19,12 +19,14 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Moon,
   Pencil,
   Plus,
   RefreshCw,
   Search,
   Settings2,
   ShieldCheck,
+  Sun,
   Wallet,
   X,
 } from "lucide-react";
@@ -78,6 +80,7 @@ async function data<T>(response: Response): Promise<T> {
 
 export default function PortfolioPage() {
   const { data: session, status: authStatus } = useSession();
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [view, setView] = useState<View>("portfolio");
   const [portfolioDirty, setPortfolioDirty] = useState(false);
   const [pendingAssetEditor, setPendingAssetEditor] = useState<{
@@ -113,6 +116,29 @@ export default function PortfolioPage() {
   const [holdingQuantity, setHoldingQuantity] = useState("");
   const [holdingCost, setHoldingCost] = useState("");
   const [holdingSaving, setHoldingSaving] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved =
+        localStorage.getItem("pf-theme") === "dark" ? "dark" : "light";
+      document.documentElement.dataset.theme = saved;
+      setTheme(saved);
+    } catch {
+      document.documentElement.dataset.theme = "light";
+      setTheme("light");
+    }
+  }, []);
+
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("pf-theme", next);
+    } catch {
+      // The switch still works when storage is unavailable.
+    }
+  }
 
   useEffect(() => {
     if (authStatus !== "authenticated") return;
@@ -848,6 +874,18 @@ export default function PortfolioPage() {
           <span className={styles.topPrivate}>
             <ShieldCheck size={15} /> 개인 자산
           </span>
+          <button
+            type="button"
+            className={styles.themeToggle}
+            onClick={toggleTheme}
+            aria-label={
+              theme === "dark" ? "라이트 모드로 전환" : "다크 모드로 전환"
+            }
+            aria-pressed={theme === "dark"}
+            title={theme === "dark" ? "라이트 모드" : "다크 모드"}
+          >
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           <button className={styles.topAvatar} onClick={() => go("settings")}>
             {session.user?.name?.slice(0, 1) || "P"}
           </button>

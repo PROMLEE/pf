@@ -202,6 +202,18 @@
   border: 0;
   margin-left: 12px;
 }
+.themeToggle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #dbe7e8;
+  border-radius: 9px;
+  background: #f3f8f8;
+  color: #315d66;
+}
+.themeToggle:hover { background: #e4f1ef; }
 .menuButton {
   display: none;
   border: 0;
@@ -1252,6 +1264,8 @@
   .topPrivate {
     display: none;
   }
+  .themeToggle { margin-left: auto; }
+  .topAvatar { margin-left: 0; }
   .content {
     padding: 23px 16px 88px;
   }
@@ -1695,34 +1709,40 @@
 
 @media (max-width: 760px) {
   .mobileHomeWorkspace {
-    background: #111516;
-  }
-  .mobileHomeWorkspace .topbar {
-    background: #111516;
-    border-color: #111516;
-    color: #c7d0d1;
-  }
-  .mobileHomeWorkspace .topbar strong {
-    color: #f4f6f6;
+    background: #f6f8fb;
   }
   .mobileHomeWorkspace .content {
     min-height: calc(100dvh - 68px);
     padding: 0 18px calc(80px + env(safe-area-inset-bottom));
-    background: #111516;
+    background: #f6f8fb;
   }
-  .mobileHomeWorkspace .notice {
-    background: #252d2f;
-    color: #e6eeee;
-    border-color: #394649;
-  }
-  .mobileHomeNav {
-    background: #181d1f;
-    border-color: #30383a;
-  }
-  .mobileHomeNav button {
-    color: #8f9d9f;
-  }
-  .mobileHomeNav .mobileActive {
-    color: #63d7b3;
-  }
+}
+
+:global(html[data-theme="dark"]) .shell,
+:global(html[data-theme="dark"]) .workspace,
+:global(html[data-theme="dark"]) .content { background: #11191d; }
+:global(html[data-theme="dark"]) .topbar { background: #172328; border-color: #30434a; color: #a8bac0; }
+:global(html[data-theme="dark"]) .topbar strong,
+:global(html[data-theme="dark"]) .pageHead h1 { color: #edf5f5; }
+:global(html[data-theme="dark"]) .topPrivate,
+:global(html[data-theme="dark"]) .themeToggle { background: #223238; border-color: #3a5057; color: #d2e4e5; }
+:global(html[data-theme="dark"]) .themeToggle:hover { background: #2c4449; }
+:global(html[data-theme="dark"]) .topAvatar { background: #2a4649; color: #d4eeee; }
+:global(html[data-theme="dark"]) .footer { color: #718b92; }
+:global(html[data-theme="dark"]) .mobileNav { background: #172328; border-color: #30434a; }
+:global(html[data-theme="dark"]) .mobileNav button { color: #91a9ad; }
+:global(html[data-theme="dark"]) .mobileNav .mobileActive { color: #6ad6bc; }
+:global(html[data-theme="dark"]) :is(.panel, .metrics article, .holdingStats > div, .profile, .settingRow, .holdingRow, .reviewRow, .upload) { background: #1d2b30; border-color: #34464b; color: #e7f1f2; }
+:global(html[data-theme="dark"]) :is(.panelHead h2, .holdingName strong, .miniRow strong, .brokerRow strong, .settingRow strong, .profile strong, .holdingRow > strong, .metrics strong) { color: #e7f1f2; }
+:global(html[data-theme="dark"]) :is(.pageHead p, .panelHead p, .miniRow small, .brokerRow small, .holdingRow small, .metrics p, .metrics small, .settingRow span) { color: #9bb1b7; }
+:global(html[data-theme="dark"]) :is(.tableHead, .tabs, .panelNote, .editIntro, .notice, .legacyNotice, .holdingEdit) { background: #24353a; border-color: #3a5156; color: #d9e9ea; }
+:global(html[data-theme="dark"]) :is(.search, .search input, .holdingEdit input, .holdingEdit button, .formGrid input, .formGrid select, .reviewRow input, .codeVerification select) { background: #18272d; border-color: #3b5158; color: #edf5f5; }
+:global(html[data-theme="dark"]) :is(.instrumentSelect, .savedInstrumentSelect, .signOut, .secondaryButton, .upload) { background: #24353a; border-color: #3b5158; color: #dcebed; }
+:global(html[data-theme="dark"]) :is(.reviewEmpty strong, .empty strong, .privacyItem strong, .editIntro strong) { color: #e7f1f2; }
+:global(html[data-theme="dark"]) .holdingRow > strong.gainPositive { color: #ff7782; }
+:global(html[data-theme="dark"]) .holdingRow > strong.gainNegative { color: #7dadff; }
+@media (max-width: 760px) {
+  :global(html[data-theme="dark"]) .mobileHomeWorkspace,
+  :global(html[data-theme="dark"]) .mobileHomeWorkspace .content { background: #11191d; }
+  :global(html[data-theme="dark"]) .mobileHomeWorkspace .topbar { background: #11191d; border-color: #11191d; }
 }

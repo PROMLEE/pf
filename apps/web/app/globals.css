@@ -16,6 +16,14 @@
   --bg: #f4f7f7;
 }
 
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e9f1f2;
+  --muted: #9aaeb3;
+  --line: #30434a;
+  --bg: #11191d;
+}
+
 * {
   box-sizing: border-box;
 }

@@ -1110,43 +1110,93 @@
 }
 .mobileDashboard { display: none; }
 @media (max-width: 760px) {
-  .homeBuilder { gap: 0; color: #f5f7f7; }
+  .homeBuilder { gap: 0; color: #203a43; }
   .homeBuilder > :not(.mobileDashboard) { display: none; }
   .mobileDashboard { display: block; min-height: calc(100dvh - 168px); padding: 20px 5px 30px; }
-  .mobileDashboardTop { display: flex; align-items: center; justify-content: space-between; color: #b5bfc0; font-size: 14px; font-weight: 700; }
-  .mobileDashboardTop button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #343b3d; border-radius: 50%; background: #202628; color: #e1eeee; }
-  .mobileTotal { margin-top: 18px; color: #f5f7f7; font-size: clamp(34px, 9vw, 48px); font-weight: 800; letter-spacing: -.055em; line-height: 1.13; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mobileDashboardTop { display: flex; align-items: center; justify-content: space-between; color: #657d85; font-size: 14px; font-weight: 700; }
+  .mobileDashboardTop button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #dce7e9; border-radius: 50%; background: #fff; color: #37626a; }
+  .mobileTotal { margin-top: 18px; color: #18333d; font-size: clamp(34px, 9vw, 48px); font-weight: 800; letter-spacing: -.055em; line-height: 1.13; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .mobileTotal span { margin-left: 3px; font-size: .55em; letter-spacing: -.03em; }
-  .mobileMetricList { margin-top: 24px; border-top: 1px solid #31383a; }
-  .mobileMetricList > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; border-bottom: 1px solid #31383a; }
-  .mobileMetricList span { color: #ccd3d3; font-size: 13px; font-weight: 650; }
-  .mobileMetricList small { display: block; margin-top: 3px; color: #7c8e91; font-size: 10px; font-weight: 500; }
-  .mobileMetricList strong { text-align: right; color: #f6f8f8; font-size: 17px; font-weight: 750; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .mobileMetricList .mobileUp { color: #ff6d79; }
-  .mobileMetricList .mobileDown { color: #69a0ff; }
-  .mobileMetricNote { margin: 12px 0 0; color: #91a0a2; font-size: 11px; line-height: 1.65; }
+  .mobileMetricList { margin-top: 24px; border-top: 1px solid #dbe5e7; }
+  .mobileMetricList > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; border-bottom: 1px solid #dbe5e7; }
+  .mobileMetricList span { color: #506a73; font-size: 13px; font-weight: 650; }
+  .mobileMetricList small { display: block; margin-top: 3px; color: #8aa0a7; font-size: 10px; font-weight: 500; }
+  .mobileMetricList strong { text-align: right; color: #213c45; font-size: 17px; font-weight: 750; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mobileMetricList .mobileUp { color: #bd4e56; }
+  .mobileMetricList .mobileDown { color: #2a6dba; }
+  .mobileMetricNote { margin: 12px 0 0; color: #788e96; font-size: 11px; line-height: 1.65; }
   .mobileMetricNote summary { width: max-content; cursor: pointer; }
   .mobileMetricNote p { max-width: 42ch; margin: 8px 0 0; }
-  .mobileQuoteTime { display: flex; align-items: center; gap: 8px; margin-top: 18px; color: #a9b8ba; font-size: 11px; }
-  .mobileDataError { margin-top: 12px; color: #e9b28d; font-size: 11px; }
+  .mobileQuoteTime { display: flex; align-items: center; gap: 8px; margin-top: 18px; color: #7d969c; font-size: 11px; }
+  .mobileDataError { margin-top: 12px; color: #a35d35; font-size: 11px; }
   .mobileAssetGroup { margin-top: 20px; }
-  .mobileAssetGroup h2 { display: flex; align-items: baseline; gap: 7px; margin: 0 0 8px; color: #f4f7f6; font-size: 17px; font-weight: 750; }
-  .mobileAssetGroup h2 span { color: #839395; font-size: 12px; font-weight: 500; }
+  .mobileAssetGroup h2 { display: flex; align-items: baseline; gap: 7px; margin: 0 0 8px; color: #25434c; font-size: 17px; font-weight: 750; }
+  .mobileAssetGroup h2 span { color: #82979c; font-size: 12px; font-weight: 500; }
   .mobileAssetList { display: grid; }
-  .mobileAssetRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 72px; border-bottom: 1px solid #252e30; }
+  .mobileAssetRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 72px; border-bottom: 1px solid #dde7e9; }
   .mobileAssetName, .mobileAssetValue { display: grid; gap: 5px; min-width: 0; }
-  .mobileAssetName strong { overflow: hidden; color: #edf2f1; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-  .mobileAssetName small { overflow: hidden; color: #839395; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+  .mobileAssetName strong { overflow: hidden; color: #294650; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+  .mobileAssetName small { overflow: hidden; color: #879ca2; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
   .mobileAssetValue { justify-items: end; text-align: right; }
-  .mobileAssetValue strong { color: #f5f7f7; font-size: 13px; font-weight: 750; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .mobileAssetValue small { color: #839395; font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .mobileAssetValue .mobileUp { color: #ff6d79; }
-  .mobileAssetValue .mobileDown { color: #69a0ff; }
-  .mobileAssetValue .assetEditLink { color: #68cbb7; font-size: 10px; }
-  .mobileAssetEmpty { padding: 16px 0; color: #91a0a2; font-size: 12px; }
+  .mobileAssetValue strong { color: #294650; font-size: 13px; font-weight: 750; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mobileAssetValue small { color: #879ca2; font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mobileAssetValue .mobileUp { color: #bd4e56; }
+  .mobileAssetValue .mobileDown { color: #2a6dba; }
+  .mobileAssetValue .assetEditLink { color: #087b83; font-size: 10px; }
+  .mobileAssetEmpty { padding: 16px 0; color: #83989f; font-size: 12px; }
   .mobileSaveBar { position: fixed; z-index: 9; inset: auto 0 calc(61px + env(safe-area-inset-bottom)); display: block; padding: 9px 16px; border-top: 1px solid #d7e5e5; background: #ffffffed; backdrop-filter: blur(12px); }
   .mobileSaveBar button { width: 100%; min-height: 42px; border: 0; border-radius: 9px; background: #087b83; color: #fff; font-size: 13px; font-weight: 750; }
   .mobileSaveBar button:disabled { opacity: .6; }
   .mobileSpinning { animation: mobileSpin 1.4s linear infinite; }
   @keyframes mobileSpin { to { transform: rotate(360deg); } }
+}
+
+:global(html[data-theme="dark"]) .builder { color: #e8f1f2; }
+:global(html[data-theme="dark"]) :is(.panel, .marketCard, .allocationCard, .desktopAssetPanel, .desktopGain > div, .desktopTarget, .dashboardDetails section, .trend, .start, .keyMetric, .screenLinks button, .vizDisclosure) { background: #1d2b30; border-color: #34464b; box-shadow: none; }
+:global(html[data-theme="dark"]) :is(.heading h1, .panelHead h2, .subHead h2, .allocationHead h2, .desktopSectionHead h2, .dashboardDetails h2, .desktopTarget strong, .desktopAssetPanel .mobileAssetName strong, .desktopAssetPanel .mobileAssetValue strong, .desktopGain strong, .dashboardDetails section > div strong, .keyMetric strong, .marketCopy strong, .allocationCenter strong, .allocationLegendRow strong, .performanceSummary strong, .flowList strong, .vizDisclosure strong, .start h1, .candidates strong, .cryptoCandidates strong, .cryptoRow strong, .previewSummary strong) { color: #e8f1f2; }
+:global(html[data-theme="dark"]) :is(.heading p, .help, .desktopMetricNote, .desktopLiveStatus, .desktopAssetPanel .mobileAssetName small, .desktopAssetPanel .mobileAssetValue small, .dashboardDetails section > div span, .desktopTarget small, .desktopGain span) { color: #9db3b8; }
+:global(html[data-theme="dark"]) :is(.bucket, .rule, .assignmentList > div, .candidates, .cryptoCandidates, .quoteStrip, .previewSummary, .rebalanceStatus, .dataStatus, .dataDetails, .performanceSummary > div) { background: #24363b; border-color: #3a5056; color: #e1eeee; }
+:global(html[data-theme="dark"]) :is(.builder input, .builder select, .ghost, .start button:last-child, .trendControls button) { background: #17262c; border-color: #3a5056; color: #e8f1f2; }
+:global(html[data-theme="dark"]) :is(.candidates button, .cryptoCandidates button) { background: #24363b; border-color: #3a5056; color: #e1eeee; }
+:global(html[data-theme="dark"]) :is(.candidates button:hover, .cryptoCandidates button:hover, .screenLinks button:hover) { background: #2c4449; }
+:global(html[data-theme="dark"]) :is(.allocationSwitch, .bar) { background: #31454b; }
+:global(html[data-theme="dark"]) .allocationSwitch button[aria-pressed="true"] { background: #1b2d33; color: #9be0d9; }
+:global(html[data-theme="dark"]) :is(.quoteStrip p, .dataStatus strong, .liveStatus strong, .screenLinks button, .trend strong) { color: #dcebed; }
+:global(html[data-theme="dark"]) :is(.keyMetric > span, .keyMetric small, .marketCopy span, .allocationLegendHead, .allocationLegendRow > span:last-child, .performanceSummary small, .flowList > div, .vizDisclosure span, .startQuote) { color: #9db3b8; }
+:global(html[data-theme="dark"]) :is(.cashBudget, .exclusions summary, .exclusions label, .settings label, .bucket label, .rule label) { color: #aac0c5; }
+:global(html[data-theme="dark"]) :is(.assignmentList, .assignmentList > div, .flowDetails, .flowList > div, .advice, .bucket, .rule, .allocationLegendHead) { border-color: #34464b; }
+:global(html[data-theme="dark"]) .desktopAssetPanel .mobileAssetRow,
+:global(html[data-theme="dark"]) .dashboardDetails section > div { border-color: #34464b; }
+:global(html[data-theme="dark"]) .desktopAssetPanel .mobileAssetValue .mobileUp { color: #ff7782; }
+:global(html[data-theme="dark"]) .desktopAssetPanel .mobileAssetValue .mobileDown { color: #7dadff; }
+:global(html[data-theme="dark"]) :is(.desktopGain strong.profitUp, .keyMetric .profitUp) { color: #ff7782; }
+:global(html[data-theme="dark"]) :is(.desktopGain strong.profitDown, .keyMetric .profitDown) { color: #7dadff; }
+
+@media (max-width: 760px) {
+  :global(html[data-theme="dark"]) .homeBuilder { color: #f5f7f7; }
+  :global(html[data-theme="dark"]) .mobileDashboardTop { color: #b5bfc0; }
+  :global(html[data-theme="dark"]) .mobileDashboardTop button { border-color: #343b3d; background: #202628; color: #e1eeee; }
+  :global(html[data-theme="dark"]) .mobileTotal { color: #f5f7f7; }
+  :global(html[data-theme="dark"]) .mobileMetricList { border-color: #31383a; }
+  :global(html[data-theme="dark"]) .mobileMetricList > div { border-color: #31383a; }
+  :global(html[data-theme="dark"]) .mobileMetricList span { color: #ccd3d3; }
+  :global(html[data-theme="dark"]) .mobileMetricList small { color: #7c8e91; }
+  :global(html[data-theme="dark"]) .mobileMetricList strong { color: #f6f8f8; }
+  :global(html[data-theme="dark"]) .mobileMetricList .mobileUp,
+  :global(html[data-theme="dark"]) .mobileAssetValue .mobileUp { color: #ff6d79; }
+  :global(html[data-theme="dark"]) .mobileMetricList .mobileDown,
+  :global(html[data-theme="dark"]) .mobileAssetValue .mobileDown { color: #69a0ff; }
+  :global(html[data-theme="dark"]) .mobileMetricNote { color: #91a0a2; }
+  :global(html[data-theme="dark"]) .mobileQuoteTime { color: #a9b8ba; }
+  :global(html[data-theme="dark"]) .mobileDataError { color: #e9b28d; }
+  :global(html[data-theme="dark"]) .mobileAssetGroup h2 { color: #f4f7f6; }
+  :global(html[data-theme="dark"]) .mobileAssetGroup h2 span { color: #839395; }
+  :global(html[data-theme="dark"]) .mobileAssetRow { border-color: #252e30; }
+  :global(html[data-theme="dark"]) .mobileAssetName strong { color: #edf2f1; }
+  :global(html[data-theme="dark"]) .mobileAssetName small,
+  :global(html[data-theme="dark"]) .mobileAssetValue small { color: #839395; }
+  :global(html[data-theme="dark"]) .mobileAssetValue strong { color: #f5f7f7; }
+  :global(html[data-theme="dark"]) .mobileAssetValue .assetEditLink { color: #68cbb7; }
+  :global(html[data-theme="dark"]) .mobileAssetEmpty { color: #91a0a2; }
+  :global(html[data-theme="dark"]) .mobileSaveBar { background: #1d2b30ed; border-color: #34464b; }
 }
