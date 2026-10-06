@@ -40,7 +40,13 @@ type CryptoMarket = { marketCode: string; name: string; englishName: string };
 const portfolioCache = new Map<string, Portfolio | null>();
 type Props = {
   userId: string;
-  screen: "dashboard" | "strategy" | "allocation" | "rebalance" | "history";
+  screen:
+    | "dashboard"
+    | "strategy"
+    | "allocation"
+    | "edit"
+    | "rebalance"
+    | "history";
   holdings: Holding[];
   quoteVersion: number;
   onHoldings: (rows: Holding[]) => void;
@@ -50,7 +56,6 @@ type Props = {
   quoteError: string;
   onImport: () => void;
   onEditHoldings: () => void;
-  onManageOtherAsset: (kind: "crypto" | "manual", id: string) => void;
   onNavigate: (
     screen: "strategy" | "allocation" | "rebalance" | "history",
   ) => void;
@@ -185,12 +190,10 @@ function AssetList({
   investments,
   manualAssets,
   usdKrw,
-  onManageOtherAsset,
 }: {
   investments: AssetSummaryRow[];
   manualAssets: Portfolio["manualAssets"];
   usdKrw: number;
-  onManageOtherAsset: Props["onManageOtherAsset"];
 }) {
   return (
     <>
@@ -232,18 +235,6 @@ function AssetList({
                       ? "매입가 정보 없음"
                       : `${asset.gain > 0 ? "+" : ""}${fmt(asset.gain)} (${asset.gainPercent === null ? "—" : `${asset.gainPercent > 0 ? "+" : ""}${pct(asset.gainPercent)}`})`}
                   </small>
-                  {asset.id.startsWith("crypto:") && (
-                    <button
-                      type="button"
-                      className={styles.assetEditLink}
-                      aria-label={`${asset.name} 보유 수량과 매입단가 수정`}
-                      onClick={() =>
-                        onManageOtherAsset("crypto", asset.id.slice(7))
-                      }
-                    >
-                      수량·매입가 수정 <Pencil size={11} />
-                    </button>
-                  )}
                 </div>
               </div>
             ))}
@@ -277,14 +268,6 @@ function AssetList({
                 </div>
                 <div className={styles.mobileAssetValue}>
                   <strong>{fmt(manualAssetValueKrw(asset, usdKrw))}</strong>
-                  <button
-                    type="button"
-                    className={styles.assetEditLink}
-                    aria-label={`${asset.name} 금액 수정`}
-                    onClick={() => onManageOtherAsset("manual", asset.id)}
-                  >
-                    금액 수정 <Pencil size={11} />
-                  </button>
                 </div>
               </div>
             ))}
@@ -307,7 +290,6 @@ export default function PortfolioBuilder({
   quoteError,
   onImport,
   onEditHoldings,
-  onManageOtherAsset,
   onNavigate,
   onDirtyChange,
 }: Props) {
@@ -671,39 +653,6 @@ export default function PortfolioBuilder({
     onNotice(
       `${candidate.name} 종목을 자동 배정 규칙에 추가했습니다. 저장하면 같은 코드의 보유 종목이 배정됩니다.`,
     );
-  }
-  function addOwnedRule(holding: Holding, bucketId: string) {
-    if (!draft || !bucketId) return;
-    if (
-      draft.rules.some(
-        (rule) =>
-          rule.market === holding.market && rule.symbol === holding.symbol,
-      )
-    )
-      return;
-    change({
-      ...draft,
-      rules: [
-        ...draft.rules,
-        {
-          id: crypto.randomUUID(),
-          bucketId,
-          market: holding.market,
-          symbol: holding.symbol,
-          exchange:
-            holding.exchange &&
-            (holding.market === "KR"
-              ? ["KOSPI", "KOSDAQ"].includes(holding.exchange)
-              : ["NAS", "NYS", "AMS"].includes(holding.exchange))
-              ? holding.exchange
-              : null,
-          name: holding.name,
-          manualPrice: null,
-          quotedPrice: null,
-          quoteCheckedAt: null,
-        },
-      ],
-    });
   }
   function addManualAsset() {
     if (!draft || !manualName.trim())
@@ -1201,36 +1150,6 @@ export default function PortfolioBuilder({
       .filter((date): date is string => Boolean(date))
       .sort()
       .at(-1) ?? null;
-  const ruleKeys = new Set(
-    draft?.rules.map((rule) => `${rule.market}:${rule.symbol}`),
-  );
-  const manuallyAssignedIds = new Set(
-    draft?.assignments
-      .filter((assignment) => assignment.source === "manual")
-      .map((assignment) => assignment.holdingId),
-  );
-  const manuallyAssignedSymbols = new Set(
-    holdings
-      .filter((holding) => manuallyAssignedIds.has(holding.id))
-      .map((holding) => `${holding.market}:${holding.symbol}`),
-  );
-  const ownedWithoutRules = Array.from(
-    new Map(
-      holdings
-        .filter(
-          (holding) => !ruleKeys.has(`${holding.market}:${holding.symbol}`),
-        )
-        .map(
-          (holding) =>
-            [
-              holding.symbol
-                ? `${holding.market}:${holding.symbol}`
-                : `missing:${holding.id}`,
-              holding,
-            ] as const,
-        ),
-    ).values(),
-  );
   const titles = {
     dashboard: [
       "MY PORTFOLIO",
@@ -1240,12 +1159,17 @@ export default function PortfolioBuilder({
     strategy: [
       "TARGET ALLOCATION",
       "목표 설계",
-      "원하는 비중과 종목 배정 규칙을 정하세요.",
+      "원하는 포트 비중과 리밸런싱 기준을 정하세요.",
     ],
     allocation: [
       "ASSET ALLOCATION",
       "자산 배정",
-      "실제 자산을 포트에 연결하고 가상자산·현금을 관리하세요.",
+      "보유 자산을 원하는 포트에 연결하세요.",
+    ],
+    edit: [
+      "ASSET EDITOR",
+      "자산 수정",
+      "주식·가상자산·현금의 보유 정보를 수정하세요.",
     ],
     rebalance: [
       "REBALANCE",
@@ -1297,32 +1221,34 @@ export default function PortfolioBuilder({
     <div
       className={`${styles.builder} ${screen === "dashboard" ? styles.homeBuilder : ""}`}
     >
-      <div className={styles.heading}>
-        <div>
-          <span>{titles[0]}</span>
-          <h1>{titles[1]}</h1>
-          <p>{titles[2]}</p>
-        </div>
-        <div>
-          <button
-            className={styles.ghost}
-            onClick={refresh}
-            disabled={refreshing || quotesRefreshing}
-          >
-            <RefreshCw size={16} />{" "}
-            {refreshing || quotesRefreshing ? "갱신 중" : "가격 갱신"}
-          </button>
-          {dirty ? (
-            <button className={styles.save} onClick={save} disabled={saving}>
-              {saving ? "저장 중" : "변경 내용 저장"}
+      {screen !== "edit" && (
+        <div className={styles.heading}>
+          <div>
+            <span>{titles[0]}</span>
+            <h1>{titles[1]}</h1>
+            <p>{titles[2]}</p>
+          </div>
+          <div>
+            <button
+              className={styles.ghost}
+              onClick={refresh}
+              disabled={refreshing || quotesRefreshing}
+            >
+              <RefreshCw size={16} />{" "}
+              {refreshing || quotesRefreshing ? "갱신 중" : "가격 갱신"}
             </button>
-          ) : screen !== "dashboard" ? (
-            <span className={styles.saved}>
-              <Check size={15} /> 저장됨
-            </span>
-          ) : null}
+            {dirty ? (
+              <button className={styles.save} onClick={save} disabled={saving}>
+                {saving ? "저장 중" : "변경 내용 저장"}
+              </button>
+            ) : screen !== "dashboard" ? (
+              <span className={styles.saved}>
+                <Check size={15} /> 저장됨
+              </span>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
 
       {screen === "dashboard" && (
         <>
@@ -1421,7 +1347,6 @@ export default function PortfolioBuilder({
               investments={mobileInvestments}
               manualAssets={draft.manualAssets}
               usdKrw={draft.usdKrw}
-              onManageOtherAsset={onManageOtherAsset}
             />
           </section>
           <div className={styles.desktopLiveStatus} role="status">
@@ -1499,14 +1424,13 @@ export default function PortfolioBuilder({
                     <h2>보유 자산</h2>
                   </div>
                   <button type="button" onClick={onEditHoldings}>
-                    주식 수정 <ArrowRight size={14} />
+                    자산 수정 <ArrowRight size={14} />
                   </button>
                 </div>
                 <AssetList
                   investments={mobileInvestments}
                   manualAssets={draft.manualAssets}
                   usdKrw={draft.usdKrw}
-                  onManageOtherAsset={onManageOtherAsset}
                 />
               </section>
             </div>
@@ -1742,89 +1666,28 @@ export default function PortfolioBuilder({
                 : " · 저장하려면 100%로 맞춰 주세요."}
             </p>
           </section>
-
+        </>
+      )}
+      {screen === "rebalance" && (
+        <>
           <details className={`${styles.panel} ${styles.collapsible}`}>
             <summary className={styles.panelHead}>
               <div>
-                <span>02 · INSTRUMENTS</span>
-                <h2>종목별 포트 배정</h2>
+                <span>매수 후보</span>
+                <h2>매수 후보 종목</h2>
               </div>
               <span className={styles.collapseMeta}>
-                보유 {holdings.length}개 · 규칙 {draft.rules.length}개{" "}
-                <ChevronDown size={16} />
+                등록 {draft.rules.length}개 <ChevronDown size={16} />
               </span>
             </summary>
             <p className={styles.help}>
-              보유 종목은 자동으로 표시됩니다. 포트를 선택하면 같은
-              시장·종목코드의 자산에 규칙이 적용됩니다. 이미 지정한 종목은 아래
-              배정 규칙에서 수정하세요. 자산 배정에서 직접 지정한 종목은 직접
-              배정이 우선합니다.
+              아직 보유하지 않은 종목을 리밸런싱 매수 후보로 등록하세요. 보유
+              종목의 포트 지정은 자산 배정에서 변경할 수 있습니다. 같은
+              종목코드의 자산은 이 규칙으로 자동 분류되며 직접 배정이
+              우선합니다.
             </p>
             <div className={styles.ownedRulesHead}>
-              <strong>보유 종목 · 자동 규칙 없음</strong>
-              <span>{ownedWithoutRules.length}종목</span>
-            </div>
-            {ownedWithoutRules.length ? (
-              <div className={styles.rules}>
-                {ownedWithoutRules.map((holding) => {
-                  const validSymbol =
-                    holding.market === "KR"
-                      ? /^[0-9A-Z]{6}$/.test(holding.symbol)
-                      : /^[A-Z.]{1,10}$/.test(holding.symbol);
-                  return (
-                    <div
-                      key={`${holding.market}:${holding.symbol || holding.id}`}
-                      className={styles.rule}
-                    >
-                      <span className={styles.dot} />
-                      <strong>{holding.name}</strong>
-                      <small>
-                        {holding.market} · {holding.symbol || "코드 미확인"}
-                        {manuallyAssignedSymbols.has(
-                          `${holding.market}:${holding.symbol}`,
-                        )
-                          ? " · 직접 배정 우선"
-                          : ""}
-                      </small>
-                      {validSymbol ? (
-                        <label className={styles.ruleBucket}>
-                          <select
-                            value=""
-                            aria-label={`${holding.name} 포트 선택`}
-                            onChange={(event) =>
-                              addOwnedRule(holding, event.target.value)
-                            }
-                          >
-                            <option value="">포트 선택</option>
-                            {draft.buckets.map((bucket) => (
-                              <option key={bucket.id} value={bucket.id}>
-                                {bucket.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : (
-                        <button
-                          type="button"
-                          className={styles.ruleFixCode}
-                          onClick={onEditHoldings}
-                        >
-                          코드 확인
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className={styles.help}>
-                {holdings.length
-                  ? "보유 종목에 필요한 배정 규칙이 모두 등록되었습니다."
-                  : "보유 종목이 없습니다. 캡처 가져오기에서 자산을 등록하세요."}
-              </p>
-            )}
-            <div className={styles.ownedRulesHead}>
-              <strong>새 종목 검색</strong>
+              <strong>후보 종목 검색</strong>
               <span>아직 보유하지 않은 종목도 추가할 수 있습니다</span>
             </div>
             <div className={styles.ruleForm}>
@@ -1880,7 +1743,7 @@ export default function PortfolioBuilder({
               </div>
             )}
             <div className={styles.ownedRulesHead}>
-              <strong>배정 규칙</strong>
+              <strong>등록된 후보</strong>
               <span>{draft.rules.length}개</span>
             </div>
             <div className={styles.rules}>
@@ -1977,29 +1840,41 @@ export default function PortfolioBuilder({
           </details>
         </>
       )}
-      {screen === "allocation" && (
+      {(screen === "allocation" || screen === "edit") && (
         <>
-          <div className={styles.vizDisclosure}>
-            <div>
-              <strong>자산 지도를 더 자세히 보고 싶나요?</strong>
-              <span>종목·포트·증권사별 비중을 3D로 탐색할 수 있습니다.</span>
+          {screen === "allocation" && (
+            <div className={styles.vizDisclosure}>
+              <div>
+                <strong>자산 지도를 더 자세히 보고 싶나요?</strong>
+                <span>종목·포트·증권사별 비중을 3D로 탐색할 수 있습니다.</span>
+              </div>
+              <button
+                type="button"
+                aria-expanded={show3d}
+                onClick={() => setShow3d((value) => !value)}
+              >
+                {show3d ? "3D 분석 접기" : "3D 분석 열기"}{" "}
+                <ChevronDown size={16} />
+              </button>
             </div>
-            <button
-              type="button"
-              aria-expanded={show3d}
-              onClick={() => setShow3d((value) => !value)}
-            >
-              {show3d ? "3D 분석 접기" : "3D 분석 열기"}{" "}
-              <ChevronDown size={16} />
-            </button>
-          </div>
-          {show3d && <Portfolio3D portfolio={draft} holdings={holdings} />}
+          )}
+          {screen === "allocation" && show3d && (
+            <Portfolio3D portfolio={draft} holdings={holdings} />
+          )}
 
           <details className={`${styles.panel} ${styles.collapsible}`} open>
             <summary className={styles.panelHead}>
               <div>
-                <span>03 · ACTUAL POSITIONS</span>
-                <h2>내 자산 배정</h2>
+                <span>
+                  {screen === "allocation"
+                    ? "03 · ACTUAL POSITIONS"
+                    : "ASSET EDITOR"}
+                </span>
+                <h2>
+                  {screen === "allocation"
+                    ? "내 자산 배정"
+                    : "가상자산·현금 수정"}
+                </h2>
               </div>
               <span className={styles.collapseMeta}>
                 주식 {holdings.length}개 · 가상자산 {draft.cryptoAssets.length}
@@ -2007,403 +1882,536 @@ export default function PortfolioBuilder({
                 <ChevronDown size={16} />
               </span>
             </summary>
-            <div className={styles.assignmentActions}>
-              <button className={styles.ghost} onClick={onEditHoldings}>
-                <Pencil size={15} /> 주식 수량·매입단가 수정
-              </button>
-              <button className={styles.ghost} onClick={onImport}>
-                <Camera size={15} /> 캡처 가져오기
-              </button>
-            </div>
-            {holdings.length ? (
-              <div className={styles.assignmentList}>
-                {holdings.map((holding) => {
-                  const assignment = draft.assignments.find(
-                    (item) => item.holdingId === holding.id,
-                  );
-                  const autoBucket =
-                    draft.rules.find(
-                      (rule) =>
-                        rule.market === holding.market &&
-                        rule.symbol === holding.symbol,
-                    )?.bucketId ?? null;
-                  const selection =
-                    assignment?.source === "manual"
-                      ? (assignment.bucketId ?? "unassigned")
-                      : "auto";
-                  return (
-                    <div key={holding.id}>
+            {screen === "allocation" && (
+              <>
+                <div className={styles.assignmentActions}>
+                  <button className={styles.ghost} onClick={onEditHoldings}>
+                    <Pencil size={15} /> 자산 수정
+                  </button>
+                  <button className={styles.ghost} onClick={onImport}>
+                    <Camera size={15} /> 캡처 가져오기
+                  </button>
+                </div>
+                {holdings.length ? (
+                  <div className={styles.assignmentList}>
+                    {holdings.map((holding) => {
+                      const assignment = draft.assignments.find(
+                        (item) => item.holdingId === holding.id,
+                      );
+                      const autoBucket =
+                        draft.rules.find(
+                          (rule) =>
+                            rule.market === holding.market &&
+                            rule.symbol === holding.symbol,
+                        )?.bucketId ?? null;
+                      const selection =
+                        assignment?.source === "manual"
+                          ? (assignment.bucketId ?? "unassigned")
+                          : "auto";
+                      return (
+                        <div key={holding.id}>
+                          <div className={styles.assignmentIdentity}>
+                            <AssetIcon
+                              kind="stock"
+                              symbol={holding.symbol}
+                              name={holding.name}
+                              market={holding.market}
+                              exchange={holding.exchange}
+                            />
+                            <div>
+                              <strong>{holding.name}</strong>
+                              <small>
+                                {holding.broker} ·{" "}
+                                {holding.symbol || "코드 미확인"} ·{" "}
+                                {fmt(holdingValueKrw(holding, draft.usdKrw))}
+                              </small>
+                            </div>
+                          </div>
+                          <select
+                            value={selection}
+                            aria-label={`${holding.name} 포트 배정`}
+                            onChange={(event) =>
+                              assign(holding.id, event.target.value)
+                            }
+                          >
+                            <option value="auto">
+                              자동{" "}
+                              {autoBucket
+                                ? `· ${draft.buckets.find((bucket) => bucket.id === autoBucket)?.name}`
+                                : "· 미분류"}
+                            </option>
+                            <option value="unassigned">직접 · 미분류</option>
+                            {draft.buckets.map((bucket) => (
+                              <option key={bucket.id} value={bucket.id}>
+                                직접 · {bucket.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className={styles.help}>
+                    보유 종목이 없습니다. 잔고 캡처를 가져오면 이곳에서 포트별로
+                    배정할 수 있습니다.
+                  </p>
+                )}
+                {draft.cryptoAssets.map((asset) => (
+                  <div className={styles.assignmentAssetRow} key={asset.id}>
+                    <div className={styles.assignmentIdentity}>
+                      <AssetIcon
+                        kind="crypto"
+                        symbol={asset.marketCode.replace(/^KRW-/, "")}
+                        name={asset.name}
+                      />
                       <div>
-                        <strong>{holding.name}</strong>
+                        <strong>{asset.name}</strong>
                         <small>
-                          {holding.broker} · {holding.symbol || "코드 미확인"} ·{" "}
-                          {fmt(holdingValueKrw(holding, draft.usdKrw))}
+                          {asset.marketCode} ·{" "}
+                          {asset.quotedPriceKrw === null
+                            ? "시세 미확인"
+                            : fmt(cryptoAssetValueKrw(asset))}
                         </small>
                       </div>
-                      <select
-                        value={selection}
-                        aria-label={`${holding.name} 포트 배정`}
-                        onChange={(event) =>
-                          assign(holding.id, event.target.value)
-                        }
-                      >
-                        <option value="auto">
-                          자동{" "}
-                          {autoBucket
-                            ? `· ${draft.buckets.find((bucket) => bucket.id === autoBucket)?.name}`
-                            : "· 미분류"}
-                        </option>
-                        <option value="unassigned">직접 · 미분류</option>
-                        {draft.buckets.map((bucket) => (
-                          <option key={bucket.id} value={bucket.id}>
-                            직접 · {bucket.name}
-                          </option>
-                        ))}
-                      </select>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className={styles.help}>
-                보유 종목이 없습니다. 잔고 캡처를 가져오면 이곳에서 포트별로
-                배정할 수 있습니다.
-              </p>
-            )}
-            <div className={styles.subHead}>
-              <h3>가상자산 · 빗썸 원화 시세</h3>
-              <small>
-                원화마켓 코드와 보유 수량을 등록하면 가격 갱신 시 평가액을
-                계산합니다.
-              </small>
-            </div>
-            <div className={styles.cryptoSearch}>
-              <input
-                value={cryptoQuery}
-                onChange={(event) => setCryptoQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") lookupCrypto();
-                }}
-                placeholder="비트코인 또는 KRW-BTC 검색"
-                aria-label="가상자산 원화마켓 검색"
-              />
-              <button
-                type="button"
-                onClick={lookupCrypto}
-                disabled={lookingUpCrypto}
-              >
-                <Search size={15} /> {lookingUpCrypto ? "검색 중" : "검색"}
-              </button>
-            </div>
-            {cryptoCandidates.length > 0 && (
-              <div className={styles.cryptoCandidates}>
-                {cryptoCandidates.map((market) => (
-                  <button
-                    key={market.marketCode}
-                    type="button"
-                    onClick={() => {
-                      setCryptoSelected(market);
-                      setCryptoCandidates([]);
-                    }}
-                  >
-                    <strong>{market.name}</strong>
-                    <span>
-                      {market.marketCode} · {market.englishName}
-                    </span>
-                  </button>
+                    <select
+                      value={asset.bucketId ?? ""}
+                      aria-label={`${asset.name} 포트 배정`}
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          cryptoAssets: draft.cryptoAssets.map((item) =>
+                            item.id === asset.id
+                              ? {
+                                  ...item,
+                                  bucketId: event.target.value || null,
+                                }
+                              : item,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="">미분류</option>
+                      {draft.buckets.map((bucket) => (
+                        <option key={bucket.id} value={bucket.id}>
+                          {bucket.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 ))}
-              </div>
-            )}
-            <div className={styles.cryptoForm}>
-              <span className={styles.cryptoSelection}>
-                {cryptoSelected
-                  ? `${cryptoSelected.name} · ${cryptoSelected.marketCode}`
-                  : "마켓을 검색해 선택"}
-              </span>
-              <input
-                type="number"
-                min="0"
-                max="999999999999"
-                step="0.000000000001"
-                value={cryptoQuantity}
-                onChange={(event) => setCryptoQuantity(event.target.value)}
-                placeholder="보유 수량"
-                aria-label="가상자산 보유 수량"
-              />
-              <input
-                type="number"
-                min="0"
-                max="999999999999"
-                step="any"
-                value={cryptoCost}
-                onChange={(event) => setCryptoCost(event.target.value)}
-                placeholder="코인당 매입가 (원)"
-                aria-label="가상자산 코인당 매입단가 원화"
-              />
-              <select
-                value={
-                  cryptoBucketId ||
-                  draft.buckets.find((bucket) =>
-                    /비트코인|가상자산|코인/i.test(bucket.name),
-                  )?.id ||
-                  draft.buckets[0]?.id ||
-                  ""
-                }
-                onChange={(event) => setCryptoBucketId(event.target.value)}
-                aria-label="가상자산 포트"
-              >
-                {draft.buckets.map((bucket) => (
-                  <option key={bucket.id} value={bucket.id}>
-                    {bucket.name}
-                  </option>
+                {draft.manualAssets.map((asset) => (
+                  <div className={styles.assignmentAssetRow} key={asset.id}>
+                    <div className={styles.assignmentIdentity}>
+                      <AssetIcon
+                        kind="cash"
+                        symbol={asset.valueUsd === null ? "KRW" : "USD"}
+                        name={asset.name}
+                      />
+                      <div>
+                        <strong>{asset.name}</strong>
+                        <small>
+                          {fmt(manualAssetValueKrw(asset, draft.usdKrw))}
+                        </small>
+                      </div>
+                    </div>
+                    <select
+                      value={asset.bucketId ?? ""}
+                      aria-label={`${asset.name} 포트 배정`}
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          manualAssets: draft.manualAssets.map((item) =>
+                            item.id === asset.id
+                              ? {
+                                  ...item,
+                                  bucketId: event.target.value || null,
+                                }
+                              : item,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="">미분류</option>
+                      {draft.buckets.map((bucket) => (
+                        <option key={bucket.id} value={bucket.id}>
+                          {bucket.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 ))}
-              </select>
-              <button type="button" onClick={addCryptoAsset}>
-                <Plus size={15} /> 추가
-              </button>
-            </div>
-            {draft.cryptoAssets.map((asset) => (
-              <div
-                className={styles.cryptoRow}
-                id={`edit-crypto-${asset.id}`}
-                key={asset.id}
-              >
-                <div>
-                  <strong>{asset.name}</strong>
+              </>
+            )}
+            {screen === "edit" && (
+              <>
+                <div className={styles.subHead}>
+                  <h3>가상자산 · 빗썸 원화 시세</h3>
                   <small>
-                    {asset.marketCode} · 빗썸{" "}
-                    {asset.quotedPriceKrw === null
-                      ? "시세 미확인"
-                      : `현재가 ${fmt(asset.quotedPriceKrw)}`}
-                  </small>
-                  <small>
-                    조회 {timeLabel(asset.quoteCheckedAt)}
-                    {asset.lastTradeAt
-                      ? ` · 마지막 체결 ${timeLabel(asset.lastTradeAt)}`
-                      : ""}
+                    원화마켓 코드와 보유 수량을 등록하면 가격 갱신 시 평가액을
+                    계산합니다.
                   </small>
                 </div>
-                <label className={styles.cryptoField}>
-                  <span>보유 수량</span>
+                <div className={styles.cryptoSearch}>
+                  <input
+                    value={cryptoQuery}
+                    onChange={(event) => setCryptoQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") lookupCrypto();
+                    }}
+                    placeholder="비트코인 또는 KRW-BTC 검색"
+                    aria-label="가상자산 원화마켓 검색"
+                  />
+                  <button
+                    type="button"
+                    onClick={lookupCrypto}
+                    disabled={lookingUpCrypto}
+                  >
+                    <Search size={15} /> {lookingUpCrypto ? "검색 중" : "검색"}
+                  </button>
+                </div>
+                {cryptoCandidates.length > 0 && (
+                  <div className={styles.cryptoCandidates}>
+                    {cryptoCandidates.map((market) => (
+                      <button
+                        key={market.marketCode}
+                        type="button"
+                        onClick={() => {
+                          setCryptoSelected(market);
+                          setCryptoCandidates([]);
+                        }}
+                      >
+                        <strong>{market.name}</strong>
+                        <span>
+                          {market.marketCode} · {market.englishName}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className={styles.cryptoForm}>
+                  <span className={styles.cryptoSelection}>
+                    {cryptoSelected
+                      ? `${cryptoSelected.name} · ${cryptoSelected.marketCode}`
+                      : "마켓을 검색해 선택"}
+                  </span>
                   <input
                     type="number"
                     min="0"
                     max="999999999999"
                     step="0.000000000001"
-                    value={asset.quantity}
-                    aria-label={`${asset.name} 보유 수량`}
-                    onChange={(event) =>
-                      change({
-                        ...draft,
-                        cryptoAssets: draft.cryptoAssets.map((item) =>
-                          item.id === asset.id
-                            ? { ...item, quantity: Number(event.target.value) }
-                            : item,
-                        ),
-                      })
-                    }
+                    value={cryptoQuantity}
+                    onChange={(event) => setCryptoQuantity(event.target.value)}
+                    placeholder="보유 수량"
+                    aria-label="가상자산 보유 수량"
                   />
-                </label>
-                <label className={styles.cryptoField}>
-                  <span>코인당 매입가 (원)</span>
                   <input
                     type="number"
                     min="0"
                     max="999999999999"
                     step="any"
-                    value={asset.averageCostKrw ?? ""}
-                    aria-label={`${asset.name} 코인당 매입단가 원화`}
-                    onChange={(event) =>
-                      change({
-                        ...draft,
-                        cryptoAssets: draft.cryptoAssets.map((item) =>
-                          item.id === asset.id
-                            ? {
-                                ...item,
-                                averageCostKrw:
-                                  event.target.value === ""
-                                    ? null
-                                    : Number(event.target.value),
-                              }
-                            : item,
-                        ),
-                      })
-                    }
+                    value={cryptoCost}
+                    onChange={(event) => setCryptoCost(event.target.value)}
+                    placeholder="코인당 매입가 (원)"
+                    aria-label="가상자산 코인당 매입단가 원화"
                   />
-                </label>
-                <select
-                  value={asset.bucketId ?? ""}
-                  aria-label={`${asset.name} 포트`}
-                  onChange={(event) =>
-                    change({
-                      ...draft,
-                      cryptoAssets: draft.cryptoAssets.map((item) =>
-                        item.id === asset.id
-                          ? { ...item, bucketId: event.target.value || null }
-                          : item,
-                      ),
-                    })
-                  }
-                >
-                  <option value="">미분류</option>
-                  {draft.buckets.map((bucket) => (
-                    <option key={bucket.id} value={bucket.id}>
-                      {bucket.name}
-                    </option>
-                  ))}
-                </select>
-                <b>
-                  {asset.quotedPriceKrw === null
-                    ? "가격 미확인"
-                    : fmt(cryptoAssetValueKrw(asset))}
-                </b>
-                <button
-                  className={styles.iconButton}
-                  aria-label={`${asset.name} 삭제`}
-                  onClick={() =>
-                    change({
-                      ...draft,
-                      cryptoAssets: draft.cryptoAssets.filter(
-                        (item) => item.id !== asset.id,
-                      ),
-                    })
-                  }
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            ))}
-            <div className={styles.subHead}>
-              <h3>기타 직접 입력 자산</h3>
-              <small>원화 금액이나 달러 수량을 직접 관리하는 자산</small>
-            </div>
-            {draft.manualAssets.some((asset) =>
-              /비트코인|bitcoin|BTC/i.test(asset.name),
-            ) && (
-              <p className={styles.help}>
-                기존 비트코인 직접 입력 금액은 자동 시세와 별개입니다. 수량을
-                등록한 뒤 중복 합산되지 않도록 기존 금액을 확인해 주세요.
-              </p>
-            )}
-            <div className={styles.manualForm}>
-              <input
-                value={manualName}
-                onChange={(event) => setManualName(event.target.value)}
-                placeholder="자산 이름"
-                aria-label="직접 입력 자산 이름"
-              />
-              <input
-                type="number"
-                min="0"
-                value={manualValue}
-                onChange={(event) => setManualValue(event.target.value)}
-                placeholder={
-                  manualCurrency === "USD" ? "달러 금액" : "평가액 (원)"
-                }
-                aria-label="직접 입력 자산 금액"
-              />
-              <select
-                value={manualCurrency}
-                onChange={(event) =>
-                  setManualCurrency(event.target.value as "KRW" | "USD")
-                }
-                aria-label="직접 입력 자산 통화"
-              >
-                <option value="KRW">원화</option>
-                <option value="USD">달러</option>
-              </select>
-              <select
-                value={manualBucketId || draft.buckets[0]?.id || ""}
-                onChange={(event) => setManualBucketId(event.target.value)}
-                aria-label="자산 포트"
-              >
-                {draft.buckets.map((bucket) => (
-                  <option key={bucket.id} value={bucket.id}>
-                    {bucket.name}
-                  </option>
+                  <select
+                    value={
+                      cryptoBucketId ||
+                      draft.buckets.find((bucket) =>
+                        /비트코인|가상자산|코인/i.test(bucket.name),
+                      )?.id ||
+                      draft.buckets[0]?.id ||
+                      ""
+                    }
+                    onChange={(event) => setCryptoBucketId(event.target.value)}
+                    aria-label="가상자산 포트"
+                  >
+                    {draft.buckets.map((bucket) => (
+                      <option key={bucket.id} value={bucket.id}>
+                        {bucket.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={addCryptoAsset}>
+                    <Plus size={15} /> 추가
+                  </button>
+                </div>
+                {draft.cryptoAssets.map((asset) => (
+                  <div
+                    className={styles.cryptoRow}
+                    id={`edit-crypto-${asset.id}`}
+                    key={asset.id}
+                  >
+                    <div>
+                      <strong>{asset.name}</strong>
+                      <small>
+                        {asset.marketCode} · 빗썸{" "}
+                        {asset.quotedPriceKrw === null
+                          ? "시세 미확인"
+                          : `현재가 ${fmt(asset.quotedPriceKrw)}`}
+                      </small>
+                      <small>
+                        조회 {timeLabel(asset.quoteCheckedAt)}
+                        {asset.lastTradeAt
+                          ? ` · 마지막 체결 ${timeLabel(asset.lastTradeAt)}`
+                          : ""}
+                      </small>
+                    </div>
+                    <label className={styles.cryptoField}>
+                      <span>보유 수량</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="999999999999"
+                        step="0.000000000001"
+                        value={asset.quantity}
+                        aria-label={`${asset.name} 보유 수량`}
+                        onChange={(event) =>
+                          change({
+                            ...draft,
+                            cryptoAssets: draft.cryptoAssets.map((item) =>
+                              item.id === asset.id
+                                ? {
+                                    ...item,
+                                    quantity: Number(event.target.value),
+                                  }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <label className={styles.cryptoField}>
+                      <span>코인당 매입가 (원)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="999999999999"
+                        step="any"
+                        value={asset.averageCostKrw ?? ""}
+                        aria-label={`${asset.name} 코인당 매입단가 원화`}
+                        onChange={(event) =>
+                          change({
+                            ...draft,
+                            cryptoAssets: draft.cryptoAssets.map((item) =>
+                              item.id === asset.id
+                                ? {
+                                    ...item,
+                                    averageCostKrw:
+                                      event.target.value === ""
+                                        ? null
+                                        : Number(event.target.value),
+                                  }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <select
+                      value={asset.bucketId ?? ""}
+                      aria-label={`${asset.name} 포트`}
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          cryptoAssets: draft.cryptoAssets.map((item) =>
+                            item.id === asset.id
+                              ? {
+                                  ...item,
+                                  bucketId: event.target.value || null,
+                                }
+                              : item,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="">미분류</option>
+                      {draft.buckets.map((bucket) => (
+                        <option key={bucket.id} value={bucket.id}>
+                          {bucket.name}
+                        </option>
+                      ))}
+                    </select>
+                    <b>
+                      {asset.quotedPriceKrw === null
+                        ? "가격 미확인"
+                        : fmt(cryptoAssetValueKrw(asset))}
+                    </b>
+                    <button
+                      className={styles.iconButton}
+                      aria-label={`${asset.name} 삭제`}
+                      onClick={() =>
+                        change({
+                          ...draft,
+                          cryptoAssets: draft.cryptoAssets.filter(
+                            (item) => item.id !== asset.id,
+                          ),
+                        })
+                      }
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 ))}
-              </select>
-              <button onClick={addManualAsset}>
-                <Plus size={15} /> 추가
-              </button>
-            </div>
-            {draft.manualAssets.map((asset) => (
-              <div
-                className={styles.manualRow}
-                id={`edit-manual-${asset.id}`}
-                key={asset.id}
-              >
-                <strong>{asset.name}</strong>
-                <input
-                  type="number"
-                  min="0"
-                  max="1000000000000000"
-                  value={asset.valueUsd ?? asset.valueKrw}
-                  aria-label={`${asset.name} ${asset.valueUsd === null ? "원화 평가액" : "달러 금액"}`}
-                  onChange={(event) =>
-                    change({
-                      ...draft,
-                      manualAssets: draft.manualAssets.map((item) =>
-                        item.id === asset.id
-                          ? item.valueUsd === null
-                            ? { ...item, valueKrw: Number(event.target.value) }
-                            : {
-                                ...item,
-                                valueUsd: Number(event.target.value),
-                                valueKrw:
-                                  Number(event.target.value) * draft.usdKrw,
-                              }
-                          : item,
-                      ),
-                    })
-                  }
-                />
-                <small>
-                  {asset.valueUsd === null
-                    ? "KRW"
-                    : `USD · ${fmt(manualAssetValueKrw(asset, draft.usdKrw))}`}
-                </small>
-                <select
-                  value={asset.bucketId ?? ""}
-                  aria-label={`${asset.name} 포트`}
-                  onChange={(event) =>
-                    change({
-                      ...draft,
-                      manualAssets: draft.manualAssets.map((item) =>
-                        item.id === asset.id
-                          ? { ...item, bucketId: event.target.value || null }
-                          : item,
-                      ),
-                    })
-                  }
-                >
-                  <option value="">미분류</option>
-                  {draft.buckets.map((bucket) => (
-                    <option key={bucket.id} value={bucket.id}>
-                      {bucket.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className={styles.iconButton}
-                  aria-label={`${asset.name} 삭제`}
-                  onClick={() =>
-                    change({
-                      ...draft,
-                      manualAssets: draft.manualAssets.filter(
-                        (item) => item.id !== asset.id,
-                      ),
-                    })
-                  }
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            ))}
+                <div className={styles.subHead}>
+                  <h3>기타 직접 입력 자산</h3>
+                  <small>원화 금액이나 달러 수량을 직접 관리하는 자산</small>
+                </div>
+                {draft.manualAssets.some((asset) =>
+                  /비트코인|bitcoin|BTC/i.test(asset.name),
+                ) && (
+                  <p className={styles.help}>
+                    기존 비트코인 직접 입력 금액은 자동 시세와 별개입니다.
+                    수량을 등록한 뒤 중복 합산되지 않도록 기존 금액을 확인해
+                    주세요.
+                  </p>
+                )}
+                <div className={styles.manualForm}>
+                  <input
+                    value={manualName}
+                    onChange={(event) => setManualName(event.target.value)}
+                    placeholder="자산 이름"
+                    aria-label="직접 입력 자산 이름"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    value={manualValue}
+                    onChange={(event) => setManualValue(event.target.value)}
+                    placeholder={
+                      manualCurrency === "USD" ? "달러 금액" : "평가액 (원)"
+                    }
+                    aria-label="직접 입력 자산 금액"
+                  />
+                  <select
+                    value={manualCurrency}
+                    onChange={(event) =>
+                      setManualCurrency(event.target.value as "KRW" | "USD")
+                    }
+                    aria-label="직접 입력 자산 통화"
+                  >
+                    <option value="KRW">원화</option>
+                    <option value="USD">달러</option>
+                  </select>
+                  <select
+                    value={manualBucketId || draft.buckets[0]?.id || ""}
+                    onChange={(event) => setManualBucketId(event.target.value)}
+                    aria-label="자산 포트"
+                  >
+                    {draft.buckets.map((bucket) => (
+                      <option key={bucket.id} value={bucket.id}>
+                        {bucket.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button onClick={addManualAsset}>
+                    <Plus size={15} /> 추가
+                  </button>
+                </div>
+                {draft.manualAssets.map((asset) => (
+                  <div
+                    className={styles.manualRow}
+                    id={`edit-manual-${asset.id}`}
+                    key={asset.id}
+                  >
+                    <strong>{asset.name}</strong>
+                    <input
+                      type="number"
+                      min="0"
+                      max="1000000000000000"
+                      value={asset.valueUsd ?? asset.valueKrw}
+                      aria-label={`${asset.name} ${asset.valueUsd === null ? "원화 평가액" : "달러 금액"}`}
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          manualAssets: draft.manualAssets.map((item) =>
+                            item.id === asset.id
+                              ? item.valueUsd === null
+                                ? {
+                                    ...item,
+                                    valueKrw: Number(event.target.value),
+                                  }
+                                : {
+                                    ...item,
+                                    valueUsd: Number(event.target.value),
+                                    valueKrw:
+                                      Number(event.target.value) * draft.usdKrw,
+                                  }
+                              : item,
+                          ),
+                        })
+                      }
+                    />
+                    <small>
+                      {asset.valueUsd === null
+                        ? "KRW"
+                        : `USD · ${fmt(manualAssetValueKrw(asset, draft.usdKrw))}`}
+                    </small>
+                    <select
+                      value={asset.bucketId ?? ""}
+                      aria-label={`${asset.name} 포트`}
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          manualAssets: draft.manualAssets.map((item) =>
+                            item.id === asset.id
+                              ? {
+                                  ...item,
+                                  bucketId: event.target.value || null,
+                                }
+                              : item,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="">미분류</option>
+                      {draft.buckets.map((bucket) => (
+                        <option key={bucket.id} value={bucket.id}>
+                          {bucket.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className={styles.iconButton}
+                      aria-label={`${asset.name} 삭제`}
+                      onClick={() =>
+                        change({
+                          ...draft,
+                          manualAssets: draft.manualAssets.filter(
+                            (item) => item.id !== asset.id,
+                          ),
+                        })
+                      }
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
           </details>
+          {screen === "edit" && (
+            <div className={styles.assetEditorSave}>
+              {dirty ? (
+                <button
+                  className={styles.save}
+                  onClick={save}
+                  disabled={saving}
+                >
+                  {saving ? "저장 중" : "가상자산·현금 변경 저장"}
+                </button>
+              ) : (
+                <span className={styles.saved}>
+                  <Check size={15} /> 저장됨
+                </span>
+              )}
+            </div>
+          )}
         </>
       )}
-      {screen === "allocation" && dirty && (
+      {(screen === "allocation" || screen === "edit") && dirty && (
         <div className={styles.mobileSaveBar}>
           <button type="button" onClick={save} disabled={saving}>
             {saving ? "저장 중" : "변경 내용 저장"}

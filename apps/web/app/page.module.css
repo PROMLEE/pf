@@ -587,6 +587,15 @@
   font-size: 19px;
   letter-spacing: -0.04em;
 }
+.holdingStats small,
+.holdingRow .gainPercent {
+  display: block;
+  margin-top: 3px;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
 .toolbar {
   display: flex;
   align-items: center;

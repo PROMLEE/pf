@@ -69,6 +69,12 @@ const gainOf = (row: Holding) =>
   row.averageCost == null || (row.currentPrice ?? row.capturedPrice) == null
     ? null
     : valueOf(row) - row.quantity * row.averageCost;
+const gainPercentOf = (row: Holding) =>
+  gainOf(row) === null || !row.averageCost || row.quantity <= 0
+    ? null
+    : (gainOf(row)! / (row.quantity * row.averageCost)) * 100;
+const signedPercent = (value: number) =>
+  `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 const signedMoney = (value: number, market: Market) =>
   `${value > 0 ? "+" : ""}${money(value, market)}`;
 
@@ -83,10 +89,6 @@ export default function PortfolioPage() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [view, setView] = useState<View>("portfolio");
   const [portfolioDirty, setPortfolioDirty] = useState(false);
-  const [pendingAssetEditor, setPendingAssetEditor] = useState<{
-    kind: "crypto" | "manual";
-    id: string;
-  } | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
@@ -184,6 +186,7 @@ export default function PortfolioPage() {
           const gain = gainOf(row);
           if (gain !== null) {
             sum.gain[row.market] += gain;
+            sum.cost[row.market] += row.quantity * row.averageCost!;
             sum.costKnown[row.market]++;
           }
           return sum;
@@ -194,6 +197,7 @@ export default function PortfolioPage() {
           quoted: 0,
           missing: 0,
           gain: { KR: 0, US: 0 },
+          cost: { KR: 0, US: 0 },
           costKnown: { KR: 0, US: 0 },
         },
       ),
@@ -216,49 +220,17 @@ export default function PortfolioPage() {
   );
 
   function go(next: View) {
-    const portfolioScreens: View[] = [
-      "portfolio",
-      "strategy",
-      "allocation",
-      "rebalance",
-      "history",
-    ];
     if (
       portfolioDirty &&
-      portfolioScreens.includes(view) &&
-      !portfolioScreens.includes(next) &&
+      next !== view &&
       !window.confirm("저장하지 않은 포트폴리오 변경 사항을 버리고 이동할까요?")
     )
       return;
-    if (!portfolioScreens.includes(next)) setPortfolioDirty(false);
+    if (next !== view) setPortfolioDirty(false);
     setView(next);
     setMenuOpen(false);
     setNotice("");
   }
-
-  function editOtherAsset(kind: "crypto" | "manual", id: string) {
-    setPendingAssetEditor({ kind, id });
-    go("allocation");
-  }
-
-  useEffect(() => {
-    if (view !== "allocation" || !pendingAssetEditor) return;
-    const frame = window.requestAnimationFrame(() => {
-      const row = document.getElementById(
-        `edit-${pendingAssetEditor.kind}-${pendingAssetEditor.id}`,
-      );
-      row?.scrollIntoView({ behavior: "smooth", block: "center" });
-      row?.querySelector<HTMLInputElement>(
-        pendingAssetEditor.kind === "crypto"
-          ? 'input[aria-label*="코인당 매입단가"]'
-          : "input",
-      )?.focus({
-        preventScroll: true,
-      });
-      setPendingAssetEditor(null);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [view, pendingAssetEditor]);
 
   async function importCapture(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -784,7 +756,7 @@ export default function PortfolioPage() {
   const nav = [
     { id: "portfolio" as View, label: "대시보드", Icon: LayoutDashboard },
     { id: "holdings" as View, label: "보유 자산", Icon: Wallet },
-    { id: "edit" as View, label: "주식 수정", Icon: Pencil },
+    { id: "edit" as View, label: "자산 수정", Icon: Pencil },
     { id: "strategy" as View, label: "목표 설계", Icon: Settings2 },
     { id: "allocation" as View, label: "자산 배정", Icon: Wallet },
     { id: "rebalance" as View, label: "리밸런싱", Icon: RefreshCw },
@@ -942,7 +914,6 @@ export default function PortfolioPage() {
               quoteError={quoteError}
               onImport={() => go("import")}
               onEditHoldings={() => go("edit")}
-              onManageOtherAsset={editOtherAsset}
               onNavigate={go}
               onDirtyChange={setPortfolioDirty}
             />
@@ -954,18 +925,18 @@ export default function PortfolioPage() {
                   <span className={styles.kicker}>
                     {view === "edit" ? "EDIT ASSETS" : "MY ASSETS"}
                   </span>
-                  <h1>{view === "edit" ? "주식 수정" : "보유 자산"}</h1>
+                  <h1>{view === "edit" ? "자산 수정" : "보유 자산"}</h1>
                   <p>
                     {view === "edit"
-                      ? "보유 수량, 매입단가와 시세 조회용 종목코드를 관리하세요."
-                      : "확인한 종목과 가격 출처를 함께 보여드립니다."}
+                      ? "주식·가상자산·현금의 수량과 매입가를 한곳에서 관리하세요."
+                      : "평가액, 손익률과 가격 출처를 함께 확인하세요."}
                   </p>
                 </div>
                 <button
                   className={styles.primaryButton}
                   onClick={() => go(view === "edit" ? "holdings" : "edit")}
                 >
-                  {view === "edit" ? "보유 자산으로" : "주식 수정"}{" "}
+                  {view === "edit" ? "보유 자산으로" : "자산 수정"}{" "}
                   <ArrowRight size={17} />
                 </button>
               </div>
@@ -988,6 +959,17 @@ export default function PortfolioPage() {
                         ? signedMoney(totals.gain.KR, "KR")
                         : "—"}
                     </strong>
+                    {totals.cost.KR > 0 && (
+                      <small
+                        className={
+                          totals.gain.KR >= 0
+                            ? styles.gainPositive
+                            : styles.gainNegative
+                        }
+                      >
+                        {signedPercent((totals.gain.KR / totals.cost.KR) * 100)}
+                      </small>
+                    )}
                   </div>
                   <div>
                     <span>미국 평가금액</span>
@@ -1006,15 +988,26 @@ export default function PortfolioPage() {
                         ? signedMoney(totals.gain.US, "US")
                         : "—"}
                     </strong>
+                    {totals.cost.US > 0 && (
+                      <small
+                        className={
+                          totals.gain.US >= 0
+                            ? styles.gainPositive
+                            : styles.gainNegative
+                        }
+                      >
+                        {signedPercent((totals.gain.US / totals.cost.US) * 100)}
+                      </small>
+                    )}
                   </div>
                 </div>
               )}
               {view === "edit" && (
                 <div className={styles.editIntro}>
-                  <strong>수정할 종목을 선택하세요</strong>
+                  <strong>수정할 자산을 선택하세요</strong>
                   <span>
-                    수량·매입단가를 바꾸거나 종목코드 연결을 확인할 수 있습니다.
-                    종목코드는 시세 조회에 사용됩니다.
+                    아래에서 주식을 수정하고, 가상자산·현금은 이 화면의 다음
+                    섹션에서 관리하세요.
                   </span>
                   <button onClick={() => go("import")}>
                     새 자산 추가 <Plus size={15} />
@@ -1119,6 +1112,11 @@ export default function PortfolioPage() {
                             {gainOf(row) === null
                               ? "—"
                               : signedMoney(gainOf(row)!, row.market)}
+                            {gainPercentOf(row) !== null && (
+                              <small className={styles.gainPercent}>
+                                {signedPercent(gainPercentOf(row)!)}
+                              </small>
+                            )}
                           </strong>
                           {view === "edit" ? (
                             <button
@@ -1238,6 +1236,23 @@ export default function PortfolioPage() {
                   <Empty onImport={() => go("import")} loading={loading} />
                 )}
               </section>
+              {view === "edit" && (
+                <PortfolioBuilder
+                  userId={session.user?.appUserId ?? "account"}
+                  screen="edit"
+                  holdings={holdings}
+                  quoteVersion={quoteVersion}
+                  onHoldings={setHoldings}
+                  onNotice={setNotice}
+                  onRefreshQuotes={refreshQuotes}
+                  quotesRefreshing={quoteBusy}
+                  quoteError={quoteError}
+                  onImport={() => go("import")}
+                  onEditHoldings={() => go("edit")}
+                  onNavigate={go}
+                  onDirtyChange={setPortfolioDirty}
+                />
+              )}
               <p className={styles.footnote}>
                 시세 조회 시각은 거래소 체결 시각과 다를 수 있습니다.
                 {totals.costKnown.KR + totals.costKnown.US < holdings.length

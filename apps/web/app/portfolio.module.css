@@ -560,6 +560,39 @@
 .assignmentList select {
   min-width: 175px;
 }
+.assignmentIdentity {
+  display: flex !important;
+  align-items: center;
+  gap: 9px !important;
+  min-width: 0;
+}
+.assignmentIdentity > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.assignmentIdentity strong,
+.assignmentIdentity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assignmentAssetRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef1f6;
+}
+.assignmentAssetRow select {
+  min-width: 175px;
+}
+.assetEditorSave {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 0;
+}
 .manualForm {
   display: grid;
   grid-template-columns: 1.2fr 1fr 80px 1fr 80px;
@@ -808,6 +841,13 @@
     flex-direction: column;
   }
   .assignmentList select {
+    width: 100%;
+  }
+  .assignmentAssetRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .assignmentAssetRow select {
     width: 100%;
   }
   .manualForm {
@@ -1208,6 +1248,9 @@
 :global(html[data-theme="dark"]) :is(.keyMetric > span, .keyMetric small, .marketCopy span, .allocationLegendHead, .allocationLegendRow > span:last-child, .performanceSummary small, .flowList > div, .vizDisclosure span, .startQuote) { color: #9db3b8; }
 :global(html[data-theme="dark"]) :is(.cashBudget, .exclusions summary, .exclusions label, .settings label, .bucket label, .rule label) { color: #aac0c5; }
 :global(html[data-theme="dark"]) :is(.assignmentList, .assignmentList > div, .flowDetails, .flowList > div, .advice, .bucket, .rule, .allocationLegendHead) { border-color: #34464b; }
+:global(html[data-theme="dark"]) .assignmentAssetRow { border-color: #34464b; }
+:global(html[data-theme="dark"]) .assignmentIdentity strong { color: #e8f1f2; }
+:global(html[data-theme="dark"]) .assignmentIdentity small { color: #9db3b8; }
 :global(html[data-theme="dark"]) .desktopAssetPanel .mobileAssetRow,
 :global(html[data-theme="dark"]) .dashboardDetails section > div { border-color: #34464b; }
 :global(html[data-theme="dark"]) .desktopAssetPanel .mobileAssetValue .mobileUp { color: #ff7782; }
