@@ -142,6 +142,7 @@ create table if not exists portfolio.snapshots (
   bucket_name text not null,
   value_krw numeric(24, 2) not null check (value_krw >= 0),
   target_percent numeric(5, 2),
+  position_signature text,
   captured_at timestamptz not null default now(),
   primary key (user_id, snapshot_date, bucket_key)
 );

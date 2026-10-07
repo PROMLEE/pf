@@ -55,7 +55,51 @@ export type Snapshot = {
   bucketName: string;
   valueKrw: number;
   targetPercent: number | null;
+  positionSignature: string | null;
 };
+
+export function positionSignature(
+  holdings: Pick<
+    Holding,
+    "id" | "market" | "quantity" | "averageCost" | "capturedPrice"
+  >[],
+  manualAssets: Pick<ManualAsset, "id" | "valueKrw" | "valueUsd">[],
+  cryptoAssets: Pick<CryptoAsset, "id" | "quantity" | "averageCostKrw">[],
+) {
+  const positions = [
+    ...holdings.map((asset) => [
+      "stock",
+      asset.id,
+      asset.market,
+      asset.quantity,
+      asset.averageCost,
+      asset.capturedPrice,
+    ]),
+    ...manualAssets.map((asset) => [
+      "manual",
+      asset.id,
+      asset.valueUsd === null ? "KRW" : "USD",
+      asset.valueUsd ?? asset.valueKrw,
+    ]),
+    ...cryptoAssets.map((asset) => [
+      "crypto",
+      asset.id,
+      asset.quantity,
+      asset.averageCostKrw,
+    ]),
+  ];
+  const serialized = JSON.stringify(
+    positions.sort((left, right) =>
+      `${left[0]}:${left[1]}`.localeCompare(`${right[0]}:${right[1]}`),
+    ),
+  );
+  let hash = 14695981039346656037n;
+  for (const byte of new TextEncoder().encode(serialized)) {
+    hash ^= BigInt(byte);
+    hash = BigInt.asUintN(64, hash * 1099511628211n);
+  }
+  return `v1:${hash.toString(16).padStart(16, "0")}`;
+}
 
 export type CashFlow = {
   id: string;

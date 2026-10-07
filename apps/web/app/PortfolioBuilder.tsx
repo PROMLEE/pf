@@ -23,6 +23,7 @@ import {
   holdingValueKrw,
   manualAssetValueKrw,
   portfolioValues,
+  positionSignature,
   type Bucket,
   type Portfolio,
   type Rule,
@@ -1050,8 +1051,22 @@ export default function PortfolioBuilder({
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(Date.now() - 24 * 60 * 60 * 1000));
-  const dailyChange =
-    previousPoint?.date === yesterdayKey ? changeSincePrevious : null;
+  const currentPositionSignature = positionSignature(
+    holdings,
+    draft?.manualAssets ?? [],
+    draft?.cryptoAssets ?? [],
+  );
+  const dailyChangeUnavailableReason =
+    previousPoint?.date !== yesterdayKey
+      ? "전일 자산 기록이 없어 계산할 수 없습니다."
+      : !previousPoint.positionSignature
+        ? "전일 보유 구성 기록이 없어 계산할 수 없습니다."
+        : previousPoint.positionSignature !== currentPositionSignature
+          ? "전일 이후 자산 등록·수량·금액이 바뀌어 계산을 보류했습니다."
+          : values?.missingPrices
+            ? "현재가가 없는 종목이 있어 계산을 보류했습니다."
+            : null;
+  const dailyChange = dailyChangeUnavailableReason ? null : changeSincePrevious;
   const mobileStockGroups = new Map<
     string,
     {
@@ -1290,13 +1305,15 @@ export default function PortfolioBuilder({
               </div>
               <div>
                 <span>
-                  당일 손익 <small>기록 기준</small>
+                  당일 추정 손익 <small>전일 대비</small>
                 </span>
                 <strong
                   className={
-                    (dailyChange ?? 0) >= 0
-                      ? styles.mobileUp
-                      : styles.mobileDown
+                    dailyChange === null
+                      ? ""
+                      : dailyChange >= 0
+                        ? styles.mobileUp
+                        : styles.mobileDown
                   }
                 >
                   {dailyChange === null
@@ -1325,9 +1342,9 @@ export default function PortfolioBuilder({
                 전체 손익은 매입단가와 현재가가 확인된 주식·가상자산{" "}
                 {knownGains.count}/{gainEligibleCount}개 기준입니다. 현금은 손익
                 계산에 포함되지 않습니다.
-                {dailyChange === null
-                  ? " 전일 자산 기록이 없어 당일 손익을 계산할 수 없습니다."
-                  : " 당일 손익은 전일 기록에서 등록된 입출금을 제외한 추정치입니다."}
+                {dailyChangeUnavailableReason
+                  ? ` ${dailyChangeUnavailableReason}`
+                  : " 당일 추정 손익은 전일 기록에서 등록된 입출금을 제외한 값입니다."}
               </p>
             </details>
             <div className={styles.mobileQuoteTime}>
@@ -1396,13 +1413,15 @@ export default function PortfolioBuilder({
                   </div>
                   <div>
                     <span>
-                      당일 손익 <small>기록 기준</small>
+                      당일 추정 손익 <small>전일 대비</small>
                     </span>
                     <strong
                       className={
-                        (dailyChange ?? 0) >= 0
-                          ? styles.profitUp
-                          : styles.profitDown
+                        dailyChange === null
+                          ? ""
+                          : dailyChange >= 0
+                            ? styles.profitUp
+                            : styles.profitDown
                       }
                     >
                       {dailyChange === null
@@ -1410,9 +1429,8 @@ export default function PortfolioBuilder({
                         : `${dailyChange > 0 ? "+" : ""}${fmt(dailyChange)}`}
                     </strong>
                     <small>
-                      {dailyChange === null
-                        ? "전일 기록이 없어 계산할 수 없습니다"
-                        : "전일 기록 대비 · 등록된 입출금 제외"}
+                      {dailyChangeUnavailableReason ??
+                        "전일 기록 대비 · 등록된 입출금 제외"}
                     </small>
                   </div>
                 </section>
@@ -1502,8 +1520,8 @@ export default function PortfolioBuilder({
               </details>
               <p className={styles.desktopMetricNote}>
                 평가손익은 매입단가가 확인된 주식·가상자산 기준이며 환차손익은
-                포함하지 않습니다. 당일 손익은 전일 자산 기록을 바탕으로 한
-                추정치입니다.
+                포함하지 않습니다. 당일 추정 손익은 전일과 보유 구성이 같을 때만
+                표시하며, 기록된 입출금을 제외합니다.
               </p>
             </aside>
           </div>
@@ -2303,10 +2321,11 @@ export default function PortfolioBuilder({
                     <option value="USD">달러</option>
                   </select>
                   <select
-                    value={manualBucketId || draft.buckets[0]?.id || ""}
+                    value={manualBucketId}
                     onChange={(event) => setManualBucketId(event.target.value)}
                     aria-label="자산 포트"
                   >
+                    <option value="">미분류</option>
                     {draft.buckets.map((bucket) => (
                       <option key={bucket.id} value={bucket.id}>
                         {bucket.name}
@@ -2497,13 +2516,23 @@ export default function PortfolioBuilder({
               않습니다. 계좌별 주문 가능 금액도 확인하세요.
             </p>
             {!rebalanceReady ? (
-              <p className={styles.rebalanceStatus}>
-                {values?.missingPrices
-                  ? `가격 미확인 ${values.missingPrices}개 종목을 확인해 주세요.`
-                  : values?.unassigned
-                    ? `미분류 자산 ${fmt(values.unassigned)}을 배정해 주세요.`
-                    : "가격이 있는 자산을 등록하면 추천이 표시됩니다."}
-              </p>
+              <div className={styles.rebalanceStatus}>
+                <span>
+                  {values?.missingPrices
+                    ? `가격 미확인 ${values.missingPrices}개 종목을 확인해 주세요.`
+                    : values?.unassigned
+                      ? `미분류 자산 ${fmt(values.unassigned)}을 배정해 주세요.`
+                      : "가격이 있는 자산을 등록하면 추천이 표시됩니다."}
+                </span>
+                {Boolean(values?.unassigned) && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("allocation")}
+                  >
+                    자산 배정으로 이동 <ArrowRight size={14} />
+                  </button>
+                )}
+              </div>
             ) : (
               <>
                 <p className={styles.rebalanceStatus}>

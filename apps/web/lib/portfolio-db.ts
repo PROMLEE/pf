@@ -9,6 +9,7 @@ import type {
   Rule,
   Snapshot,
 } from "../app/portfolio-model";
+import { positionSignature } from "../app/portfolio-model";
 import { db } from "./db";
 
 type Client = Pick<PoolClient, "query">;
@@ -72,6 +73,7 @@ type SnapshotRow = {
   bucket_name: string;
   value_krw: string;
   target_percent: string | null;
+  position_signature: string | null;
 };
 
 export async function listPortfolio(
@@ -115,7 +117,7 @@ export async function listPortfolio(
       [userId],
     ),
     client.query<SnapshotRow>(
-      `select snapshot_date::text, bucket_key, bucket_name, value_krw, target_percent
+      `select snapshot_date::text, bucket_key, bucket_name, value_krw, target_percent, position_signature
        from portfolio.snapshots where user_id = $1 order by snapshot_date, bucket_key`,
       [userId],
     ),
@@ -193,6 +195,7 @@ export async function listPortfolio(
         valueKrw: Number(row.value_krw),
         targetPercent:
           row.target_percent === null ? null : Number(row.target_percent),
+        positionSignature: row.position_signature,
       }),
     ),
     cashFlows: cashFlows.rows.map(
@@ -487,33 +490,62 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
         [userId],
       ),
       client.query<{
+        id: string;
         bucket_id: string | null;
         market: "KR" | "US";
         quantity: string;
+        average_cost: string | null;
+        captured_price: string | null;
         price: string | null;
       }>(
-        `select bucket_id, market, quantity, coalesce(current_price, captured_price) as price
+        `select id::text, bucket_id, market, quantity, average_cost, captured_price,
+                coalesce(current_price, captured_price) as price
        from portfolio.holdings where user_id = $1`,
         [userId],
       ),
       client.query<{
+        id: string;
         bucket_id: string | null;
         value_krw: string;
         value_usd: string | null;
       }>(
-        `select bucket_id, value_krw, value_usd from portfolio.manual_assets where user_id = $1`,
+        `select id::text, bucket_id, value_krw, value_usd from portfolio.manual_assets where user_id = $1`,
         [userId],
       ),
       client.query<{
+        id: string;
         bucket_id: string | null;
         quantity: string;
+        average_cost_krw: string | null;
         quoted_price_krw: string | null;
       }>(
-        `select bucket_id, quantity, quoted_price_krw from portfolio.crypto_assets where user_id = $1`,
+        `select id::text, bucket_id, quantity, average_cost_krw, quoted_price_krw
+         from portfolio.crypto_assets where user_id = $1`,
         [userId],
       ),
     ]);
   if (!plan.rows[0]) return;
+  const signature = positionSignature(
+    holdings.rows.map((row) => ({
+      id: row.id,
+      market: row.market,
+      quantity: Number(row.quantity),
+      averageCost: row.average_cost === null ? null : Number(row.average_cost),
+      capturedPrice:
+        row.captured_price === null ? null : Number(row.captured_price),
+    })),
+    manualAssets.rows.map((row) => ({
+      id: row.id,
+      valueKrw: Number(row.value_krw),
+      valueUsd: row.value_usd === null ? null : Number(row.value_usd),
+    })),
+    cryptoAssets.rows.map((row) => ({
+      id: row.id,
+      quantity: Number(row.quantity),
+      averageCostKrw:
+        row.average_cost_krw === null ? null : Number(row.average_cost_krw),
+    })),
+  );
   const fx = Number(plan.rows[0].usd_krw);
   const values = new Map<string, number>(
     buckets.rows.map((row) => [row.id, 0]),
@@ -558,8 +590,8 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
   const entries = [...values];
   const placeholders = entries
     .map((_, index) => {
-      const start = index * 4 + 2;
-      return `($1,(now() at time zone 'Asia/Seoul')::date,$${start},$${start + 1},$${start + 2},$${start + 3})`;
+      const start = index * 5 + 2;
+      return `($1,(now() at time zone 'Asia/Seoul')::date,$${start},$${start + 1},$${start + 2},$${start + 3},$${start + 4})`;
     })
     .join(",");
   const parameters = [
@@ -573,15 +605,17 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
           : names.get(key),
       Math.round(value * 100) / 100,
       targets.get(key) ?? null,
+      key === "__TOTAL__" ? signature : null,
     ]),
   ];
   await client.query(
     `insert into portfolio.snapshots
-     (user_id, snapshot_date, bucket_key, bucket_name, value_krw, target_percent)
+     (user_id, snapshot_date, bucket_key, bucket_name, value_krw, target_percent, position_signature)
      values ${placeholders}
      on conflict (user_id, snapshot_date, bucket_key) do update set
        bucket_name = excluded.bucket_name, value_krw = excluded.value_krw,
-       target_percent = excluded.target_percent, captured_at = now()`,
+       target_percent = excluded.target_percent,
+       position_signature = excluded.position_signature, captured_at = now()`,
     parameters,
   );
 }
