@@ -4,6 +4,8 @@
 
 `meet_in_the_middle`은 Supabase Auth가 아닌 NextAuth의 카카오·네이버 로그인과 Supabase PostgreSQL의 `public."User"` 테이블을 사용합니다. 이 앱도 동일한 제공자 키, `AUTH_SECRET`, `DATABASE_URL`을 서버 환경 변수로 읽어 기존 사용자 ID를 공유합니다. `apps/web/.env.example`을 참고해 `.env.local`을 설정하고 http://localhost:3000 에서 실행하세요. 두 앱의 세션 쿠키를 같은 브라우저에서 공유하려면 호스트 이름도 동일하게 `localhost`로 사용해야 합니다.
 
+로컬 QA 계정은 개발 환경에서 소셜 로그인 없이 화면을 점검할 때 사용합니다. 공유 DB의 별도 `GUEST` 사용자 ID를 준비하고 `.env.local`에 `LOCAL_ADMIN_USERNAME`, `LOCAL_ADMIN_PASSWORD`, `LOCAL_ADMIN_USER_ID`를 설정한 뒤 개발 서버를 재시작하세요. 로그인 화면의 **로컬 관리자 테스트 로그인**으로 들어갈 수 있습니다. 이 경로는 `NODE_ENV=development`와 `localhost` 또는 `127.0.0.1` 요청에서만 작동하며 배포 환경에는 제공되지 않습니다. QA 계정의 자산은 실제 소셜 계정의 자산과 분리됩니다. 비밀번호는 `.env.local`에만 두고 저장소에 커밋하지 마세요.
+
 자산 테이블 정의는 [sql/portfolio_schema.sql](../../sql/portfolio_schema.sql)에 있습니다. 공유 Supabase 프로젝트에 적용된 `portfolio` 스키마는 Data API에 노출하지 않았고 `anon`·`authenticated` 권한을 부여하지 않았습니다. 모든 자산 요청은 Next.js 서버에서 로그인 사용자 ID로 범위를 제한합니다. DB 비밀번호와 OAuth 비밀 키는 브라우저로 보내지 않습니다.
 
 가상자산 보유량과 시세 저장 테이블은 [sql/portfolio_crypto_assets.sql](../../sql/portfolio_crypto_assets.sql)에 있습니다. 기존 공유 Supabase 프로젝트에 적용되어 있습니다.

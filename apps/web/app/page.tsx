@@ -2,6 +2,7 @@
 
 import {
   ChangeEvent,
+  FormEvent,
   Fragment,
   useEffect,
   useMemo,
@@ -118,6 +119,35 @@ export default function PortfolioPage() {
   const [holdingQuantity, setHoldingQuantity] = useState("");
   const [holdingCost, setHoldingCost] = useState("");
   const [holdingSaving, setHoldingSaving] = useState(false);
+  const [localAdminOpen, setLocalAdminOpen] = useState(false);
+  const [localAdminName, setLocalAdminName] = useState("");
+  const [localAdminPassword, setLocalAdminPassword] = useState("");
+  const [localAdminBusy, setLocalAdminBusy] = useState(false);
+  const [localAdminError, setLocalAdminError] = useState("");
+
+  async function signInLocalAdmin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLocalAdminBusy(true);
+    setLocalAdminError("");
+    try {
+      const result = await signIn("local-admin", {
+        redirect: false,
+        username: localAdminName,
+        password: localAdminPassword,
+        callbackUrl: "/",
+      });
+      setLocalAdminPassword("");
+      if (!result?.ok) {
+        setLocalAdminError("아이디 또는 비밀번호를 확인해 주세요.");
+        return;
+      }
+      window.location.reload();
+    } catch {
+      setLocalAdminError("로컬 관리자 로그인에 실패했습니다.");
+    } finally {
+      setLocalAdminBusy(false);
+    }
+  }
 
   useEffect(() => {
     try {
@@ -744,6 +774,51 @@ export default function PortfolioPage() {
             >
               <b>N</b> 네이버로 계속하기 <ArrowRight size={17} />
             </button>
+            {process.env.NODE_ENV === "development" && (
+              <div className={styles.localAdminAccess}>
+                <button
+                  type="button"
+                  className={styles.localAdminToggle}
+                  onClick={() => setLocalAdminOpen((open) => !open)}
+                  aria-expanded={localAdminOpen}
+                >
+                  로컬 관리자 테스트 로그인
+                </button>
+                {localAdminOpen && (
+                  <form onSubmit={signInLocalAdmin}>
+                    <label>
+                      아이디
+                      <input
+                        autoComplete="username"
+                        value={localAdminName}
+                        onChange={(event) =>
+                          setLocalAdminName(event.target.value)
+                        }
+                        required
+                      />
+                    </label>
+                    <label>
+                      비밀번호
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        value={localAdminPassword}
+                        onChange={(event) =>
+                          setLocalAdminPassword(event.target.value)
+                        }
+                        required
+                      />
+                    </label>
+                    {localAdminError && <p role="alert">{localAdminError}</p>}
+                    <button type="submit" disabled={localAdminBusy}>
+                      {localAdminBusy
+                        ? "로그인 중"
+                        : "테스트 계정으로 들어가기"}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
             <div className={styles.authPrivacy}>
               <ShieldCheck size={18} /> 캡처 이미지는 브라우저에서 분석하고
               저장하지 않습니다.
