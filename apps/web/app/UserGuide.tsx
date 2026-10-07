@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight, Check, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { ArrowDown, ArrowRight, Check, ChevronRight } from "lucide-react";
 import styles from "./UserGuide.module.css";
 
 type Destination =
@@ -84,6 +85,82 @@ export default function UserGuide({
 }: {
   onNavigate?: (view: Destination) => void;
 }) {
+  const guideRef = useRef<HTMLElement>(null);
+  const [chapter, setChapter] = useState("guide-start");
+
+  useEffect(() => {
+    const root = guideRef.current;
+    if (!root) return;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const reveals = root.querySelectorAll<HTMLElement>("[data-reveal]");
+    const revealObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            (entry.target as HTMLElement).dataset.visible = "true";
+            revealObserver.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.08 },
+    );
+    reveals.forEach((element) => revealObserver.observe(element));
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const bounds = root.getBoundingClientRect();
+      const distance = Math.max(1, bounds.height - window.innerHeight);
+      root.style.setProperty(
+        "--guide-progress",
+        String(Math.max(0, Math.min(1, -bounds.top / distance))),
+      );
+      const chapters = Array.from(
+        root.querySelectorAll<HTMLElement>("[data-chapter]"),
+      );
+      const current = chapters
+        .filter(
+          (section) =>
+            section.getBoundingClientRect().top <= window.innerHeight * 0.4,
+        )
+        .at(-1);
+      const timeline = root.querySelector<HTMLElement>("[data-timeline]");
+      if (timeline) {
+        const track = timeline.getBoundingClientRect();
+        root.style.setProperty(
+          "--step-progress",
+          String(
+            Math.max(
+              0,
+              Math.min(
+                1,
+                (window.innerHeight * 0.6 - track.top) / track.height,
+              ),
+            ),
+          ),
+        );
+      }
+      setChapter(current?.id ?? "guide-start");
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    const onMotionChange = () => {
+      root.dataset.reduceMotion = String(motion.matches);
+    };
+    onMotionChange();
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    motion.addEventListener("change", onMotionChange);
+    return () => {
+      revealObserver.disconnect();
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      motion.removeEventListener("change", onMotionChange);
+    };
+  }, []);
+
   function action(destination: Destination, label: string) {
     return onNavigate ? (
       <button type="button" onClick={() => onNavigate(destination)}>
@@ -93,34 +170,134 @@ export default function UserGuide({
     ) : null;
   }
   return (
-    <article className={styles.guide}>
+    <article ref={guideRef} className={styles.guide}>
       <header className={styles.hero}>
-        <span>PORTRHYTHM GUIDE</span>
-        <h1>
-          내 포트폴리오의
-          <br />첫 리듬을 만들어보세요
-        </h1>
-        <p>
-          목표를 정하고, 자산을 연결하고, 비중을 점검하세요.
-          <br />
-          처음에는 이 순서대로 시작하면 됩니다.
-        </p>
-        {!onNavigate && (
-          <a className={styles.loginLink} href="/">
-            로그인하고 시작하기 <ArrowRight size={16} />
+        <div className={styles.heroCopy} data-reveal>
+          <span>PORTRHYTHM GUIDE</span>
+          <h1>
+            내 포트폴리오의
+            <br />첫 리듬을 만들어보세요
+          </h1>
+          <p>
+            목표를 정하고, 자산을 연결하고, 비중을 점검하세요.
+            <br />
+            처음에는 이 순서대로 시작하면 됩니다.
+          </p>
+          {!onNavigate && (
+            <a className={styles.loginLink} href="/">
+              로그인하고 시작하기 <ArrowRight size={16} />
+            </a>
+          )}
+          <a className={styles.scrollCue} href="#guide-start">
+            <ArrowDown size={16} /> 아래로 내려 첫 리듬 시작하기
           </a>
-        )}
-        <nav aria-label="가이드 목차">
-          <a href="#guide-start">시작 순서</a>
-          <a href="#guide-edit">자산 수정</a>
-          <a href="#guide-faq">자주 묻는 질문</a>
-        </nav>
+        </div>
+        <div
+          className={styles.blueprint}
+          data-reveal
+          aria-label="목표 비중 예시: 미국 지수 35%, 한국 지수 25%, 우량주 20%, 금 10%, 비트코인 10%"
+        >
+          <span className={styles.blueprintLabel}>MY PORTFOLIO RHYTHM</span>
+          <div className={styles.ring}>
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle
+                cx="60"
+                cy="60"
+                r="48"
+                fill="none"
+                stroke="var(--line)"
+                strokeWidth="10"
+              />
+              {[35, 25, 20, 10, 10].map((weight, index, values) => (
+                <circle
+                  key={index}
+                  className={styles.ringSegment}
+                  cx="60"
+                  cy="60"
+                  r="48"
+                  pathLength="100"
+                  fill="none"
+                  stroke={
+                    ["#177c88", "#42a994", "#6986b3", "#cba664", "#d88975"][
+                      index
+                    ]
+                  }
+                  strokeWidth="10"
+                  strokeDasharray={`${weight - 1.2} ${100 - weight + 1.2}`}
+                  strokeDashoffset={
+                    -values
+                      .slice(0, index)
+                      .reduce((sum, value) => sum + value, 0)
+                  }
+                  style={
+                    {
+                      "--segment": `${weight - 1.2} ${100 - weight + 1.2}`,
+                      "--delay": `${index * 90}ms`,
+                    } as CSSProperties
+                  }
+                />
+              ))}
+            </svg>
+            <div>
+              <small>나만의 기준</small>
+              <strong>
+                100<span>%</span>
+              </strong>
+              <small>목표 비중 예시</small>
+            </div>
+          </div>
+          <div className={styles.rhythmLegend}>
+            {[
+              "미국 지수 35%",
+              "한국 지수 25%",
+              "우량주 20%",
+              "금 10%",
+              "비트코인 10%",
+            ].map((label, index) => (
+              <span key={label}>
+                <i
+                  style={{
+                    background: [
+                      "#177c88",
+                      "#42a994",
+                      "#6986b3",
+                      "#cba664",
+                      "#d88975",
+                    ][index],
+                  }}
+                />
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
       </header>
-      <section id="guide-start" className={styles.section}>
-        <h2>처음 시작하는 5단계</h2>
-        <ol className={styles.steps}>
+      <nav className={styles.chapterNav} aria-label="가이드 목차">
+        <div className={styles.readProgress} aria-hidden="true" />
+        {[
+          ["guide-start", "시작 순서"],
+          ["guide-edit", "자산 수정"],
+          ["guide-rebalance", "리밸런싱"],
+          ["guide-faq", "궁금한 점"],
+        ].map(([id, label]) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            aria-current={chapter === id ? "location" : undefined}
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
+      <section id="guide-start" data-chapter className={styles.section}>
+        <h2 data-reveal>처음 시작하는 5단계</h2>
+        <ol className={styles.steps} data-timeline>
           {steps.map((step, index) => (
-            <li key={step.destination}>
+            <li
+              key={step.destination}
+              data-reveal
+              style={{ "--delay": `${index * 40}ms` } as CSSProperties}
+            >
               <span className={styles.number}>{index + 1}</span>
               <div>
                 <h3>{step.title}</h3>
@@ -130,7 +307,7 @@ export default function UserGuide({
             </li>
           ))}
         </ol>
-        <figure>
+        <figure data-reveal className={styles.screenReveal}>
           <img
             src="/guide/desktop-composition.jpg"
             width="1280"
@@ -141,8 +318,8 @@ export default function UserGuide({
           <figcaption>포트 비중 · 실제 앱의 테스트 자산 예시</figcaption>
         </figure>
       </section>
-      <section id="guide-edit" className={styles.section}>
-        <h2>거래 후에는 여기서 수정하세요</h2>
+      <section id="guide-edit" data-chapter className={styles.section}>
+        <h2 data-reveal>거래 후에는 여기서 수정하세요</h2>
         <p>
           대시보드에서 자산을 눌러 상세를 확인한 뒤 수정으로 이동할 수 있습니다.
         </p>
@@ -167,7 +344,7 @@ export default function UserGuide({
           </li>
         </ul>
         {action("edit", "자산 수정으로 이동")}
-        <figure>
+        <figure data-reveal className={styles.screenReveal}>
           <img
             src="/guide/desktop-asset-edit.jpg"
             width="1265"
@@ -178,13 +355,13 @@ export default function UserGuide({
           <figcaption>입력 후 저장 버튼으로 반영합니다.</figcaption>
         </figure>
       </section>
-      <section className={styles.section}>
-        <h2>목표와 달라졌다면, 조정 방법 비교하기</h2>
+      <section id="guide-rebalance" data-chapter className={styles.section}>
+        <h2 data-reveal>목표와 달라졌다면, 조정 방법 비교하기</h2>
         <p>
           매수·매도 수량과 조정 후 예상 비중을 함께 확인하세요. 가상자산은 별도
           확인할 조정 금액으로 표시되며, 주식 거래 미리보기에 포함되지 않습니다.
         </p>
-        <figure>
+        <figure data-reveal className={styles.screenReveal}>
           <img
             src="/guide/desktop-rebalance.jpg"
             width="1265"
@@ -198,8 +375,8 @@ export default function UserGuide({
           </figcaption>
         </figure>
       </section>
-      <section id="guide-faq" className={styles.section}>
-        <h2>자주 묻는 질문</h2>
+      <section id="guide-faq" data-chapter className={styles.section}>
+        <h2 data-reveal>자주 묻는 질문</h2>
         {questions.map(([question, answer]) => (
           <details key={question} className={styles.question}>
             <summary>
@@ -210,7 +387,7 @@ export default function UserGuide({
           </details>
         ))}
       </section>
-      <footer className={styles.end}>
+      <footer data-reveal className={styles.end}>
         <strong>투자는 리듬을 타듯, 내 기준으로 꾸준히.</strong>
         <p>현재 보유 자산을 확인한 후 목표 비중을 정해보세요.</p>
         {onNavigate ? (

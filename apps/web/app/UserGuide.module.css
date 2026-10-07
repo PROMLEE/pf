@@ -52,7 +52,6 @@
   display: flex;
   gap: 18px;
   padding: 20px 0;
-  border-bottom: 1px solid var(--line);
 }
 .number {
   flex-shrink: 0;
@@ -196,4 +195,273 @@
   font-size: 14px;
   font-weight: 750;
   padding-top: 8px;
+}
+
+/* A readable static guide is the fallback; motion only starts on viewport entry. */
+.hero {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  align-items: center;
+  gap: 42px;
+  padding: 48px 0;
+}
+.heroCopy > span {
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.heroCopy .scrollCue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12px;
+}
+.scrollCue svg {
+  animation: scrollNudge 2.4s ease-in-out 3;
+}
+.blueprint {
+  position: relative;
+  padding: 24px;
+  border-radius: 28px;
+  background:
+    radial-gradient(ellipse at 50% 35%, #087b8314, transparent 70%), var(--soft);
+}
+.blueprintLabel {
+  display: block;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.15em;
+  font-weight: 800;
+}
+.ring {
+  position: relative;
+  width: 220px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  margin: 16px auto;
+}
+.ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.ring > div {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.ring small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.ring strong {
+  font-size: 42px;
+  font-weight: 850;
+  letter-spacing: -0.05em;
+}
+.ring strong span {
+  font-size: 18px;
+  margin-left: 2px;
+}
+.rhythmLegend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 14px;
+}
+.rhythmLegend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.rhythmLegend i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.chapterNav {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 18px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.chapterNav a {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 700;
+  transition: color 0.2s;
+}
+.chapterNav a[aria-current] {
+  color: var(--blue);
+}
+.readProgress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--blue);
+  transform: scaleX(var(--guide-progress, 0));
+  transform-origin: left;
+}
+.guide [data-reveal][data-visible="true"] {
+  animation: revealUp 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+.guide .screenReveal[data-visible="true"] {
+  animation-name: revealScreen;
+  animation-duration: 1s;
+}
+.screenReveal img {
+  box-shadow: 0 18px 45px #102f3b12;
+}
+.blueprint[data-visible="true"] .ringSegment {
+  animation: drawSegment 1.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--delay);
+}
+.steps li[data-visible="true"] .number {
+  animation: stepPulse 0.9s ease-out both;
+  animation-delay: var(--delay);
+}
+.guide button:hover svg,
+.loginLink:hover svg,
+.end a:hover svg {
+  transform: translateX(4px);
+}
+.guide button svg,
+.loginLink svg,
+.end a svg {
+  transition: transform 0.2s;
+}
+.chapterNav a:hover {
+  color: var(--blue);
+}
+@keyframes revealUp {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes revealScreen {
+  from {
+    opacity: 0;
+    transform: perspective(1200px) translateY(40px) rotateX(5deg) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(1200px) translateY(0) rotateX(0) scale(1);
+  }
+}
+@keyframes drawSegment {
+  from {
+    stroke-dasharray: 0 100;
+  }
+  to {
+    stroke-dasharray: var(--segment);
+  }
+}
+@keyframes stepPulse {
+  0% {
+    box-shadow: 0 0 0 0 #087b8330;
+  }
+  100% {
+    box-shadow: 0 0 0 12px #087b8300;
+  }
+}
+@keyframes scrollNudge {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(4px);
+  }
+}
+@media (max-width: 700px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding: 28px 0;
+  }
+  .blueprint {
+    padding: 20px;
+    border-radius: 20px;
+  }
+  .ring {
+    width: 180px;
+    margin: 10px auto;
+  }
+  .ring strong {
+    font-size: 36px;
+  }
+  .chapterNav {
+    padding: 16px 0;
+  }
+  .chapterNav a {
+    font-size: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide [data-reveal][data-visible],
+  .blueprint[data-visible] .ringSegment,
+  .steps li[data-visible] .number,
+  .scrollCue svg {
+    animation: none;
+  }
+  .guide *,
+  .guide *::before,
+  .guide *::after {
+    transition: none;
+  }
+}
+.guide[data-reduce-motion="true"] [data-reveal],
+.guide[data-reduce-motion="true"] .ringSegment,
+.guide[data-reduce-motion="true"] .number,
+.guide[data-reduce-motion="true"] .scrollCue svg {
+  animation: none;
+}
+
+.steps {
+  position: relative;
+}
+.steps::before,
+.steps::after {
+  content: "";
+  position: absolute;
+  top: 38px;
+  bottom: 38px;
+  left: 16px;
+  width: 2px;
+  background: var(--line);
+}
+.steps::after {
+  background: var(--blue);
+  transform: scaleY(var(--step-progress, 0));
+  transform-origin: top;
+}
+.number {
+  position: relative;
+  z-index: 1;
+  outline: 7px solid var(--bg);
 }
