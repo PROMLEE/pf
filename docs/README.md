@@ -1,5 +1,7 @@
 # PortRhythm 문서
 
+서비스: [pf.promleeblog.com](https://pf.promleeblog.com)
+
 **투자는 리듬을 타듯, 내 기준으로 꾸준히.**
 
 PortRhythm의 사용법, 계산 기준, 운영 방법과 서비스 소개 자료를 모았습니다. 문서와 화면은 **2026-10-08 구현 기준**입니다.

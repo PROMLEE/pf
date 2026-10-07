@@ -89,7 +89,7 @@ pnpm dev:web
 
 ## 5. 소셜 로그인 설정
 
-운영 URL을 `https://pf.promleeblog.com`으로 사용하는 경우 다음 주소를 제공자 앱의 Callback URL에 등록합니다.
+현재 공식 서비스 주소는 [https://pf.promleeblog.com](https://pf.promleeblog.com)입니다. 다음 주소를 제공자 앱의 Callback URL에 등록합니다.
 
 ```text
 카카오: https://pf.promleeblog.com/api/auth/callback/kakao
@@ -119,7 +119,7 @@ http://localhost:3000/api/auth/callback/naver
 2. **Root Directory**를 `apps/web`으로 선택합니다.
 3. Next.js 프레임워크와 `pnpm build` 빌드 명령을 사용합니다.
 4. Production 환경 변수에 DB·인증·KIS 설정을 등록합니다.
-5. `NEXTAUTH_URL`을 운영 도메인으로 지정합니다.
+5. Production의 `NEXTAUTH_URL`을 `https://pf.promleeblog.com`으로 지정합니다.
 6. 배포 도메인을 연결하고 제공자 Callback URL과 일치하는지 확인합니다.
 7. 로그인 → 자산 조회 → 가격 갱신 → 수정·저장 흐름을 확인합니다.
 

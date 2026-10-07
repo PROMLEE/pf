@@ -1,5 +1,7 @@
 # PortRhythm 웹 앱
 
+서비스: [pf.promleeblog.com](https://pf.promleeblog.com)
+
 PortRhythm의 화면, NextAuth 인증, 자산 관리 API가 들어 있는 Next.js 앱입니다.
 
 ## 실행
