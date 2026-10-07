@@ -52,6 +52,7 @@ type View =
   | "rebalance"
   | "history"
   | "import"
+  | "more"
   | "settings";
 type Instrument = {
   market: Market;
@@ -125,7 +126,6 @@ export default function PortfolioPage() {
   const lastQuoteAttemptAt = useRef(0);
   const [filter, setFilter] = useState<"ALL" | Market>("ALL");
   const [search, setSearch] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
   const [legacy, setLegacy] = useState<Holding[]>([]);
   const [resolvingIndex, setResolvingIndex] = useState<number | null>(null);
   const [instrumentMatches, setInstrumentMatches] = useState<
@@ -293,7 +293,6 @@ export default function PortfolioPage() {
       return;
     if (next !== view) setPortfolioDirty(false);
     setView(next);
-    setMenuOpen(false);
     setNotice("");
   }
 
@@ -934,20 +933,27 @@ export default function PortfolioPage() {
     { id: "import" as View, label: "캡처 가져오기", Icon: Camera },
     { id: "settings" as View, label: "계정", Icon: Settings2 },
   ];
-  const navLabel = nav.find((item) => item.id === view)?.label;
+  const navLabel = view === "more" ? "전체 메뉴" : nav.find((item) => item.id === view)?.label;
+  const menuSections = [
+    { label: "포트폴리오", ids: ["strategy", "composition", "rebalance"] },
+    { label: "자산 관리", ids: ["holdings", "edit", "allocation", "import"] },
+    { label: "기록과 계정", ids: ["history", "settings"] },
+  ];
+  const menuDescriptions: Partial<Record<View, string>> = {
+    strategy: "목표 비중과 허용 오차 설정",
+    composition: "현재 비중과 목표 비교",
+    rebalance: "매수·매도 수량 확인",
+    holdings: "종목별 평가액과 손익",
+    edit: "수량, 매입단가, 현금 수정",
+    allocation: "보유 자산의 포트 지정",
+    import: "증권사 잔고 캡처로 등록",
+    history: "포트별 자산 변화 확인",
+    settings: "로그인 정보와 데이터 관리",
+  };
 
   return (
     <div className={styles.shell}>
-      {menuOpen && (
-        <button
-          className={styles.backdrop}
-          aria-label="메뉴 닫기"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-      <aside
-        className={`${styles.sidebar} ${menuOpen ? styles.sidebarOpen : ""}`}
-      >
+      <aside className={styles.sidebar}>
         <div className={styles.brand}>
           <span className={styles.logo}>PR</span>
           <div>
@@ -1005,14 +1011,14 @@ export default function PortfolioPage() {
       >
         <header className={styles.topbar}>
           <button
-            className={styles.menuButton}
-            aria-label="메뉴 열기"
-            onClick={() => setMenuOpen(true)}
+            className={styles.mobileBrand}
+            aria-label="PortRhythm 홈으로"
+            onClick={() => go("portfolio")}
           >
-            <Menu size={21} />
+            PR
           </button>
           <div>
-            내 자산 <span>/</span> <strong>{navLabel}</strong>
+            <span className={styles.desktopBreadcrumb}>내 자산 /</span> <strong>{navLabel}</strong>
           </div>
           <span className={styles.topPrivate}>
             <ShieldCheck size={15} /> 개인 자산
@@ -1034,6 +1040,31 @@ export default function PortfolioPage() {
           </button>
         </header>
         <main className={styles.content}>
+          {view === "more" && (
+            <div className={styles.allMenu}>
+              <div className={styles.pageHead}>
+                <div>
+                  <h1>전체 메뉴</h1>
+                  <p>내 투자 기준부터 자산 관리까지</p>
+                </div>
+              </div>
+              {menuSections.map((section) => (
+                <section className={styles.menuSection} key={section.label}>
+                  <h2>{section.label}</h2>
+                  {section.ids.map((id) => {
+                    const item = nav.find((entry) => entry.id === id)!;
+                    return (
+                      <button key={id} type="button" onClick={() => go(item.id)}>
+                        <item.Icon size={22} strokeWidth={1.7} />
+                        <span><strong>{item.label}</strong><small>{menuDescriptions[item.id]}</small></span>
+                        <ChevronRight size={17} />
+                      </button>
+                    );
+                  })}
+                </section>
+              ))}
+            </div>
+          )}
           {notice && (
             <div className={styles.notice} role="status">
               <CircleHelp size={17} />
@@ -1097,9 +1128,6 @@ export default function PortfolioPage() {
             <>
               <div className={styles.pageHead}>
                 <div>
-                  <span className={styles.kicker}>
-                    {view === "edit" ? "EDIT ASSETS" : "MY ASSETS"}
-                  </span>
                   <h1>{view === "edit" ? "자산 수정" : "보유 자산"}</h1>
                   <p>
                     {view === "edit"
@@ -1446,7 +1474,6 @@ export default function PortfolioPage() {
             <>
               <div className={styles.pageHead}>
                 <div>
-                  <span className={styles.kicker}>ADD ASSETS</span>
                   <h1>캡처에서 자산 가져오기</h1>
                   <p>잔고 화면을 읽고, 확인한 내용만 계정에 저장합니다.</p>
                 </div>
@@ -1709,7 +1736,6 @@ export default function PortfolioPage() {
             <>
               <div className={styles.pageHead}>
                 <div>
-                  <span className={styles.kicker}>ACCOUNT</span>
                   <h1>내 계정</h1>
                   <p>로그인 계정과 자산 보관 방식을 확인하세요.</p>
                 </div>
@@ -1814,7 +1840,7 @@ export default function PortfolioPage() {
             </button>
           );
         })}
-        <button onClick={() => setMenuOpen(true)} aria-label="전체 메뉴 열기">
+        <button className={view === "more" ? styles.mobileActive : ""} onClick={() => go("more")} aria-label="전체 메뉴">
           <Menu size={21} />
           <span>전체</span>
         </button>

@@ -1366,3 +1366,83 @@
   :global(html[data-theme="dark"]) .mobileAssetEmpty { color: #91a0a2; }
   :global(html[data-theme="dark"]) .mobileSaveBar { background: #1d2b30ed; border-color: #34464b; }
 }
+
+/* Group information with spacing and restrained surfaces. */
+.builder { gap: 22px; }
+.heading h1 { margin-top: 0; font-size: 28px; }
+.heading p { max-width: 55ch; }
+.panel, .allocationCard, .desktopAssetPanel, .desktopTarget { border: 0; box-shadow: none; background: var(--surface); border-radius: 12px; }
+.panel { padding: 24px; }
+.panelHead h2 { margin-top: 0; font-size: 18px; }
+.toleranceControl, .dataStatus, .allocationDetail, .vizDisclosure { border: 0; box-shadow: none; background: var(--soft); }
+.toleranceControl { margin-bottom: 16px; }
+.bucket, .rule { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding-top: 14px; padding-bottom: 14px; }
+.bucket:last-child, .rule:last-child { border-bottom: 0; }
+.exclusions { border: 0; border-radius: 8px; background: var(--soft); }
+.exclusions summary { font-size: 12px; }
+.methodNote { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.methodNote button { border: 0; background: none; color: #087b83; padding: 2px 0; font-size: 12px; cursor: pointer; }
+.advice { gap: 12px; padding: 20px 0; }
+.advice strong { font-size: 15px; }
+.advice small { font-size: 11px; color: var(--muted); }
+.advice p { font-size: 13px; line-height: 1.7; }
+.actionTag { font-size: 10px; padding: 4px 7px; }
+.previewSummary { padding: 18px; background: var(--soft); font-size: 12px; }
+.candidateSection { margin-top: 8px; }
+.candidateSection > summary h2 { font-size: 16px; }
+.candidateSection .help { font-size: 12px; line-height: 1.7; }
+.rule strong { font-size: 13px; }
+.rule small { font-size: 11px; }
+.performanceSummary > div { border: 0; background: var(--soft); }
+.desktopMetricGrid { gap: 18px; padding: 24px 26px; border-radius: 12px; background: var(--surface); }
+.desktopTotal { min-height: auto; padding: 0; background: transparent; color: var(--ink); }
+.desktopTotal > span, .desktopTotal small { color: var(--muted); }
+.desktopTotal strong { font-weight: 800; }
+.desktopGain > div { min-height: auto; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.desktopGain strong { font-size: 23px; }
+.desktopAssetPanel .mobileAssetRow { min-height: 68px; border-bottom: 0; }
+.desktopAssetPanel .mobileAssetName strong, .desktopAssetPanel .mobileAssetValue strong { font-size: 13px; }
+.desktopSectionHead h2 { margin: 0; font-size: 19px; }
+.desktopSide .allocationCard { padding: 20px; }
+.allocationLegendRow { min-height: 34px; }
+.allocationDetail { padding: 14px 16px; gap: 12px 20px; }
+.allocationDetail span { font-size: 10px; }
+.allocationDetail b { font-size: 12px; }
+.compositionView .screenLinks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.screenLinks button { border: 0; background: var(--surface); min-height: 48px; }
+:global(html[data-theme="dark"]) .desktopTotal { background: transparent; }
+:global(html[data-theme="dark"]) .desktopGain > div { background: transparent; }
+:global(html[data-theme="dark"]) .desktopTotal > span,
+:global(html[data-theme="dark"]) .desktopTotal small { color: var(--muted); }
+:global(html[data-theme="dark"]) .bucket,
+:global(html[data-theme="dark"]) .rule { background: transparent; }
+:global(html[data-theme="dark"]) .adviceAdd p { color: #ff9ba5; }
+:global(html[data-theme="dark"]) .adviceSell p { color: #9fc2ff; }
+:global(html[data-theme="dark"]) .adviceAdd small,
+:global(html[data-theme="dark"]) .adviceSell small { color: var(--muted); }
+@media (max-width: 760px) {
+  .builder { gap: 24px; }
+  .heading h1 { font-size: 25px; }
+  .panel, .allocationCard { padding: 16px 0; border-radius: 0; }
+  .candidateSection { margin-top: 8px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .panelHead h2 { font-size: 18px; }
+  .help { font-size: 11px; line-height: 1.7; }
+  .methodNote { line-height: 1.7; }
+  .advice { display: grid; grid-template-columns: 9px minmax(0, 1fr); gap: 10px 12px; padding: 22px 0; }
+  .advice > div { min-width: 0; gap: 6px; }
+  .advice p { grid-column: 2; margin: 0; text-align: left; font-size: 14px; }
+  .previewSummary { display: grid; gap: 8px; padding: 18px 16px; }
+  .mobileDashboard { padding: 18px 0 28px; }
+  .mobileMetricList { border: 0; margin-top: 22px; }
+  .mobileMetricList > div { border: 0; min-height: 64px; }
+  .mobileDashboardTop button { border: 0; background: var(--soft); }
+  .mobileAssetRow { border-bottom: 0; min-height: 76px; }
+  .mobileAssetGroup { margin-top: 28px; }
+  .allocationLegendRow { min-height: 40px; font-size: 12px; }
+  .allocationLegendRow strong { font-size: 13px; }
+  .allocationChart { width: 190px; }
+  .allocationBody { gap: 24px; }
+  .allocationDetail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .allocationDetail > strong { grid-column: 1 / -1; }
+  .allocationDetail b { font-size: 13px; }
+}

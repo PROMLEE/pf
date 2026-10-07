@@ -58,7 +58,6 @@ export default function PortfolioVisuals({ portfolio, holdings }: Props) {
     >
       <div className={styles.allocationHead}>
         <div>
-          <small>ALLOCATION</small>
           <h2>포트별 자산 비중</h2>
           <p>그래프 조각이나 포트 이름을 선택해 평가액과 비중을 확인하세요.</p>
         </div>

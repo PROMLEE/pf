@@ -1362,7 +1362,6 @@ export default function PortfolioBuilder({
       {screen !== "edit" && (
         <div className={styles.heading}>
           <div>
-            <span>{titles[0]}</span>
             <h1>{titles[1]}</h1>
             <p>{titles[2]}</p>
           </div>
@@ -1570,7 +1569,6 @@ export default function PortfolioBuilder({
               <section className={styles.desktopAssetPanel}>
                 <div className={styles.desktopSectionHead}>
                   <div>
-                    <span>MY ASSETS</span>
                     <h2>보유 자산</h2>
                   </div>
                   <button type="button" onClick={onEditHoldings}>
@@ -1681,7 +1679,6 @@ export default function PortfolioBuilder({
           <section className={styles.panel}>
             <div className={styles.panelHead}>
               <div>
-                <span>01 · STRATEGY</span>
                 <h2>목표 비중 편집</h2>
               </div>
               <button className={styles.ghost} onClick={addBucket}>
@@ -1841,178 +1838,6 @@ export default function PortfolioBuilder({
           </section>
         </>
       )}
-      {screen === "rebalance" && (
-        <>
-          <details className={`${styles.panel} ${styles.collapsible}`}>
-            <summary className={styles.panelHead}>
-              <div>
-                <span>매수 후보</span>
-                <h2>매수 후보 종목</h2>
-              </div>
-              <span className={styles.collapseMeta}>
-                등록 {draft.rules.length}개 <ChevronDown size={16} />
-              </span>
-            </summary>
-            <p className={styles.help}>
-              아직 보유하지 않은 종목을 리밸런싱 매수 후보로 등록하세요. 보유
-              종목의 포트 지정은 자산 배정에서 변경할 수 있습니다. 같은
-              종목코드의 자산은 이 규칙으로 자동 분류되며 직접 배정이
-              우선합니다.
-            </p>
-            <div className={styles.ownedRulesHead}>
-              <strong>후보 종목 검색</strong>
-              <span>아직 보유하지 않은 종목도 추가할 수 있습니다</span>
-            </div>
-            <div className={styles.ruleForm}>
-              <select
-                value={ruleBucketId || draft.buckets[0]?.id || ""}
-                onChange={(event) => setRuleBucketId(event.target.value)}
-                aria-label="배정할 포트"
-              >
-                {draft.buckets.map((bucket) => (
-                  <option key={bucket.id} value={bucket.id}>
-                    {bucket.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={ruleMarket}
-                onChange={(event) => {
-                  setRuleMarket(event.target.value as Market);
-                  setCandidates([]);
-                }}
-                aria-label="시장"
-              >
-                <option value="KR">국내</option>
-                <option value="US">미국</option>
-              </select>
-              <input
-                value={ruleQuery}
-                onChange={(event) => {
-                  setRuleQuery(event.target.value);
-                  setCandidates([]);
-                }}
-                placeholder="종목명 또는 종목코드"
-                aria-label="종목 검색어"
-              />
-              <button onClick={lookup} disabled={lookingUp}>
-                <Search size={15} /> {lookingUp ? "검색 중" : "KIS 검색"}
-              </button>
-            </div>
-            {candidates.length > 0 && (
-              <div className={styles.candidates}>
-                {candidates.map((item) => (
-                  <button
-                    key={`${item.market}:${item.symbol}:${item.exchange}`}
-                    onClick={() => addRule(item)}
-                  >
-                    <strong>{item.name}</strong>
-                    <span>
-                      {item.symbol} · {item.exchange}
-                    </span>
-                    <Plus size={14} />
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className={styles.ownedRulesHead}>
-              <strong>등록된 후보</strong>
-              <span>{draft.rules.length}개</span>
-            </div>
-            <div className={styles.rules}>
-              {draft.rules.map((rule) => (
-                <div key={rule.id} className={styles.rule}>
-                  <span
-                    className={styles.dot}
-                    style={{
-                      background:
-                        draft.buckets.find(
-                          (bucket) => bucket.id === rule.bucketId,
-                        )?.color ?? "#aaa",
-                    }}
-                  />
-                  <strong>{rule.name || rule.symbol}</strong>
-                  <small>
-                    {rule.market} · {rule.symbol}
-                  </small>
-                  <label className={styles.ruleBucket}>
-                    <select
-                      value={rule.bucketId}
-                      aria-label={`${rule.name || rule.symbol} 배정 포트`}
-                      onChange={(event) =>
-                        change({
-                          ...draft,
-                          rules: draft.rules.map((item) =>
-                            item.id === rule.id
-                              ? { ...item, bucketId: event.target.value }
-                              : item,
-                          ),
-                        })
-                      }
-                    >
-                      {draft.buckets.map((bucket) => (
-                        <option key={bucket.id} value={bucket.id}>
-                          {bucket.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <details className={styles.ruleAdvanced}>
-                    <summary>
-                      임시 가격
-                      {rule.manualPrice
-                        ? ` ${won.format(rule.manualPrice)}`
-                        : ""}
-                    </summary>
-                    <label>
-                      시세가 없을 때 매수 수량 계산용 ·{" "}
-                      {rule.market === "KR" ? "원" : "달러"}
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={rule.manualPrice ?? ""}
-                        placeholder="비워두면 자동 시세 사용"
-                        aria-label={`${rule.name || rule.symbol} 임시 가격`}
-                        onChange={(event) =>
-                          change({
-                            ...draft,
-                            rules: draft.rules.map(
-                              (item): Rule =>
-                                item.id === rule.id
-                                  ? {
-                                      ...item,
-                                      manualPrice: event.target.value
-                                        ? Number(event.target.value)
-                                        : null,
-                                    }
-                                  : item,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                  </details>
-                  <button
-                    className={styles.iconButton}
-                    aria-label={`${rule.symbol} 규칙 삭제`}
-                    onClick={() =>
-                      change({
-                        ...draft,
-                        rules: draft.rules.filter(
-                          (item) => item.id !== rule.id,
-                        ),
-                      })
-                    }
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </details>
-        </>
-      )}
       {(screen === "allocation" || screen === "edit") && (
         <>
           {screen === "allocation" && (
@@ -2038,11 +1863,6 @@ export default function PortfolioBuilder({
           <details className={`${styles.panel} ${styles.collapsible}`} open>
             <summary className={styles.panelHead}>
               <div>
-                <span>
-                  {screen === "allocation"
-                    ? "03 · ACTUAL POSITIONS"
-                    : "ASSET EDITOR"}
-                </span>
                 <h2>
                   {screen === "allocation"
                     ? "내 자산 배정"
@@ -2597,8 +2417,7 @@ export default function PortfolioBuilder({
           <section className={styles.panel}>
             <div className={styles.panelHead}>
               <div>
-                <span>04 · REBALANCE</span>
-                <h2>리밸런싱</h2>
+                <h2>조정 제안</h2>
               </div>
               <select
                 value={rebalanceMode}
@@ -2613,6 +2432,7 @@ export default function PortfolioBuilder({
             </div>
             <p className={styles.methodNote}>
               허용 오차 ±{draft.tolerancePercent.toFixed(1)}%p
+              <button type="button" onClick={() => onNavigate("strategy")}>기준 변경</button>
               {rebalanceMode === "add-only" && advice.requiredCash > 0
                 ? ` · 목표 비중까지 이론상 필요한 신규 자금 약 ${fmt(advice.requiredCash)}`
                 : ""}
@@ -2769,13 +2589,181 @@ export default function PortfolioBuilder({
           </section>
         </>
       )}
+      {screen === "rebalance" && (
+        <>
+          <details className={`${styles.panel} ${styles.collapsible} ${styles.candidateSection}`}>
+            <summary className={styles.panelHead}>
+              <div>
+                <h2>매수 후보 종목</h2>
+              </div>
+              <span className={styles.collapseMeta}>
+                등록 {draft.rules.length}개 <ChevronDown size={16} />
+              </span>
+            </summary>
+            <p className={styles.help}>
+              매수에 사용할 종목을 포트별로 등록하세요. 등록된 후보와 보유
+              종목을 기준으로 위의 조정 수량을 계산합니다.
+            </p>
+            <div className={styles.ownedRulesHead}>
+              <strong>후보 종목 검색</strong>
+              <span>아직 보유하지 않은 종목도 추가할 수 있습니다</span>
+            </div>
+            <div className={styles.ruleForm}>
+              <select
+                value={ruleBucketId || draft.buckets[0]?.id || ""}
+                onChange={(event) => setRuleBucketId(event.target.value)}
+                aria-label="배정할 포트"
+              >
+                {draft.buckets.map((bucket) => (
+                  <option key={bucket.id} value={bucket.id}>
+                    {bucket.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={ruleMarket}
+                onChange={(event) => {
+                  setRuleMarket(event.target.value as Market);
+                  setCandidates([]);
+                }}
+                aria-label="시장"
+              >
+                <option value="KR">국내</option>
+                <option value="US">미국</option>
+              </select>
+              <input
+                value={ruleQuery}
+                onChange={(event) => {
+                  setRuleQuery(event.target.value);
+                  setCandidates([]);
+                }}
+                placeholder="종목명 또는 종목코드"
+                aria-label="종목 검색어"
+              />
+              <button onClick={lookup} disabled={lookingUp}>
+                <Search size={15} /> {lookingUp ? "검색 중" : "KIS 검색"}
+              </button>
+            </div>
+            {candidates.length > 0 && (
+              <div className={styles.candidates}>
+                {candidates.map((item) => (
+                  <button
+                    key={`${item.market}:${item.symbol}:${item.exchange}`}
+                    onClick={() => addRule(item)}
+                  >
+                    <strong>{item.name}</strong>
+                    <span>
+                      {item.symbol} · {item.exchange}
+                    </span>
+                    <Plus size={14} />
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className={styles.ownedRulesHead}>
+              <strong>등록된 후보</strong>
+              <span>{draft.rules.length}개</span>
+            </div>
+            <div className={styles.rules}>
+              {draft.rules.map((rule) => (
+                <div key={rule.id} className={styles.rule}>
+                  <span
+                    className={styles.dot}
+                    style={{
+                      background:
+                        draft.buckets.find(
+                          (bucket) => bucket.id === rule.bucketId,
+                        )?.color ?? "#aaa",
+                    }}
+                  />
+                  <strong>{rule.name || rule.symbol}</strong>
+                  <small>
+                    {rule.market} · {rule.symbol}
+                  </small>
+                  <label className={styles.ruleBucket}>
+                    <select
+                      value={rule.bucketId}
+                      aria-label={`${rule.name || rule.symbol} 배정 포트`}
+                      onChange={(event) =>
+                        change({
+                          ...draft,
+                          rules: draft.rules.map((item) =>
+                            item.id === rule.id
+                              ? { ...item, bucketId: event.target.value }
+                              : item,
+                          ),
+                        })
+                      }
+                    >
+                      {draft.buckets.map((bucket) => (
+                        <option key={bucket.id} value={bucket.id}>
+                          {bucket.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <details className={styles.ruleAdvanced}>
+                    <summary>
+                      임시 가격
+                      {rule.manualPrice
+                        ? ` ${won.format(rule.manualPrice)}`
+                        : ""}
+                    </summary>
+                    <label>
+                      시세가 없을 때 매수 수량 계산용 ·{" "}
+                      {rule.market === "KR" ? "원" : "달러"}
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={rule.manualPrice ?? ""}
+                        placeholder="비워두면 자동 시세 사용"
+                        aria-label={`${rule.name || rule.symbol} 임시 가격`}
+                        onChange={(event) =>
+                          change({
+                            ...draft,
+                            rules: draft.rules.map(
+                              (item): Rule =>
+                                item.id === rule.id
+                                  ? {
+                                      ...item,
+                                      manualPrice: event.target.value
+                                        ? Number(event.target.value)
+                                        : null,
+                                    }
+                                  : item,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                  </details>
+                  <button
+                    className={styles.iconButton}
+                    aria-label={`${rule.symbol} 규칙 삭제`}
+                    onClick={() =>
+                      change({
+                        ...draft,
+                        rules: draft.rules.filter(
+                          (item) => item.id !== rule.id,
+                        ),
+                      })
+                    }
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
+        </>
+      )}
       {screen === "history" && (
         <>
           <section className={styles.panel}>
             <div className={styles.panelHead}>
               <div>
-                <span>05 · HISTORY</span>
-                <h2>자산 기록</h2>
+                <h2>포트별 자산 추이</h2>
               </div>
               <button
                 className={styles.ghost}

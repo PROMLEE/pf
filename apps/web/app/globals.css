@@ -13,7 +13,9 @@
   --line: #dde7ea;
   --navy: #102f3b;
   --blue: #087b83;
-  --bg: #f4f7f7;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --soft: #f3f5f7;
 }
 
 html[data-theme="dark"] {
@@ -22,6 +24,8 @@ html[data-theme="dark"] {
   --muted: #9aaeb3;
   --line: #30434a;
   --bg: #11191d;
+  --surface: #1d2b30;
+  --soft: #24363b;
 }
 
 * {

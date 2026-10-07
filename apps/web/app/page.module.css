@@ -218,7 +218,7 @@
   color: #315d66;
 }
 .themeToggle:hover { background: #e4f1ef; }
-.menuButton {
+.mobileBrand {
   display: none;
   border: 0;
   background: none;
@@ -1275,7 +1275,6 @@
   color: #ba4051;
   font-size: 11px;
 }
-.backdrop,
 .mobileNav {
   display: none;
 }
@@ -1298,20 +1297,7 @@
 }
 @media (max-width: 760px) {
   .sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.2s;
-    width: 250px;
-  }
-  .sidebarOpen {
-    transform: translateX(0);
-  }
-  .backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 19;
-    background: #0a142780;
-    border: 0;
+    display: none;
   }
   .workspace {
     margin-left: 0;
@@ -1320,7 +1306,7 @@
     height: 57px;
     padding: 0 18px;
   }
-  .menuButton {
+  .mobileBrand {
     display: block;
   }
   .topPrivate {
@@ -1771,12 +1757,12 @@
 
 @media (max-width: 760px) {
   .mobileHomeWorkspace {
-    background: #f6f8fb;
+    background: var(--surface);
   }
   .mobileHomeWorkspace .content {
     min-height: calc(100dvh - 68px);
-    padding: 0 18px calc(80px + env(safe-area-inset-bottom));
-    background: #f6f8fb;
+    padding: 0 20px calc(80px + env(safe-area-inset-bottom));
+    background: var(--surface);
   }
 }
 
@@ -1807,4 +1793,39 @@
   :global(html[data-theme="dark"]) .mobileHomeWorkspace,
   :global(html[data-theme="dark"]) .mobileHomeWorkspace .content { background: #11191d; }
   :global(html[data-theme="dark"]) .mobileHomeWorkspace .topbar { background: #11191d; border-color: #11191d; }
+}
+
+/* Calm surfaces and a dedicated mobile menu. */
+.topbar { border-bottom: 0; }
+.sideNote { border: 0; background: none; padding: 8px; }
+.primaryButton { box-shadow: none; }
+.panel, .metrics article, .holdingStats > div { border: 0; box-shadow: none; }
+.metrics article, .holdingStats > div { background: var(--surface); }
+.editIntro { border: 0; background: var(--soft); border-radius: 10px; }
+.themeToggle { border: 0; background: transparent; }
+.topbar .desktopBreadcrumb { margin: 0 8px 0 0; color: var(--muted); }
+.allMenu { max-width: 800px; }
+.menuSection { padding: 12px 0 20px; }
+.menuSection + .menuSection { border-top: 1px solid var(--line); }
+.menuSection h2 { margin: 12px 0 8px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.menuSection button { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 72px; padding: 12px 6px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: left; }
+.menuSection button:hover { background: var(--soft); }
+.menuSection button > svg:first-child { color: #487278; }
+.menuSection button > svg:last-child { margin-left: auto; color: var(--muted); }
+.menuSection button span { display: grid; gap: 4px; }
+.menuSection button strong { font-size: 15px; font-weight: 650; }
+.menuSection button small { color: var(--muted); font-size: 12px; }
+@media (max-width: 760px) {
+  .shell, .workspace, .content { background: var(--surface); }
+  .mobileBrand { display: grid; place-items: center; width: 30px; height: 30px; padding: 0 2px 0 0; border: 0; border-radius: 8px; background: #087b83; color: #fff; font-size: 13px; font-weight: 800; letter-spacing: -.12em; }
+  .topbar .desktopBreadcrumb { display: none; }
+  .topbar { height: 60px; padding: 0 20px; }
+  .topbar strong { font-size: 13px; }
+  .content { padding: 24px 20px 100px; }
+  .panel { padding: 18px 0; border-radius: 0; }
+  .mobileNav { border-top: 0; background: var(--surface); box-shadow: 0 -4px 18px #102f3b06; padding-top: 10px; }
+  .mobileNav button { min-width: 60px; min-height: 44px; gap: 5px; font-size: 10px; }
+  .mobileNav .mobileActive { color: #087b83; font-weight: 750; }
+  .allMenu .pageHead { margin-bottom: 12px; }
+  .menuSection { padding-bottom: 14px; }
 }
