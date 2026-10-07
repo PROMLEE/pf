@@ -24,6 +24,7 @@ export type KisQuote = {
   symbol: string;
   exchange: string | null;
   price: number | null;
+  previousClose: number | null;
   currency: "KRW" | "USD";
   checkedAt: string | null;
   label: string;
@@ -374,6 +375,7 @@ export async function quoteKis(
     symbol,
     exchange: preferredExchange,
     price: null,
+    previousClose: null,
     currency: market === "KR" ? "KRW" : "USD",
     checkedAt: null,
     label: market === "KR" ? "한국투자증권 현재가" : "한국투자증권 해외 현재가",
@@ -386,8 +388,17 @@ export async function quoteKis(
         { FID_COND_MRKT_DIV_CODE: "J", FID_INPUT_ISCD: symbol },
       );
       const price = Number(output.stck_prpr);
+      const previousClose = Number(output.stck_prdy_clpr);
       return Number.isFinite(price) && price > 0
-        ? { ...base, price, checkedAt: new Date().toISOString() }
+        ? {
+            ...base,
+            price,
+            previousClose:
+              Number.isFinite(previousClose) && previousClose > 0
+                ? previousClose
+                : null,
+            checkedAt: new Date().toISOString(),
+          }
         : { ...base, error: "종목 코드 또는 시세를 확인할 수 없습니다" };
     }
     const exchanges =
@@ -403,11 +414,16 @@ export async function quoteKis(
           { AUTH: "", EXCD: exchange, SYMB: symbol },
         );
         const price = Number(output.last);
+        const previousClose = Number(output.base);
         if (Number.isFinite(price) && price > 0) {
           return {
             ...base,
             exchange,
             price,
+            previousClose:
+              Number.isFinite(previousClose) && previousClose > 0
+                ? previousClose
+                : null,
             checkedAt: new Date().toISOString(),
           };
         }

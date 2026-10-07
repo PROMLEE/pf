@@ -23,7 +23,6 @@ import {
   holdingValueKrw,
   manualAssetValueKrw,
   portfolioValues,
-  positionSignature,
   type Bucket,
   type Portfolio,
   type Rule,
@@ -44,11 +43,19 @@ type Props = {
   screen:
     | "dashboard"
     | "strategy"
+    | "composition"
     | "allocation"
     | "edit"
     | "rebalance"
     | "history";
   holdings: Holding[];
+  dailyStockQuotes: {
+    market: Market;
+    symbol: string;
+    exchange: string | null;
+    previousClose: number | null;
+    checkedAt: string | null;
+  }[];
   quoteVersion: number;
   onHoldings: (rows: Holding[]) => void;
   onNotice: (message: string) => void;
@@ -185,16 +192,20 @@ type AssetSummaryRow = {
   value: number | null;
   gain: number | null;
   gainPercent: number | null;
+  dailyGain: number | null;
+  dailyGainPercent: number | null;
 };
 
 function AssetList({
   investments,
   manualAssets,
   usdKrw,
+  gainView,
 }: {
   investments: AssetSummaryRow[];
   manualAssets: Portfolio["manualAssets"];
   usdKrw: number;
+  gainView: "total" | "daily";
 }) {
   return (
     <>
@@ -204,41 +215,50 @@ function AssetList({
         </h2>
         {investments.length ? (
           <div className={styles.mobileAssetList}>
-            {investments.map((asset) => (
-              <div className={styles.mobileAssetRow} key={asset.id}>
-                <div className={styles.mobileAssetIdentity}>
-                  <AssetIcon
-                    kind={asset.kind}
-                    symbol={asset.symbol}
-                    name={asset.name}
-                    market={asset.market}
-                    exchange={asset.exchange}
-                  />
-                  <div className={styles.mobileAssetName}>
-                    <strong>{asset.name}</strong>
-                    <small>{asset.detail}</small>
+            {investments.map((asset) => {
+              const gain = gainView === "total" ? asset.gain : asset.dailyGain;
+              const gainPercent =
+                gainView === "total"
+                  ? asset.gainPercent
+                  : asset.dailyGainPercent;
+              return (
+                <div className={styles.mobileAssetRow} key={asset.id}>
+                  <div className={styles.mobileAssetIdentity}>
+                    <AssetIcon
+                      kind={asset.kind}
+                      symbol={asset.symbol}
+                      name={asset.name}
+                      market={asset.market}
+                      exchange={asset.exchange}
+                    />
+                    <div className={styles.mobileAssetName}>
+                      <strong>{asset.name}</strong>
+                      <small>{asset.detail}</small>
+                    </div>
+                  </div>
+                  <div className={styles.mobileAssetValue}>
+                    <strong>
+                      {asset.value === null ? "—" : fmt(asset.value)}
+                    </strong>
+                    <small
+                      className={
+                        gain === null
+                          ? ""
+                          : gain >= 0
+                            ? styles.mobileUp
+                            : styles.mobileDown
+                      }
+                    >
+                      {gain === null
+                        ? gainView === "daily"
+                          ? "전일 종가 확인 중"
+                          : "매입가 정보 없음"
+                        : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${pct(gainPercent)}`})`}
+                    </small>
                   </div>
                 </div>
-                <div className={styles.mobileAssetValue}>
-                  <strong>
-                    {asset.value === null ? "—" : fmt(asset.value)}
-                  </strong>
-                  <small
-                    className={
-                      asset.gain === null
-                        ? ""
-                        : asset.gain >= 0
-                          ? styles.mobileUp
-                          : styles.mobileDown
-                    }
-                  >
-                    {asset.gain === null
-                      ? "매입가 정보 없음"
-                      : `${asset.gain > 0 ? "+" : ""}${fmt(asset.gain)} (${asset.gainPercent === null ? "—" : `${asset.gainPercent > 0 ? "+" : ""}${pct(asset.gainPercent)}`})`}
-                  </small>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className={styles.mobileAssetEmpty}>
@@ -283,6 +303,7 @@ export default function PortfolioBuilder({
   userId,
   screen,
   holdings,
+  dailyStockQuotes,
   quoteVersion,
   onHoldings,
   onNotice,
@@ -335,6 +356,9 @@ export default function PortfolioBuilder({
     "trade",
   );
   const [gainView, setGainView] = useState<"total" | "daily">("total");
+  const [dailyCryptoQuotes, setDailyCryptoQuotes] = useState<
+    Record<string, { previousClose: number | null; checkedAt: string | null }>
+  >({});
   const [cashInput, setCashInput] = useState("");
   const [excludedHoldingIds, setExcludedHoldingIds] = useState<string[]>([]);
   const [flowDate, setFlowDate] = useState(kstDate);
@@ -447,6 +471,7 @@ export default function PortfolioBuilder({
           quotes?: {
             marketCode: string;
             price: number | null;
+            previousClose: number | null;
             checkedAt: string | null;
             lastTradeAt: string | null;
           }[];
@@ -455,6 +480,17 @@ export default function PortfolioBuilder({
         if (!response.ok || !payload.quotes)
           throw new Error(payload.message || "빗썸 시세 조회 실패");
         if (active) {
+          setDailyCryptoQuotes(
+            Object.fromEntries(
+              payload.quotes.map((quote) => [
+                quote.marketCode,
+                {
+                  previousClose: quote.previousClose,
+                  checkedAt: quote.checkedAt,
+                },
+              ]),
+            ),
+          );
           const byCode = new Map(
             payload.quotes.map((quote) => [quote.marketCode, quote]),
           );
@@ -1065,49 +1101,6 @@ export default function PortfolioBuilder({
     }
   }
   const gainEligibleCount = holdings.length + (draft?.cryptoAssets.length ?? 0);
-  const previousPoint = [...totalHistory]
-    .reverse()
-    .find((point) => point.date < kstDate());
-  const flowsSincePrevious = previousPoint
-    ? (draft?.cashFlows
-        .filter((flow) => flow.date > previousPoint.date)
-        .reduce((sum, flow) => sum + flow.amountKrw, 0) ?? 0)
-    : 0;
-  const changeSincePrevious = previousPoint
-    ? (values?.total ?? 0) - previousPoint.valueKrw - flowsSincePrevious
-    : null;
-  const yesterdayKey = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(Date.now() - 24 * 60 * 60 * 1000));
-  const currentPositionSignature = positionSignature(
-    holdings,
-    draft?.manualAssets ?? [],
-    draft?.cryptoAssets ?? [],
-  );
-  const dailyChangeUnavailableReason =
-    previousPoint?.date !== yesterdayKey
-      ? "전일 자산 기록이 없어 계산할 수 없습니다."
-      : !previousPoint.positionSignature
-        ? "전일 보유 구성 기록이 없어 계산할 수 없습니다."
-        : previousPoint.positionSignature !== currentPositionSignature
-          ? "전일 이후 자산 등록·수량·금액이 바뀌어 계산을 보류했습니다."
-          : values?.missingPrices
-            ? "현재가가 없는 종목이 있어 계산을 보류했습니다."
-            : null;
-  const dailyChange = dailyChangeUnavailableReason ? null : changeSincePrevious;
-  const displayedGain =
-    gainView === "total"
-      ? knownGains.count
-        ? knownGains.value
-        : null
-      : dailyChange;
-  const displayedGainNote =
-    gainView === "total"
-      ? `매입단가 확인 ${knownGains.count}/${gainEligibleCount}개`
-      : (dailyChangeUnavailableReason ?? "전일 기록 대비 · 등록된 입출금 제외");
   const mobileStockGroups = new Map<
     string,
     {
@@ -1123,6 +1116,9 @@ export default function PortfolioBuilder({
       missingPrice: boolean;
       missingCost: boolean;
       capturedOnly: boolean;
+      dailyGain: number;
+      dailyBase: number;
+      missingDaily: boolean;
     }
   >();
   for (const holding of holdings) {
@@ -1142,13 +1138,31 @@ export default function PortfolioBuilder({
       missingPrice: false,
       missingCost: false,
       capturedOnly: false,
+      dailyGain: 0,
+      dailyBase: 0,
+      missingDaily: false,
     };
     const price = holding.currentPrice ?? holding.capturedPrice;
+    const dailyQuote = dailyStockQuotes.find(
+      (quote) =>
+        quote.market === holding.market &&
+        quote.symbol === holding.symbol &&
+        (!holding.exchange || quote.exchange === holding.exchange),
+    );
     const rate = holding.market === "US" ? (draft?.usdKrw ?? 0) : 1;
     group.quantity += holding.quantity;
     group.capturedOnly ||= holding.currentPrice === null;
     group.missingPrice ||= price === null;
     group.missingCost ||= holding.averageCost === null;
+    group.missingDaily ||=
+      holding.currentPrice === null || dailyQuote?.previousClose == null;
+    if (holding.currentPrice !== null && dailyQuote?.previousClose != null) {
+      group.dailyGain +=
+        (holding.currentPrice - dailyQuote.previousClose) *
+        holding.quantity *
+        rate;
+      group.dailyBase += dailyQuote.previousClose * holding.quantity * rate;
+    }
     if (price !== null) group.value += holding.quantity * price * rate;
     if (holding.averageCost !== null) {
       group.cost += holding.averageCost * holding.quantity * rate;
@@ -1174,6 +1188,11 @@ export default function PortfolioBuilder({
             group.missingPrice || group.missingCost || group.cost === 0
               ? null
               : (group.gain / group.cost) * 100,
+          dailyGain: group.missingDaily ? null : group.dailyGain,
+          dailyGainPercent:
+            group.missingDaily || group.dailyBase === 0
+              ? null
+              : (group.dailyGain / group.dailyBase) * 100,
         })),
         ...draft.cryptoAssets.map((asset) => ({
           id: `crypto:${asset.id}`,
@@ -1193,9 +1212,55 @@ export default function PortfolioBuilder({
               : ((asset.quotedPriceKrw - asset.averageCostKrw) /
                   asset.averageCostKrw) *
                 100,
+          dailyGain:
+            asset.quotedPriceKrw === null ||
+            dailyCryptoQuotes[asset.marketCode]?.previousClose == null
+              ? null
+              : (asset.quotedPriceKrw -
+                  dailyCryptoQuotes[asset.marketCode].previousClose!) *
+                asset.quantity,
+          dailyGainPercent:
+            asset.quotedPriceKrw === null ||
+            dailyCryptoQuotes[asset.marketCode]?.previousClose == null
+              ? null
+              : ((asset.quotedPriceKrw -
+                  dailyCryptoQuotes[asset.marketCode].previousClose!) /
+                  dailyCryptoQuotes[asset.marketCode].previousClose!) *
+                100,
         })),
       ].sort((a, b) => (b.value ?? -1) - (a.value ?? -1))
     : [];
+  const dailyKnown = mobileInvestments.reduce(
+    (summary, asset) => {
+      if (asset.dailyGain !== null && asset.value !== null) {
+        summary.value += asset.dailyGain;
+        summary.base += asset.value - asset.dailyGain;
+        summary.count++;
+      }
+      return summary;
+    },
+    { value: 0, base: 0, count: 0 },
+  );
+  const displayedGain =
+    gainView === "total"
+      ? knownGains.count
+        ? knownGains.value
+        : null
+      : dailyKnown.count
+        ? dailyKnown.value
+        : null;
+  const displayedGainPercent =
+    gainView === "total"
+      ? knownGains.cost > 0
+        ? (knownGains.value / knownGains.cost) * 100
+        : null
+      : dailyKnown.base > 0
+        ? (dailyKnown.value / dailyKnown.base) * 100
+        : null;
+  const displayedGainNote =
+    gainView === "total"
+      ? `매입단가 확인 ${knownGains.count}/${gainEligibleCount}개`
+      : `전일 종가 확인 ${dailyKnown.count}/${mobileInvestments.length}개 · 현재 보유 수량 기준`;
   const latestCryptoQuote = draft?.cryptoAssets
     .map((asset) => asset.quoteCheckedAt)
     .filter((date): date is string => Boolean(date))
@@ -1216,6 +1281,11 @@ export default function PortfolioBuilder({
       "TARGET ALLOCATION",
       "목표 설계",
       "원하는 포트 비중과 리밸런싱 기준을 정하세요.",
+    ],
+    composition: [
+      "PORTFOLIO MIX",
+      "포트별 자산 비중",
+      "현재 보유 비중과 목표의 차이를 살펴보세요.",
     ],
     allocation: [
       "ASSET ALLOCATION",
@@ -1370,16 +1440,21 @@ export default function PortfolioBuilder({
               </div>
               <div>
                 <span>
-                  전체 수익률 <small>확인분</small>
+                  {gainView === "daily" ? "일간 수익률" : "전체 수익률"}{" "}
+                  <small>확인분</small>
                 </span>
                 <strong
                   className={
-                    knownGains.value >= 0 ? styles.mobileUp : styles.mobileDown
+                    displayedGainPercent === null
+                      ? ""
+                      : displayedGainPercent >= 0
+                        ? styles.mobileUp
+                        : styles.mobileDown
                   }
                 >
-                  {knownGains.cost > 0
-                    ? `${knownGains.value > 0 ? "+" : ""}${pct((knownGains.value / knownGains.cost) * 100)}`
-                    : "—"}
+                  {displayedGainPercent === null
+                    ? "—"
+                    : `${displayedGainPercent > 0 ? "+" : ""}${pct(displayedGainPercent)}`}
                 </strong>
               </div>
             </div>
@@ -1388,10 +1463,9 @@ export default function PortfolioBuilder({
               <p>
                 전체 손익은 매입단가와 현재가가 확인된 주식·가상자산{" "}
                 {knownGains.count}/{gainEligibleCount}개 기준입니다. 현금은 손익
-                계산에 포함되지 않습니다.
-                {dailyChangeUnavailableReason
-                  ? ` ${dailyChangeUnavailableReason}`
-                  : " 당일 추정 손익은 전일 기록에서 등록된 입출금을 제외한 값입니다."}
+                계산에 포함되지 않습니다. 일간 손익은 각 시장의 전일 종가와
+                현재가 차이에 현재 보유 수량을 곱해 계산합니다. 환율 변동과
+                현금은 제외합니다.
               </p>
             </details>
             <div className={styles.mobileQuoteTime}>
@@ -1411,6 +1485,7 @@ export default function PortfolioBuilder({
               investments={mobileInvestments}
               manualAssets={draft.manualAssets}
               usdKrw={draft.usdKrw}
+              gainView={gainView}
             />
           </section>
           <div className={styles.desktopLiveStatus} role="status">
@@ -1471,8 +1546,8 @@ export default function PortfolioBuilder({
                         : `${displayedGain > 0 ? "+" : ""}${fmt(displayedGain)}`}
                     </strong>
                     <small>
-                      {gainView === "total" && knownGains.cost > 0
-                        ? `${knownGains.value > 0 ? "+" : ""}${pct((knownGains.value / knownGains.cost) * 100)} · `
+                      {displayedGainPercent !== null
+                        ? `${displayedGainPercent > 0 ? "+" : ""}${pct(displayedGainPercent)} · `
                         : ""}
                       {displayedGainNote}
                     </small>
@@ -1493,6 +1568,7 @@ export default function PortfolioBuilder({
                   investments={mobileInvestments}
                   manualAssets={draft.manualAssets}
                   usdKrw={draft.usdKrw}
+                  gainView={gainView}
                 />
               </section>
             </div>
@@ -1564,12 +1640,26 @@ export default function PortfolioBuilder({
               </details>
               <p className={styles.desktopMetricNote}>
                 평가손익은 매입단가가 확인된 주식·가상자산 기준이며 환차손익은
-                포함하지 않습니다. 당일 추정 손익은 전일과 보유 구성이 같을 때만
-                표시하며, 기록된 입출금을 제외합니다.
+                포함하지 않습니다. 일간 손익은 각 시장 전일 종가와 현재가의
+                차이를 현재 보유 수량에 적용하며 환율 변동과 현금은 제외합니다.
               </p>
             </aside>
           </div>
         </>
+      )}
+
+      {screen === "composition" && (
+        <div className={styles.compositionView}>
+          <PortfolioVisuals portfolio={draft} holdings={holdings} />
+          <div className={styles.screenLinks}>
+            <button type="button" onClick={() => onNavigate("rebalance")}>
+              리밸런싱 보기 <ArrowRight size={16} />
+            </button>
+            <button type="button" onClick={() => onNavigate("allocation")}>
+              자산 배정 수정 <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
       )}
 
       {screen === "strategy" && (

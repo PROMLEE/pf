@@ -991,6 +991,7 @@
 .flowList { display: grid; gap: 4px; max-height: 170px; overflow: auto; padding: 0 12px 12px; }
 .flowList > div { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #edf1f2; padding: 6px 0; color: #667983; font-size: 10px; }
 .flowList strong { margin-left: auto; color: #244d56; font-size: 11px; }
+.compositionView { display: grid; gap: 12px; width: min(100%, 940px); }
 .allocationCard {
   min-width: 0;
   border: 1px solid var(--line);
@@ -1010,6 +1011,10 @@
 .allocationChart { position: relative; width: min(100%, 205px); aspect-ratio: 1; margin: auto; }
 .allocationChart svg { display: block; width: 100%; height: 100%; }
 .allocationChart circle { transition: stroke-dasharray .25s ease, stroke-dashoffset .25s ease; }
+.allocationChart circle[role="button"] { cursor: pointer; }
+.allocationChart circle[role="button"]:hover,
+.allocationChart circle[role="button"]:focus-visible,
+.allocationChart .allocationArcActive { stroke-width: 17; outline: none; }
 .allocationCenter { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
 .allocationCenter span { color: #788c96; font-size: 10px; }
 .allocationCenter strong { color: #153340; font-size: 29px; line-height: 1.1; }
@@ -1018,7 +1023,10 @@
 .allocationLegendHead, .allocationLegendRow { display: grid; grid-template-columns: minmax(70px, 1fr) 44px 44px 52px; align-items: center; gap: 7px; }
 .allocationLegendHead { padding: 0 0 7px; border-bottom: 1px solid #ecf1f2; color: #8ea0a9; font-size: 10px; }
 .allocationLegendHead span:not(:first-child), .allocationLegendRow > span:not(:first-child), .allocationLegendRow strong { text-align: right; }
-.allocationLegendRow { min-height: 27px; font-size: 11px; }
+.allocationLegendRow { width: 100%; min-height: 27px; padding: 3px 4px; border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: left; font: inherit; font-size: 11px; cursor: pointer; }
+.allocationLegendRow:hover,
+.allocationLegendRow:focus-visible,
+.allocationLegendRow[aria-pressed="true"] { background: #edf5f4; outline: none; }
 .allocationLegendRow > span:first-child { min-width: 0; display: flex; align-items: center; gap: 7px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .allocationLegendRow i { width: 8px; height: 8px; border-radius: 3px; flex: none; }
 .allocationLegendRow strong { color: #213d46; font-size: 12px; }
@@ -1026,6 +1034,14 @@
 .allocationLegendRow .allocationUnder { color: #bd4050 !important; font-weight: 750; }
 .allocationLegendRow .allocationOver { color: #326ac2 !important; font-weight: 750; }
 .allocationHint { margin: 8px 0 0; color: #81949b; font-size: 10px; line-height: 1.5; }
+.allocationDetail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-top: 13px; padding: 12px 14px; border: 1px solid #dceae9; border-radius: 10px; background: #f5faf9; }
+.allocationDetail strong { display: flex; align-items: center; gap: 7px; min-width: 100px; color: #193e45; font-size: 12px; }
+.allocationDetail strong i { width: 9px; height: 9px; border-radius: 3px; }
+.allocationDetail div { display: grid; gap: 2px; }
+.allocationDetail span { color: #7c9298; font-size: 9px; }
+.allocationDetail b { color: #25464d; font-size: 11px; font-variant-numeric: tabular-nums; }
+.allocationDetail .allocationUnder { color: #bd4050; }
+.allocationDetail .allocationOver { color: #326ac2; }
 .panel { border-color: var(--line); border-radius: 16px; box-shadow: 0 5px 22px #1b485209; }
 .panelHead h2 { color: var(--ink); font-size: 18px; }
 .save, .start button:first-child { background: #087b83; border-radius: 9px; }
@@ -1310,6 +1326,12 @@
 :global(html[data-theme="dark"]) .dashboardDetails section > div { border-color: #34464b; }
 :global(html[data-theme="dark"]) .desktopAssetPanel .mobileAssetValue .mobileUp { color: #ff7782; }
 :global(html[data-theme="dark"]) .desktopAssetPanel .mobileAssetValue .mobileDown { color: #7dadff; }
+:global(html[data-theme="dark"]) .allocationLegendRow:hover,
+:global(html[data-theme="dark"]) .allocationLegendRow:focus-visible,
+:global(html[data-theme="dark"]) .allocationLegendRow[aria-pressed="true"],
+:global(html[data-theme="dark"]) .allocationDetail { background: #253a3e; border-color: #3a5559; }
+:global(html[data-theme="dark"]) .allocationDetail strong,
+:global(html[data-theme="dark"]) .allocationDetail b { color: #e8f1f2; }
 :global(html[data-theme="dark"]) :is(.desktopGain strong.profitUp, .keyMetric .profitUp) { color: #ff7782; }
 :global(html[data-theme="dark"]) :is(.desktopGain strong.profitDown, .keyMetric .profitDown) { color: #7dadff; }
 :global(html[data-theme="dark"]) .gainToggle { background: #294147; }

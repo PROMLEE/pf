@@ -22,6 +22,7 @@ import {
   Menu,
   Moon,
   Pencil,
+  PieChart,
   Plus,
   RefreshCw,
   Search,
@@ -46,6 +47,7 @@ type View =
   | "holdings"
   | "edit"
   | "strategy"
+  | "composition"
   | "allocation"
   | "rebalance"
   | "history"
@@ -56,6 +58,13 @@ type Instrument = {
   symbol: string;
   name: string;
   exchange: string | null;
+};
+type DailyStockQuote = {
+  market: Market;
+  symbol: string;
+  exchange: string | null;
+  previousClose: number | null;
+  checkedAt: string | null;
 };
 const won = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 const dollars = new Intl.NumberFormat("en-US", {
@@ -103,6 +112,9 @@ export default function PortfolioPage() {
   const [quoteError, setQuoteError] = useState("");
   const quoteInFlight = useRef(false);
   const [quoteVersion, setQuoteVersion] = useState(0);
+  const [dailyStockQuotes, setDailyStockQuotes] = useState<DailyStockQuote[]>(
+    [],
+  );
   const [filter, setFilter] = useState<"ALL" | Market>("ALL");
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -174,6 +186,21 @@ export default function PortfolioPage() {
 
   useEffect(() => {
     if (authStatus !== "authenticated") return;
+    try {
+      const cached = JSON.parse(
+        sessionStorage.getItem(
+          `pf-daily-quotes:${session?.user?.appUserId ?? "account"}`,
+        ) ?? "null",
+      ) as { savedAt: number; quotes: DailyStockQuote[] } | null;
+      if (
+        cached &&
+        Date.now() - cached.savedAt < 5 * 60 * 1000 &&
+        Array.isArray(cached.quotes)
+      )
+        setDailyStockQuotes(cached.quotes);
+    } catch {
+      // Fresh quotes will be fetched when session storage is unavailable.
+    }
     let active = true;
     try {
       const previous = JSON.parse(
@@ -597,9 +624,39 @@ export default function PortfolioPage() {
     try {
       const result = await data<{
         holdings: Holding[];
-        quotes: { price: number | null; error?: string }[];
+        quotes: {
+          market?: Market;
+          symbol?: string;
+          exchange?: string | null;
+          price: number | null;
+          previousClose?: number | null;
+          checkedAt?: string | null;
+          error?: string;
+        }[];
       }>(await fetch("/api/quotes", { method: "POST" }));
       setHoldings(result.holdings);
+      const daily = result.quotes
+        .filter(
+          (quote): quote is typeof quote & { market: Market; symbol: string } =>
+            (quote.market === "KR" || quote.market === "US") &&
+            typeof quote.symbol === "string",
+        )
+        .map((quote) => ({
+          market: quote.market,
+          symbol: quote.symbol,
+          exchange: quote.exchange ?? null,
+          previousClose: quote.previousClose ?? null,
+          checkedAt: quote.checkedAt ?? null,
+        }));
+      setDailyStockQuotes(daily);
+      try {
+        sessionStorage.setItem(
+          `pf-daily-quotes:${session?.user?.appUserId ?? "account"}`,
+          JSON.stringify({ savedAt: Date.now(), quotes: daily }),
+        );
+      } catch {
+        // A fresh API response is still available in memory.
+      }
       setQuoteVersion((version) => version + 1);
       const count = result.quotes.filter(
         (quote) => quote.price !== null,
@@ -633,7 +690,8 @@ export default function PortfolioPage() {
       if (document.visibilityState !== "visible" || quoteInFlight.current)
         return;
       const last = Number(sessionStorage.getItem(key) ?? 0);
-      if (Date.now() - last < 5 * 60 * 1000) return;
+      if (Date.now() - last < (dailyStockQuotes.length ? 5 : 1) * 60 * 1000)
+        return;
       sessionStorage.setItem(key, String(Date.now()));
       void refreshQuotes(true);
     };
@@ -644,7 +702,13 @@ export default function PortfolioPage() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [authStatus, holdings.length, session?.user?.appUserId, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    authStatus,
+    holdings.length,
+    session?.user?.appUserId,
+    view,
+    dailyStockQuotes.length,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function migrateLegacy() {
     setBusy(true);
@@ -833,6 +897,7 @@ export default function PortfolioPage() {
     { id: "holdings" as View, label: "보유 자산", Icon: Wallet },
     { id: "edit" as View, label: "자산 수정", Icon: Pencil },
     { id: "strategy" as View, label: "목표 설계", Icon: Settings2 },
+    { id: "composition" as View, label: "포트 비중", Icon: PieChart },
     { id: "allocation" as View, label: "자산 배정", Icon: Wallet },
     { id: "rebalance" as View, label: "리밸런싱", Icon: RefreshCw },
     { id: "history" as View, label: "자산 기록", Icon: LayoutDashboard },
@@ -964,6 +1029,7 @@ export default function PortfolioPage() {
             [
               "portfolio",
               "strategy",
+              "composition",
               "allocation",
               "rebalance",
               "history",
@@ -976,11 +1042,13 @@ export default function PortfolioPage() {
                   ? "dashboard"
                   : (view as
                       | "strategy"
+                      | "composition"
                       | "allocation"
                       | "rebalance"
                       | "history")
               }
               holdings={holdings}
+              dailyStockQuotes={dailyStockQuotes}
               quoteVersion={quoteVersion}
               onHoldings={setHoldings}
               onNotice={setNotice}
@@ -1316,6 +1384,7 @@ export default function PortfolioPage() {
                   userId={session.user?.appUserId ?? "account"}
                   screen="edit"
                   holdings={holdings}
+                  dailyStockQuotes={dailyStockQuotes}
                   quoteVersion={quoteVersion}
                   onHoldings={setHoldings}
                   onNotice={setNotice}
@@ -1691,9 +1760,15 @@ export default function PortfolioPage() {
         className={`${styles.mobileNav} ${view === "portfolio" ? styles.mobileHomeNav : ""}`}
         aria-label="모바일 주요 메뉴"
       >
-        {(["portfolio", "holdings", "allocation"] as View[]).map((id) => {
+        {(["portfolio", "composition", "rebalance"] as View[]).map((id) => {
           const item = nav.find((entry) => entry.id === id)!;
-          const { label, Icon } = item;
+          const { Icon } = item;
+          const label =
+            id === "portfolio"
+              ? "자산"
+              : id === "composition"
+                ? "비중"
+                : "리밸런싱";
           return (
             <button
               key={id}

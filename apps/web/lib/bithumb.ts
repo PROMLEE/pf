@@ -7,6 +7,7 @@ export type CryptoMarket = {
 export type CryptoQuote = {
   marketCode: string;
   price: number | null;
+  previousClose: number | null;
   checkedAt: string | null;
   lastTradeAt: string | null;
   error?: string;
@@ -21,6 +22,7 @@ type MarketResponse = {
 type TickerResponse = {
   market?: unknown;
   trade_price?: unknown;
+  prev_closing_price?: unknown;
   trade_date?: unknown;
   trade_time?: unknown;
 };
@@ -111,9 +113,16 @@ export async function quoteKrwCryptoMarkets(
       row.trade_price > 0
         ? row.trade_price
         : null;
+    const previousClose =
+      typeof row?.prev_closing_price === "number" &&
+      Number.isFinite(row.prev_closing_price) &&
+      row.prev_closing_price > 0
+        ? row.prev_closing_price
+        : null;
     return {
       marketCode,
       price,
+      previousClose,
       checkedAt: price === null ? null : checkedAt,
       lastTradeAt: utcTradeTime(row),
       ...(price === null
