@@ -1,0 +1,250 @@
+.account {
+  --account-accent: var(--blue);
+  max-width: 800px;
+  margin: 0 auto;
+  color: var(--ink);
+}
+.head {
+  margin-bottom: 28px;
+}
+.head h1 {
+  font-size: 28px;
+  letter-spacing: -0.04em;
+  margin: 0 0 9px;
+}
+.head p {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  background: var(--soft);
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--account-accent);
+  background: var(--surface);
+}
+.identity > div {
+  min-width: 0;
+}
+.identity small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.identity h2 {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+.identity p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.group {
+  padding: 24px 0 12px;
+}
+.group + .group {
+  border-top: 1px solid var(--line);
+}
+.group > h2 {
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+.appearance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0 14px;
+}
+.appearance strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+.appearance p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 7px 0 0;
+}
+.themes {
+  display: flex;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.themes legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.themes label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 11px 14px;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  background: var(--soft);
+}
+.themes label.selected {
+  color: var(--account-accent);
+  box-shadow: inset 0 0 0 1px var(--account-accent);
+}
+.themes input {
+  accent-color: var(--account-accent);
+  margin: 0;
+}
+.menuRow {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 0 18px;
+  text-align: left;
+}
+.menuRow > svg:first-child,
+.dataInfo summary > svg:first-child {
+  color: var(--account-accent);
+  flex-shrink: 0;
+}
+.menuRow > svg:last-child,
+.dataInfo summary > svg:last-child {
+  margin-left: auto;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.menuRow span {
+  display: grid;
+  gap: 7px;
+}
+.menuRow strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+.menuRow small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.menuRow:hover strong {
+  color: var(--account-accent);
+}
+.dataInfo summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+.dataInfo summary::-webkit-details-marker {
+  display: none;
+}
+.dataInfo[open] summary > svg:last-child {
+  transform: rotate(90deg);
+}
+.dataInfo > div {
+  padding: 0 0 10px 35px;
+}
+.dataInfo h3 {
+  font-size: 13px;
+  margin: 15px 0 7px;
+}
+.dataInfo p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+  margin: 0;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding: 24px 0;
+}
+.footer button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  padding: 8px 0;
+  font-size: 13px;
+}
+.footer button:hover {
+  color: var(--ink);
+}
+.footer span {
+  color: var(--muted);
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .head {
+    margin-bottom: 20px;
+  }
+  .head h1 {
+    font-size: 25px;
+  }
+  .identity {
+    padding: 20px;
+    gap: 14px;
+  }
+  .identity h2 {
+    font-size: 18px;
+  }
+  .appearance {
+    flex-wrap: wrap;
+  }
+  .themes {
+    width: 100%;
+  }
+  .themes label {
+    flex: 1;
+    justify-content: center;
+  }
+  .group {
+    padding-top: 20px;
+  }
+  .footer {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
+
+:global(html[data-theme="dark"]) .account {
+  --account-accent: #76d4ca;
+}

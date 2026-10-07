@@ -18,7 +18,6 @@ import {
   CircleHelp,
   FileUp,
   LayoutDashboard,
-  LogOut,
   Menu,
   Moon,
   Pencil,
@@ -41,6 +40,7 @@ import {
 import PortfolioBuilder, { stockAssetId, type AssetSelection } from "./PortfolioBuilder";
 import AssetIcon from "./AssetIcon";
 import UserGuide from "./UserGuide";
+import AccountSettings from "./AccountSettings";
 import styles from "./page.module.css";
 
 type View =
@@ -994,7 +994,7 @@ export default function PortfolioPage() {
     allocation: "보유 자산의 포트 지정",
     import: "증권사 잔고 캡처로 등록",
     history: "포트별 자산 변화 확인",
-    settings: "로그인 정보와 데이터 관리",
+    settings: "계정·화면 설정과 이용 안내",
     guide: "처음 시작하는 순서와 기능 설명",
   };
 
@@ -1803,83 +1803,14 @@ export default function PortfolioPage() {
             </>
           )}
           {view === "settings" && (
-            <>
-              <div className={styles.pageHead}>
-                <div>
-                  <h1>내 계정</h1>
-                  <p>로그인 계정과 자산 보관 방식을 확인하세요.</p>
-                </div>
-              </div>
-              <div className={styles.settingsGrid}>
-                <section className={styles.panel}>
-                  <div className={styles.profile}>
-                    <span className={styles.avatar}>
-                      {session.user?.name?.slice(0, 1) || "P"}
-                    </span>
-                    <div>
-                      <strong>{session.user?.name || "내 계정"}</strong>
-                      <small>
-                        {session.user?.email || "카카오 · 네이버 로그인"}
-                      </small>
-                    </div>
-                  </div>
-                  <div className={styles.settingRow}>
-                    <span>보유 종목</span>
-                    <strong>{holdings.length}개</strong>
-                  </div>
-                  <div className={styles.settingRow}>
-                    <span>연결된 증권사</span>
-                    <strong>
-                      {new Set(holdings.map((row) => row.broker)).size}곳
-                    </strong>
-                  </div>
-                  <div className={styles.settingRow}>
-                    <span>데이터 보관</span>
-                    <strong>Supabase PostgreSQL</strong>
-                  </div>
-                  <button
-                    className={styles.signOut}
-                    onClick={() => signOut({ callbackUrl: "/" })}
-                  >
-                    <LogOut size={17} /> 로그아웃
-                  </button>
-                </section>
-                <section className={styles.panel}>
-                  <div className={styles.panelHead}>
-                    <h2>데이터와 개인정보</h2>
-                  </div>
-                  <div className={styles.privacyItem}>
-                    <ShieldCheck size={20} />
-                    <div>
-                      <strong>계정별 데이터 분리</strong>
-                      <p>
-                        로그인한 사용자에게 연결된 자산 내역만 서버가
-                        조회합니다.
-                      </p>
-                    </div>
-                  </div>
-                  <div className={styles.privacyItem}>
-                    <Camera size={20} />
-                    <div>
-                      <strong>캡처 이미지는 저장하지 않음</strong>
-                      <p>
-                        브라우저에서 인식한 뒤 확인한 종목 데이터만 저장합니다.
-                      </p>
-                    </div>
-                  </div>
-                  <div className={styles.privacyItem}>
-                    <RefreshCw size={20} />
-                    <div>
-                      <strong>시세 출처 구분</strong>
-                      <p>
-                        시세 조회에 실패하면 캡처 가격을 사용하고 출처를
-                        표시합니다.
-                      </p>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </>
+            <AccountSettings
+              name={session.user?.name}
+              email={session.user?.email}
+              theme={theme}
+              onThemeChange={(next) => { if (next !== theme) toggleTheme(); }}
+              onNavigate={go}
+              onSignOut={() => signOut({ callbackUrl: "/" })}
+            />
           )}
         </main>
         <footer className={styles.footer}>
