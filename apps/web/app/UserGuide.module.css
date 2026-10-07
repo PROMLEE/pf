@@ -294,14 +294,19 @@
   position: sticky;
   top: 0;
   z-index: 8;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 18px 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 8px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
 .chapterNav a {
+  display: block;
+  padding: 12px 4px;
+  text-align: center;
+  border-radius: 8px;
+  white-space: nowrap;
   font-size: 13px;
   color: var(--muted);
   text-decoration: none;
@@ -309,6 +314,7 @@
   transition: color 0.2s;
 }
 .chapterNav a[aria-current] {
+  background: var(--soft);
   color: var(--blue);
 }
 .readProgress {
@@ -416,7 +422,7 @@
     font-size: 36px;
   }
   .chapterNav {
-    padding: 16px 0;
+    padding: 6px;
   }
   .chapterNav a {
     font-size: 12px;
@@ -444,11 +450,18 @@
 
 .steps {
   position: relative;
+  isolation: isolate;
+}
+.steps li {
+  position: relative;
+  z-index: 1;
 }
 .steps::before,
 .steps::after {
   content: "";
   position: absolute;
+  z-index: 0;
+  pointer-events: none;
   top: 38px;
   bottom: 38px;
   left: 16px;
