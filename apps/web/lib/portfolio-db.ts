@@ -13,6 +13,23 @@ import { positionSignature } from "../app/portfolio-model";
 import { db } from "./db";
 
 type Client = Pick<PoolClient, "query">;
+
+async function insertRows(
+  client: Client,
+  table: string,
+  columns: string[],
+  rows: unknown[][],
+) {
+  if (!rows.length) return;
+  const placeholders = rows.map(
+    (row, rowIndex) =>
+      `(${row.map((_, columnIndex) => `$${rowIndex * columns.length + columnIndex + 1}`).join(",")})`,
+  );
+  await client.query(
+    `insert into ${table} (${columns.join(",")}) values ${placeholders.join(",")}`,
+    rows.flat(),
+  );
+}
 type PlanRow = {
   title: string;
   usd_krw: string;
@@ -213,6 +230,24 @@ export async function savePortfolio(userId: string, input: Portfolio) {
   const client = await db().connect();
   try {
     await client.query("begin");
+    if (input.usdKrwMode === "auto") {
+      const currentFx = await client.query<{
+        usd_krw: string;
+        usd_krw_rate_date: string | null;
+      }>(
+        `select usd_krw, usd_krw_rate_date::text from portfolio.plans where user_id = $1`,
+        [userId],
+      );
+      const saved = currentFx.rows[0];
+      if (
+        saved?.usd_krw_rate_date &&
+        (!input.usdKrwRateDate ||
+          saved.usd_krw_rate_date > input.usdKrwRateDate)
+      ) {
+        input.usdKrw = Number(saved.usd_krw);
+        input.usdKrwRateDate = saved.usd_krw_rate_date;
+      }
+    }
     await client.query(
       `insert into portfolio.plans (user_id, title, usd_krw, usd_krw_mode, usd_krw_rate_date, tolerance_percent)
        values ($1,$2,$3,$4,$5,$6)
@@ -269,27 +304,38 @@ export async function savePortfolio(userId: string, input: Portfolio) {
     await client.query(`delete from portfolio.buckets where user_id = $1`, [
       userId,
     ]);
-    for (const [position, bucket] of input.buckets.entries()) {
-      await client.query(
-        `insert into portfolio.buckets (id, user_id, name, target_percent, color, position)
-         values ($1,$2,$3,$4,$5,$6)`,
-        [
-          bucket.id,
-          userId,
-          bucket.name,
-          bucket.targetPercent,
-          bucket.color,
-          position,
-        ],
-      );
-    }
-    for (const [position, rule] of input.rules.entries()) {
-      const previous = prices.get(`${rule.market}:${rule.symbol}`);
-      await client.query(
-        `insert into portfolio.rules
-         (id, user_id, bucket_id, market, symbol, exchange_code, name, manual_price, quoted_price, quote_checked_at, position)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [
+    await insertRows(
+      client,
+      "portfolio.buckets",
+      ["id", "user_id", "name", "target_percent", "color", "position"],
+      input.buckets.map((bucket, position) => [
+        bucket.id,
+        userId,
+        bucket.name,
+        bucket.targetPercent,
+        bucket.color,
+        position,
+      ]),
+    );
+    await insertRows(
+      client,
+      "portfolio.rules",
+      [
+        "id",
+        "user_id",
+        "bucket_id",
+        "market",
+        "symbol",
+        "exchange_code",
+        "name",
+        "manual_price",
+        "quoted_price",
+        "quote_checked_at",
+        "position",
+      ],
+      input.rules.map((rule, position) => {
+        const previous = prices.get(`${rule.market}:${rule.symbol}`);
+        return [
           rule.id,
           userId,
           rule.bucketId,
@@ -301,49 +347,71 @@ export async function savePortfolio(userId: string, input: Portfolio) {
           previous?.quoted_price ?? null,
           previous?.quote_checked_at ?? null,
           position,
-        ],
-      );
-    }
+        ];
+      }),
+    );
     await client.query(
       `update portfolio.holdings h set bucket_id = r.bucket_id
        from portfolio.rules r
        where h.user_id = $1 and r.user_id = $1 and h.market = r.market and h.symbol = r.symbol`,
       [userId],
     );
-    for (const assignment of input.assignments.filter(
+    const manualAssignments = input.assignments.filter(
       (item) => item.source === "manual",
-    )) {
-      const result = await client.query(
-        `update portfolio.holdings set bucket_id = $3, assignment_source = 'manual', updated_at = now()
-         where user_id = $1 and id = $2`,
-        [userId, assignment.holdingId, assignment.bucketId],
+    );
+    if (manualAssignments.length) {
+      const values = manualAssignments.map(
+        (_, index) => `($${index * 2 + 2}::uuid,$${index * 2 + 3}::uuid)`,
       );
-      if (result.rowCount !== 1)
-        throw new Error("보유 종목 배정 정보를 확인해 주세요");
-    }
-    for (const asset of input.manualAssets) {
-      await client.query(
-        `insert into portfolio.manual_assets (id, user_id, bucket_id, name, value_krw, value_usd)
-         values ($1,$2,$3,$4,$5,$6)`,
+      const result = await client.query(
+        `update portfolio.holdings h set bucket_id = a.bucket_id,
+           assignment_source = 'manual', updated_at = now()
+         from (values ${values.join(",")}) as a(id, bucket_id)
+         where h.user_id = $1 and h.id = a.id`,
         [
-          asset.id,
           userId,
-          asset.bucketId,
-          asset.name,
-          asset.valueUsd === null
-            ? asset.valueKrw
-            : asset.valueUsd * input.usdKrw,
-          asset.valueUsd,
+          ...manualAssignments.flatMap((item) => [
+            item.holdingId,
+            item.bucketId,
+          ]),
         ],
       );
+      if (result.rowCount !== manualAssignments.length)
+        throw new Error("보유 종목 배정 정보를 확인해 주세요");
     }
-    for (const asset of input.cryptoAssets) {
-      const previous = cryptoPrices.get(asset.marketCode);
-      await client.query(
-        `insert into portfolio.crypto_assets
-         (id, user_id, bucket_id, market_code, name, quantity, average_cost_krw, quoted_price_krw, quote_checked_at, last_trade_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [
+    await insertRows(
+      client,
+      "portfolio.manual_assets",
+      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd"],
+      input.manualAssets.map((asset) => [
+        asset.id,
+        userId,
+        asset.bucketId,
+        asset.name,
+        asset.valueUsd === null
+          ? asset.valueKrw
+          : asset.valueUsd * input.usdKrw,
+        asset.valueUsd,
+      ]),
+    );
+    await insertRows(
+      client,
+      "portfolio.crypto_assets",
+      [
+        "id",
+        "user_id",
+        "bucket_id",
+        "market_code",
+        "name",
+        "quantity",
+        "average_cost_krw",
+        "quoted_price_krw",
+        "quote_checked_at",
+        "last_trade_at",
+      ],
+      input.cryptoAssets.map((asset) => {
+        const previous = cryptoPrices.get(asset.marketCode);
+        return [
           asset.id,
           userId,
           asset.bucketId,
@@ -354,13 +422,134 @@ export async function savePortfolio(userId: string, input: Portfolio) {
           previous?.quoted_price_krw ?? null,
           previous?.quote_checked_at ?? null,
           previous?.last_trade_at ?? null,
-        ],
-      );
-    }
+        ];
+      }),
+    );
     await recordSnapshot(userId, client);
     const saved = await listPortfolio(userId, client);
     await client.query("commit");
     return saved;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function savePortfolioAssets(userId: string, input: Portfolio) {
+  const client = await db().connect();
+  try {
+    await client.query("begin");
+    const plan = await client.query<PlanRow & { bucket_ids: string[] }>(
+      `select title, usd_krw, usd_krw_updated_at, usd_krw_mode,
+         usd_krw_rate_date::text, tolerance_percent,
+         array(select id from portfolio.buckets where user_id = $1) as bucket_ids
+       from portfolio.plans where user_id = $1`,
+      [userId],
+    );
+    const savedPlan = plan.rows[0];
+    if (!savedPlan) throw new Error("포트폴리오를 찾지 못했습니다.");
+    const bucketIds = new Set(savedPlan.bucket_ids);
+    if (
+      [...input.manualAssets, ...input.cryptoAssets].some(
+        (asset) => asset.bucketId !== null && !bucketIds.has(asset.bucketId),
+      )
+    )
+      throw new Error("자산 배정 정보를 확인해 주세요.");
+    const previousCrypto = await client.query<{
+      market_code: string;
+      quoted_price_krw: string | null;
+      quote_checked_at: Date | null;
+      last_trade_at: Date | null;
+    }>(
+      `select market_code, quoted_price_krw, quote_checked_at, last_trade_at
+       from portfolio.crypto_assets where user_id = $1`,
+      [userId],
+    );
+    const prices = new Map(
+      previousCrypto.rows.map((row) => [row.market_code, row]),
+    );
+    await client.query(
+      `delete from portfolio.manual_assets where user_id = $1`,
+      [userId],
+    );
+    await client.query(
+      `delete from portfolio.crypto_assets where user_id = $1`,
+      [userId],
+    );
+    const usdKrw = Number(savedPlan.usd_krw);
+    await insertRows(
+      client,
+      "portfolio.manual_assets",
+      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd"],
+      input.manualAssets.map((asset) => [
+        asset.id,
+        userId,
+        asset.bucketId,
+        asset.name,
+        asset.valueUsd === null ? asset.valueKrw : asset.valueUsd * usdKrw,
+        asset.valueUsd,
+      ]),
+    );
+    await insertRows(
+      client,
+      "portfolio.crypto_assets",
+      [
+        "id",
+        "user_id",
+        "bucket_id",
+        "market_code",
+        "name",
+        "quantity",
+        "average_cost_krw",
+        "quoted_price_krw",
+        "quote_checked_at",
+        "last_trade_at",
+      ],
+      input.cryptoAssets.map((asset) => {
+        const previous = prices.get(asset.marketCode);
+        return [
+          asset.id,
+          userId,
+          asset.bucketId,
+          asset.marketCode,
+          asset.name,
+          asset.quantity,
+          asset.averageCostKrw,
+          previous?.quoted_price_krw ?? null,
+          previous?.quote_checked_at ?? null,
+          previous?.last_trade_at ?? null,
+        ];
+      }),
+    );
+    const today = await recordSnapshot(userId, client);
+    await client.query("commit");
+    return {
+      ...input,
+      title: savedPlan.title,
+      usdKrw,
+      usdKrwMode: savedPlan.usd_krw_mode,
+      usdKrwUpdatedAt: savedPlan.usd_krw_updated_at.toISOString(),
+      usdKrwRateDate: savedPlan.usd_krw_rate_date,
+      tolerancePercent: Number(savedPlan.tolerance_percent),
+      cryptoAssets: input.cryptoAssets.map((asset) => {
+        const previous = prices.get(asset.marketCode);
+        return {
+          ...asset,
+          quotedPriceKrw:
+            previous?.quoted_price_krw === null || !previous
+              ? null
+              : Number(previous.quoted_price_krw),
+          quoteCheckedAt: previous?.quote_checked_at?.toISOString() ?? null,
+          lastTradeAt: previous?.last_trade_at?.toISOString() ?? null,
+        };
+      }),
+      snapshots: [
+        ...input.snapshots.filter((item) => item.date !== today[0]?.date),
+        ...today,
+      ],
+    } satisfies Portfolio;
   } catch (error) {
     await client.query("rollback");
     throw error;
@@ -474,59 +663,62 @@ export async function setRuleQuote(
   );
 }
 
-export async function recordSnapshot(userId: string, client: Client = db()) {
-  const [plan, buckets, holdings, manualAssets, cryptoAssets] =
-    await Promise.all([
-      client.query<{ usd_krw: string }>(
-        `select usd_krw from portfolio.plans where user_id = $1`,
-        [userId],
-      ),
-      client.query<{
-        id: string;
-        name: string;
-        target_percent: string;
-      }>(
-        `select id, name, target_percent from portfolio.buckets where user_id = $1`,
-        [userId],
-      ),
-      client.query<{
-        id: string;
-        bucket_id: string | null;
-        market: "KR" | "US";
-        quantity: string;
-        average_cost: string | null;
-        captured_price: string | null;
-        price: string | null;
-      }>(
-        `select id::text, bucket_id, market, quantity, average_cost, captured_price,
-                coalesce(current_price, captured_price) as price
-       from portfolio.holdings where user_id = $1`,
-        [userId],
-      ),
-      client.query<{
-        id: string;
-        bucket_id: string | null;
-        value_krw: string;
-        value_usd: string | null;
-      }>(
-        `select id::text, bucket_id, value_krw, value_usd from portfolio.manual_assets where user_id = $1`,
-        [userId],
-      ),
-      client.query<{
-        id: string;
-        bucket_id: string | null;
-        quantity: string;
-        average_cost_krw: string | null;
-        quoted_price_krw: string | null;
-      }>(
-        `select id::text, bucket_id, quantity, average_cost_krw, quoted_price_krw
-         from portfolio.crypto_assets where user_id = $1`,
-        [userId],
-      ),
-    ]);
-  if (!plan.rows[0]) return;
+export async function recordSnapshot(
+  userId: string,
+  client: Client = db(),
+): Promise<Snapshot[]> {
+  const result = await client.query<{
+    usd_krw: string | null;
+    buckets: { id: string; name: string; target_percent: string }[];
+    holdings: {
+      id: string;
+      bucket_id: string | null;
+      market: "KR" | "US";
+      quantity: string;
+      average_cost: string | null;
+      captured_price: string | null;
+      price: string | null;
+    }[];
+    manual_assets: {
+      id: string;
+      bucket_id: string | null;
+      value_krw: string;
+      value_usd: string | null;
+    }[];
+    crypto_assets: {
+      id: string;
+      bucket_id: string | null;
+      quantity: string;
+      average_cost_krw: string | null;
+      quoted_price_krw: string | null;
+    }[];
+  }>(
+    `select
+       (select usd_krw from portfolio.plans where user_id = $1) as usd_krw,
+       coalesce((select jsonb_agg(to_jsonb(b)) from
+         (select id, name, target_percent from portfolio.buckets where user_id = $1) b), '[]'::jsonb) as buckets,
+       coalesce((select jsonb_agg(to_jsonb(h)) from
+         (select id::text, bucket_id, market, quantity, average_cost, captured_price,
+                 coalesce(current_price, captured_price) as price
+          from portfolio.holdings where user_id = $1) h), '[]'::jsonb) as holdings,
+       coalesce((select jsonb_agg(to_jsonb(m)) from
+         (select id::text, bucket_id, value_krw, value_usd
+          from portfolio.manual_assets where user_id = $1) m), '[]'::jsonb) as manual_assets,
+       coalesce((select jsonb_agg(to_jsonb(c)) from
+         (select id::text, bucket_id, quantity, average_cost_krw, quoted_price_krw
+          from portfolio.crypto_assets where user_id = $1) c), '[]'::jsonb) as crypto_assets`,
+    [userId],
+  );
+  const snapshot = result.rows[0];
+  if (!snapshot?.usd_krw) return [];
+  const {
+    buckets,
+    holdings,
+    manual_assets: manualAssets,
+    crypto_assets: cryptoAssets,
+  } = snapshot;
   const signature = positionSignature(
-    holdings.rows.map((row) => ({
+    holdings.map((row) => ({
       id: row.id,
       market: row.market,
       quantity: Number(row.quantity),
@@ -534,28 +726,26 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
       capturedPrice:
         row.captured_price === null ? null : Number(row.captured_price),
     })),
-    manualAssets.rows.map((row) => ({
+    manualAssets.map((row) => ({
       id: row.id,
       valueKrw: Number(row.value_krw),
       valueUsd: row.value_usd === null ? null : Number(row.value_usd),
     })),
-    cryptoAssets.rows.map((row) => ({
+    cryptoAssets.map((row) => ({
       id: row.id,
       quantity: Number(row.quantity),
       averageCostKrw:
         row.average_cost_krw === null ? null : Number(row.average_cost_krw),
     })),
   );
-  const fx = Number(plan.rows[0].usd_krw);
-  const values = new Map<string, number>(
-    buckets.rows.map((row) => [row.id, 0]),
-  );
+  const fx = Number(snapshot.usd_krw);
+  const values = new Map<string, number>(buckets.map((row) => [row.id, 0]));
   values.set("__UNASSIGNED__", 0);
   function add(bucketId: string | null, value: number) {
     const key = bucketId && values.has(bucketId) ? bucketId : "__UNASSIGNED__";
     values.set(key, (values.get(key) ?? 0) + value);
   }
-  for (const row of holdings.rows) {
+  for (const row of holdings) {
     add(
       row.bucket_id,
       Number(row.quantity) *
@@ -563,14 +753,14 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
         (row.market === "US" ? fx : 1),
     );
   }
-  for (const row of manualAssets.rows)
+  for (const row of manualAssets)
     add(
       row.bucket_id,
       row.value_usd === null
         ? Number(row.value_krw)
         : Number(row.value_usd) * fx,
     );
-  for (const row of cryptoAssets.rows)
+  for (const row of cryptoAssets)
     add(
       row.bucket_id,
       Number(row.quantity) * Number(row.quoted_price_krw ?? 0),
@@ -583,9 +773,9 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
     `delete from portfolio.snapshots where user_id = $1 and snapshot_date = (now() at time zone 'Asia/Seoul')::date`,
     [userId],
   );
-  const names = new Map(buckets.rows.map((row) => [row.id, row.name]));
+  const names = new Map(buckets.map((row) => [row.id, row.name]));
   const targets = new Map(
-    buckets.rows.map((row) => [row.id, Number(row.target_percent)]),
+    buckets.map((row) => [row.id, Number(row.target_percent)]),
   );
   const entries = [...values];
   const placeholders = entries
@@ -608,14 +798,25 @@ export async function recordSnapshot(userId: string, client: Client = db()) {
       key === "__TOTAL__" ? signature : null,
     ]),
   ];
-  await client.query(
+  const saved = await client.query<SnapshotRow>(
     `insert into portfolio.snapshots
      (user_id, snapshot_date, bucket_key, bucket_name, value_krw, target_percent, position_signature)
      values ${placeholders}
      on conflict (user_id, snapshot_date, bucket_key) do update set
        bucket_name = excluded.bucket_name, value_krw = excluded.value_krw,
        target_percent = excluded.target_percent,
-       position_signature = excluded.position_signature, captured_at = now()`,
+       position_signature = excluded.position_signature, captured_at = now()
+     returning snapshot_date::text, bucket_key, bucket_name, value_krw,
+       target_percent, position_signature`,
     parameters,
   );
+  return saved.rows.map((row) => ({
+    date: row.snapshot_date,
+    bucketKey: row.bucket_key,
+    bucketName: row.bucket_name,
+    valueKrw: Number(row.value_krw),
+    targetPercent:
+      row.target_percent === null ? null : Number(row.target_percent),
+    positionSignature: row.position_signature,
+  }));
 }

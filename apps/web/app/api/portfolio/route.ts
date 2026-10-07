@@ -6,12 +6,9 @@ import {
   listCryptoAssets,
   recordSnapshot,
   savePortfolio,
+  savePortfolioAssets,
 } from "../../../lib/portfolio-db";
-import { fetchUsdKrwReference } from "../../../lib/fx";
-import {
-  listKrwCryptoMarkets,
-  refreshStoredCryptoQuotes,
-} from "../../../lib/bithumb";
+import { listKrwCryptoMarkets } from "../../../lib/bithumb";
 
 export const runtime = "nodejs";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -235,7 +232,7 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: Request) {
+async function saveRequest(request: Request, assetsOnly: boolean) {
   const userId = await currentUserId();
   if (!userId)
     return NextResponse.json(
@@ -257,31 +254,10 @@ export async function PUT(request: Request) {
         },
         { status: 400 },
       );
-    let fxWarning: string | null = null;
-    if (input.usdKrwMode === "auto") {
-      try {
-        const reference = await fetchUsdKrwReference();
-        const previous = await listPortfolio(userId);
-        if (
-          previous?.usdKrwRateDate &&
-          previous.usdKrwRateDate > reference.date
-        ) {
-          input.usdKrw = previous.usdKrw;
-          input.usdKrwRateDate = previous.usdKrwRateDate;
-        } else {
-          input.usdKrw = reference.rate;
-          input.usdKrwRateDate = reference.date;
-        }
-      } catch {
-        const previous = await listPortfolio(userId);
-        if (previous) {
-          input.usdKrw = previous.usdKrw;
-          input.usdKrwRateDate = previous.usdKrwRateDate;
-        }
-        fxWarning = "자동 환율 조회에 실패해 마지막 저장 환율을 유지했습니다.";
-      }
-    } else input.usdKrwRateDate = null;
-    const existingCodes = new Set(await listCryptoAssets(userId));
+    if (input.usdKrwMode === "manual") input.usdKrwRateDate = null;
+    const existingCodes = new Set(
+      input.cryptoAssets.length ? await listCryptoAssets(userId) : [],
+    );
     const newCodes = input.cryptoAssets
       .map((asset) => asset.marketCode)
       .filter((code) => !existingCodes.has(code));
@@ -302,22 +278,10 @@ export async function PUT(request: Request) {
         name: markets.get(asset.marketCode) ?? asset.name,
       }));
     }
-    let portfolio = await savePortfolio(userId, input);
-    let quoteWarning: string | null = null;
-    if (input.cryptoAssets.length) {
-      try {
-        const quotes = await refreshStoredCryptoQuotes(userId);
-        if (quotes.some((quote) => quote.price === null))
-          quoteWarning =
-            "포트폴리오는 저장했지만 일부 가상자산 시세는 확인하지 못했습니다. 마켓 코드를 확인해 주세요.";
-        await recordSnapshot(userId);
-        portfolio = await listPortfolio(userId);
-      } catch {
-        quoteWarning =
-          "포트폴리오는 저장했지만 가상자산 시세는 갱신하지 못했습니다. 가격 갱신을 다시 눌러 주세요.";
-      }
-    }
-    return NextResponse.json({ portfolio, quoteWarning, fxWarning });
+    const portfolio = assetsOnly
+      ? await savePortfolioAssets(userId, input)
+      : await savePortfolio(userId, input);
+    return NextResponse.json({ portfolio });
   } catch (error) {
     return NextResponse.json(
       {
@@ -329,6 +293,14 @@ export async function PUT(request: Request) {
       { status: 500 },
     );
   }
+}
+
+export async function PUT(request: Request) {
+  return saveRequest(request, false);
+}
+
+export async function PATCH(request: Request) {
+  return saveRequest(request, true);
 }
 
 export async function POST(request: Request) {

@@ -429,7 +429,7 @@ export default function PortfolioBuilder({
 
   const hasCryptoAssets = Boolean(draft?.cryptoAssets.length);
   useEffect(() => {
-    if (!hasCryptoAssets || dirty || screen !== "dashboard") return;
+    if (!hasCryptoAssets || dirty) return;
     let active = true;
     async function refreshCrypto() {
       if (
@@ -499,7 +499,7 @@ export default function PortfolioBuilder({
       active = false;
       window.clearInterval(timer);
     };
-  }, [hasCryptoAssets, dirty, quotesRefreshing, screen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasCryptoAssets, dirty, quotesRefreshing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function change(next: Portfolio) {
     setDraft(next);
@@ -784,35 +784,65 @@ export default function PortfolioBuilder({
       return onNotice(
         `목표 비중 합계가 ${pct(total)}입니다. 100%로 맞춰 주세요.`,
       );
+    const saved = portfolioCache.get(userId);
+    const assetsOnly =
+      screen === "edit" &&
+      Boolean(saved) &&
+      JSON.stringify({
+        title: draft.title,
+        usdKrw: draft.usdKrw,
+        usdKrwMode: draft.usdKrwMode,
+        usdKrwRateDate: draft.usdKrwRateDate,
+        tolerancePercent: draft.tolerancePercent,
+        buckets: draft.buckets,
+        rules: draft.rules,
+        assignments: draft.assignments,
+      }) ===
+        JSON.stringify({
+          title: saved?.title,
+          usdKrw: saved?.usdKrw,
+          usdKrwMode: saved?.usdKrwMode,
+          usdKrwRateDate: saved?.usdKrwRateDate,
+          tolerancePercent: saved?.tolerancePercent,
+          buckets: saved?.buckets,
+          rules: saved?.rules,
+          assignments: saved?.assignments,
+        });
     setSaving(true);
     try {
       const response = await fetch("/api/portfolio", {
-        method: "PUT",
+        method: assetsOnly ? "PATCH" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
       const payload = (await response.json()) as {
         portfolio?: Portfolio;
         message?: string;
-        quoteWarning?: string | null;
-        fxWarning?: string | null;
       };
       if (!response.ok || !payload.portfolio)
         throw new Error(payload.message || "저장하지 못했습니다.");
+      if (
+        draft.cryptoAssets.some(
+          (asset) =>
+            !saved?.cryptoAssets.some(
+              (previous) => previous.marketCode === asset.marketCode,
+            ),
+        )
+      )
+        lastCryptoFetchAt.current = 0;
       setDraft(payload.portfolio);
       portfolioCache.set(userId, payload.portfolio);
       setDirty(false);
-      const holdingsResponse = await fetch("/api/holdings", {
-        cache: "no-store",
-      });
-      if (holdingsResponse.ok)
-        onHoldings(
-          ((await holdingsResponse.json()) as { holdings: Holding[] }).holdings,
-        );
-      onNotice(
-        [payload.fxWarning, payload.quoteWarning].filter(Boolean).join(" ") ||
-          "포트폴리오와 오늘의 평가액을 저장했습니다.",
-      );
+      onNotice("포트폴리오와 오늘의 평가액을 저장했습니다.");
+      if (!assetsOnly)
+        void fetch("/api/holdings", { cache: "no-store" })
+          .then(async (response) => {
+            if (response.ok)
+              onHoldings(
+                ((await response.json()) as { holdings: Holding[] }).holdings,
+              );
+          })
+          .catch(() => {});
     } catch (error) {
       onNotice(
         error instanceof Error
