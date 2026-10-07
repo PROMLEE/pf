@@ -40,6 +40,7 @@ import {
 } from "./holdings";
 import PortfolioBuilder, { stockAssetId, type AssetSelection } from "./PortfolioBuilder";
 import AssetIcon from "./AssetIcon";
+import UserGuide from "./UserGuide";
 import styles from "./page.module.css";
 
 type View =
@@ -54,7 +55,8 @@ type View =
   | "import"
   | "more"
   | "detail"
-  | "settings";
+  | "settings"
+  | "guide";
 type Instrument = {
   market: Market;
   symbol: string;
@@ -104,6 +106,19 @@ export default function PortfolioPage() {
   const { data: session, status: authStatus } = useSession();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [view, setView] = useState<View>("portfolio");
+  const [showStartGuide, setShowStartGuide] = useState(false);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    try {
+      setShowStartGuide(localStorage.getItem(`pf-guide-dismissed:${session?.user?.appUserId ?? "account"}`) !== "1");
+    } catch { setShowStartGuide(true); }
+  }, [authStatus, session?.user?.appUserId]);
+
+  function dismissStartGuide() {
+    setShowStartGuide(false);
+    try { localStorage.setItem(`pf-guide-dismissed:${session?.user?.appUserId ?? "account"}`, "1"); } catch { /* Dismiss for this visit when storage is unavailable. */ }
+  }
   const [selectedAsset, setSelectedAsset] = useState<AssetSelection | null>(null);
   const [detailSource, setDetailSource] = useState<"portfolio" | "holdings">("portfolio");
   const [editFocus, setEditFocus] = useState<AssetSelection | null>(null);
@@ -301,6 +316,7 @@ export default function PortfolioPage() {
       setEditingHoldingId(null);
     }
     setView(next);
+    if (next !== view) window.scrollTo({ top: 0, behavior: "instant" });
     setNotice("");
   }
 
@@ -940,6 +956,7 @@ export default function PortfolioPage() {
                 )}
               </div>
             )}
+            <a className={styles.authGuideLink} href="/guide">처음이신가요? 사용 가이드 보기 <ArrowRight size={16} /></a>
             <div className={styles.authPrivacy}>
               <ShieldCheck size={18} /> 캡처 이미지는 브라우저에서 분석하고
               저장하지 않습니다.
@@ -960,12 +977,13 @@ export default function PortfolioPage() {
     { id: "history" as View, label: "자산 기록", Icon: LayoutDashboard },
     { id: "import" as View, label: "캡처 가져오기", Icon: Camera },
     { id: "settings" as View, label: "계정", Icon: Settings2 },
+    { id: "guide" as View, label: "사용 가이드", Icon: CircleHelp },
   ];
   const navLabel = view === "more" ? "전체 메뉴" : view === "detail" ? "자산 상세" : nav.find((item) => item.id === view)?.label;
   const menuSections = [
     { label: "포트폴리오", ids: ["strategy", "composition", "rebalance"] },
     { label: "자산 관리", ids: ["holdings", "edit", "allocation", "import"] },
-    { label: "기록과 계정", ids: ["history", "settings"] },
+    { label: "기록과 계정", ids: ["history", "settings", "guide"] },
   ];
   const menuDescriptions: Partial<Record<View, string>> = {
     strategy: "목표 비중과 허용 오차 설정",
@@ -977,6 +995,7 @@ export default function PortfolioPage() {
     import: "증권사 잔고 캡처로 등록",
     history: "포트별 자산 변화 확인",
     settings: "로그인 정보와 데이터 관리",
+    guide: "처음 시작하는 순서와 기능 설명",
   };
 
   return (
@@ -1068,6 +1087,15 @@ export default function PortfolioPage() {
           </button>
         </header>
         <main className={styles.content}>
+          {view === "guide" && <UserGuide onNavigate={go} />}
+          {view === "portfolio" && showStartGuide && (
+            <section className={styles.startGuide} aria-label="처음 시작 안내">
+              <CircleHelp size={21} />
+              <div><strong>나만의 포트폴리오, 어디서 시작할까요?</strong><p>목표 설계 → 자산 등록 → 배정 → 비중 점검</p></div>
+              <button type="button" onClick={() => go("guide")}>시작 안내 <ArrowRight size={16} /></button>
+              <button type="button" className={styles.startGuideDismiss} aria-label="시작 안내 닫기" onClick={dismissStartGuide}><X size={17} /></button>
+            </section>
+          )}
           {view === "more" && (
             <div className={styles.allMenu}>
               <div className={styles.pageHead}>
