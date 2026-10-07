@@ -38,7 +38,7 @@ import {
   RecognizedHolding,
   recognizeHoldings,
 } from "./holdings";
-import PortfolioBuilder from "./PortfolioBuilder";
+import PortfolioBuilder, { stockAssetId, type AssetSelection } from "./PortfolioBuilder";
 import AssetIcon from "./AssetIcon";
 import styles from "./page.module.css";
 
@@ -53,6 +53,7 @@ type View =
   | "history"
   | "import"
   | "more"
+  | "detail"
   | "settings";
 type Instrument = {
   market: Market;
@@ -103,6 +104,9 @@ export default function PortfolioPage() {
   const { data: session, status: authStatus } = useSession();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [view, setView] = useState<View>("portfolio");
+  const [selectedAsset, setSelectedAsset] = useState<AssetSelection | null>(null);
+  const [detailSource, setDetailSource] = useState<"portfolio" | "holdings">("portfolio");
+  const [editFocus, setEditFocus] = useState<AssetSelection | null>(null);
   const [portfolioDirty, setPortfolioDirty] = useState(false);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(false);
@@ -292,9 +296,33 @@ export default function PortfolioPage() {
     )
       return;
     if (next !== view) setPortfolioDirty(false);
+    if (next !== "edit") {
+      setEditFocus(null);
+      setEditingHoldingId(null);
+    }
     setView(next);
     setNotice("");
   }
+
+  function openAsset(asset: AssetSelection, source: "portfolio" | "holdings") {
+    setSelectedAsset(asset);
+    setDetailSource(source);
+    go("detail");
+  }
+
+  function editAsset(asset: AssetSelection) {
+    setEditFocus(asset);
+    if (asset.kind === "stock") {
+      const row = holdings.find((item) => `holding:${item.id}` === asset.id || stockAssetId(item) === asset.id);
+      if (row) beginHoldingEdit(row);
+    }
+    go("edit");
+  }
+
+  useEffect(() => {
+    if (view !== "edit" || !editingHoldingId) return;
+    requestAnimationFrame(() => document.getElementById(`edit-stock-${editingHoldingId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }, [view, editingHoldingId]);
 
   async function importCapture(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -933,7 +961,7 @@ export default function PortfolioPage() {
     { id: "import" as View, label: "캡처 가져오기", Icon: Camera },
     { id: "settings" as View, label: "계정", Icon: Settings2 },
   ];
-  const navLabel = view === "more" ? "전체 메뉴" : nav.find((item) => item.id === view)?.label;
+  const navLabel = view === "more" ? "전체 메뉴" : view === "detail" ? "자산 상세" : nav.find((item) => item.id === view)?.label;
   const menuSections = [
     { label: "포트폴리오", ids: ["strategy", "composition", "rebalance"] },
     { label: "자산 관리", ids: ["holdings", "edit", "allocation", "import"] },
@@ -944,7 +972,7 @@ export default function PortfolioPage() {
     composition: "현재 비중과 목표 비교",
     rebalance: "매수·매도 수량 확인",
     holdings: "종목별 평가액과 손익",
-    edit: "수량, 매입단가, 현금 수정",
+    edit: "수량, 매입단가, 자산 이름 수정",
     allocation: "보유 자산의 포트 지정",
     import: "증권사 잔고 캡처로 등록",
     history: "포트별 자산 변화 확인",
@@ -1094,6 +1122,7 @@ export default function PortfolioPage() {
               "allocation",
               "rebalance",
               "history",
+              "detail",
             ] as View[]
           ).includes(view) && (
             <PortfolioBuilder
@@ -1106,7 +1135,8 @@ export default function PortfolioPage() {
                       | "composition"
                       | "allocation"
                       | "rebalance"
-                      | "history")
+                      | "history"
+                      | "detail")
               }
               holdings={holdings}
               dailyStockQuotes={dailyStockQuotes}
@@ -1120,6 +1150,10 @@ export default function PortfolioPage() {
               quoteError={quoteError}
               onImport={() => go("import")}
               onEditHoldings={() => go("edit")}
+              selectedAsset={selectedAsset}
+              onSelectAsset={(asset) => openAsset(asset, "portfolio")}
+              onEditAsset={editAsset}
+              onBack={() => go(detailSource)}
               onNavigate={go}
               onDirtyChange={setPortfolioDirty}
             />
@@ -1209,8 +1243,7 @@ export default function PortfolioPage() {
                 <div className={styles.editIntro}>
                   <strong>수정할 자산을 선택하세요</strong>
                   <span>
-                    아래에서 주식을 수정하고, 가상자산·현금은 이 화면의 다음
-                    섹션에서 관리하세요.
+                    주식 수량과 매입단가를 수정하고, 아래에서 가상자산·직접 입력 자산의 이름과 금액을 관리하세요.
                   </span>
                   <button onClick={() => go("import")}>
                     새 자산 추가 <Plus size={15} />
@@ -1257,7 +1290,7 @@ export default function PortfolioPage() {
                     const price = row.currentPrice ?? row.capturedPrice;
                     return (
                       <Fragment key={row.id}>
-                        <div className={styles.holdingRow}>
+                        <div className={styles.holdingRow} id={`edit-stock-${row.id}`}>
                           <div className={styles.holdingName}>
                             <AssetIcon
                               kind="stock"
@@ -1267,7 +1300,11 @@ export default function PortfolioPage() {
                               exchange={row.exchange}
                             />
                             <div>
-                              <strong>{row.name}</strong>
+                              {view === "holdings" ? (
+                                <button type="button" className={styles.holdingDetailLink} onClick={() => openAsset({ kind: "stock", id: `holding:${row.id}` }, "holdings")}>
+                                  {row.name} <ChevronRight size={15} />
+                                </button>
+                              ) : <strong>{row.name}</strong>}
                               <small>
                                 {row.broker} · {row.account} ·{" "}
                                 {row.symbol || "코드 미확인"}
@@ -1455,6 +1492,11 @@ export default function PortfolioPage() {
                   quoteError={quoteError}
                   onImport={() => go("import")}
                   onEditHoldings={() => go("edit")}
+                  selectedAsset={selectedAsset}
+                  onSelectAsset={(asset) => openAsset(asset, "portfolio")}
+                  onEditAsset={editAsset}
+                  onBack={() => go(detailSource)}
+                  focusAsset={editFocus}
                   onNavigate={go}
                   onDirtyChange={setPortfolioDirty}
                 />

@@ -1800,6 +1800,9 @@
 .sideNote { border: 0; background: none; padding: 8px; }
 .primaryButton { box-shadow: none; }
 .panel, .metrics article, .holdingStats > div { border: 0; box-shadow: none; }
+.holdingDetailLink { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.holdingDetailLink:hover { color: #087b83; }
+.holdingDetailLink:focus-visible { outline: 2px solid #087b83; outline-offset: 3px; }
 .metrics article, .holdingStats > div { background: var(--surface); }
 .editIntro { border: 0; background: var(--soft); border-radius: 10px; }
 .themeToggle { border: 0; background: transparent; }

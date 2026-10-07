@@ -42,6 +42,15 @@ type DailyCryptoQuotes = Record<
   string,
   { previousClose: number | null; checkedAt: string | null }
 >;
+export type AssetSelection = {
+  kind: "stock" | "crypto" | "manual";
+  id: string;
+};
+export function stockAssetId(holding: Holding) {
+  return holding.symbol
+    ? `${holding.market}:${holding.exchange ?? ""}:${holding.symbol.toUpperCase()}`
+    : `holding:${holding.id}`;
+}
 type Props = {
   userId: string;
   screen:
@@ -51,7 +60,8 @@ type Props = {
     | "allocation"
     | "edit"
     | "rebalance"
-    | "history";
+    | "history"
+    | "detail";
   holdings: Holding[];
   dailyStockQuotes: {
     market: Market;
@@ -70,6 +80,11 @@ type Props = {
   quoteError: string;
   onImport: () => void;
   onEditHoldings: () => void;
+  selectedAsset?: AssetSelection | null;
+  focusAsset?: AssetSelection | null;
+  onSelectAsset?: (asset: AssetSelection) => void;
+  onEditAsset?: (asset: AssetSelection) => void;
+  onBack?: () => void;
   onNavigate: (
     screen: "strategy" | "allocation" | "rebalance" | "history",
   ) => void;
@@ -208,12 +223,14 @@ function AssetList({
   usdKrw,
   gainView,
   dailyLoading,
+  onSelectAsset,
 }: {
   investments: AssetSummaryRow[];
   manualAssets: Portfolio["manualAssets"];
   usdKrw: number;
   gainView: "total" | "daily";
   dailyLoading: boolean;
+  onSelectAsset: (asset: AssetSelection) => void;
 }) {
   return (
     <>
@@ -230,7 +247,13 @@ function AssetList({
                   ? asset.gainPercent
                   : asset.dailyGainPercent;
               return (
-                <div className={styles.mobileAssetRow} key={asset.id}>
+                <button
+                  type="button"
+                  className={styles.mobileAssetRow}
+                  key={asset.id}
+                  onClick={() => onSelectAsset({ kind: asset.kind, id: asset.id })}
+                  aria-label={`${asset.name} 상세 보기`}
+                >
                   <div className={styles.mobileAssetIdentity}>
                     <AssetIcon
                       kind={asset.kind}
@@ -266,7 +289,7 @@ function AssetList({
                         : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${pct(gainPercent)}`})`}
                     </small>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -283,7 +306,13 @@ function AssetList({
           </h2>
           <div className={styles.mobileAssetList}>
             {manualAssets.map((asset) => (
-              <div className={styles.mobileAssetRow} key={asset.id}>
+              <button
+                type="button"
+                className={styles.mobileAssetRow}
+                key={asset.id}
+                onClick={() => onSelectAsset({ kind: "manual", id: asset.id })}
+                aria-label={`${asset.name} 상세 보기`}
+              >
                 <div className={styles.mobileAssetIdentity}>
                   <AssetIcon
                     kind="cash"
@@ -300,12 +329,97 @@ function AssetList({
                 <div className={styles.mobileAssetValue}>
                   <strong>{fmt(manualAssetValueKrw(asset, usdKrw))}</strong>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       )}
     </>
+  );
+}
+
+function AssetDetail({
+  selection,
+  portfolio,
+  holdings,
+  summary,
+  onBack,
+  onEdit,
+}: {
+  selection: AssetSelection;
+  portfolio: Portfolio;
+  holdings: Holding[];
+  summary?: AssetSummaryRow;
+  onBack: () => void;
+  onEdit: (asset: AssetSelection) => void;
+}) {
+  const stockRows = selection.kind === "stock"
+    ? holdings.filter((row) => stockAssetId(row) === selection.id || `holding:${row.id}` === selection.id)
+    : [];
+  const crypto = selection.kind === "crypto"
+    ? portfolio.cryptoAssets.find((asset) => `crypto:${asset.id}` === selection.id)
+    : null;
+  const manual = selection.kind === "manual"
+    ? portfolio.manualAssets.find((asset) => asset.id === selection.id)
+    : null;
+  const first = stockRows[0];
+  const quantity = first
+    ? stockRows.reduce((sum, row) => sum + row.quantity, 0)
+    : crypto?.quantity ?? null;
+  const costKnown = first && stockRows.every((row) => row.averageCost !== null);
+  const averageCost = first && costKnown && quantity
+    ? stockRows.reduce((sum, row) => sum + row.quantity * row.averageCost!, 0) / quantity
+    : crypto?.averageCostKrw ?? null;
+  const price = first
+    ? first.currentPrice ?? first.capturedPrice
+    : crypto?.quotedPriceKrw ?? null;
+  const name = first?.name ?? crypto?.name ?? manual?.name;
+  const stockValueKnown = stockRows.every((row) => (row.currentPrice ?? row.capturedPrice) !== null);
+  const stockValue = stockRows.reduce((sum, row) => sum + holdingValueKrw(row, portfolio.usdKrw), 0);
+  const stockCost = stockRows.reduce((sum, row) => sum + row.quantity * (row.averageCost ?? 0) * (row.market === "US" ? portfolio.usdKrw : 1), 0);
+  const value = summary?.value ?? (first && stockValueKnown ? stockValue : null);
+  const gain = summary?.gain ?? (first && costKnown && stockValueKnown ? stockValue - stockCost : null);
+  const gainPercent = summary?.gainPercent ?? (gain !== null && stockCost > 0 ? gain / stockCost * 100 : null);
+  if (!name) return <p className={styles.help}>자산을 찾을 수 없습니다. 목록에서 다시 선택해 주세요.</p>;
+  const unit = first?.market === "US" ? "USD" : "KRW";
+  const unitPrice = (value: number | null) => value === null
+    ? "—"
+    : unit === "USD" ? `$${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}` : fmt(value);
+  const bucketId = manual?.bucketId ?? crypto?.bucketId ??
+    (first ? portfolio.assignments.find((item) => item.holdingId === first.id)?.bucketId : null);
+  const bucketName = portfolio.buckets.find((bucket) => bucket.id === bucketId)?.name ?? "미분류";
+  return (
+    <section className={styles.assetDetail} aria-label={`${name} 상세 정보`}>
+      <button type="button" className={styles.detailBack} onClick={onBack}>← 이전 화면</button>
+      <div className={styles.detailHead}>
+        <AssetIcon kind={selection.kind === "manual" ? "cash" : selection.kind} symbol={first?.symbol ?? crypto?.marketCode ?? (manual?.valueUsd === null ? "KRW" : "USD")} name={name} market={first?.market} exchange={first?.exchange} />
+        <div><h2>{name}</h2><p>{first?.symbol ?? crypto?.marketCode ?? (manual?.valueUsd === null ? "원화 직접 입력" : "달러 직접 입력")} · {bucketName}</p></div>
+      </div>
+      <div className={styles.detailTotal}>
+        <span>평가 금액</span>
+        <strong>{manual ? fmt(manualAssetValueKrw(manual, portfolio.usdKrw)) : value === null ? "—" : fmt(value)}</strong>
+        {!manual && <small className={gain === null ? "" : gain >= 0 ? styles.mobileUp : styles.mobileDown}>
+          {gain === null ? "매입단가 정보 없음" : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${pct(gainPercent)}`})`}
+        </small>}
+      </div>
+      <div className={styles.detailFacts}>
+        {manual ? <>
+          <div><span>입력 금액</span><strong>{manual.valueUsd === null ? fmt(manual.valueKrw) : `$${manual.valueUsd.toLocaleString("en-US")}`}</strong></div>
+          <div><span>평가 기준</span><strong>{manual.valueUsd === null ? "원화 직접 입력" : `적용 환율 ${won.format(portfolio.usdKrw)}원`}</strong></div>
+        </> : <>
+          <div><span>보유 수량</span><strong>{quantityFormat.format(quantity ?? 0)}{first ? "주" : "개"}</strong></div>
+          <div><span>현재가</span><strong>{unitPrice(price)}</strong></div>
+          <div><span>평균 매입단가</span><strong>{unitPrice(averageCost)}</strong></div>
+          <div><span>평가손익</span><strong className={gain === null ? "" : gain >= 0 ? styles.mobileUp : styles.mobileDown}>{gain === null ? "—" : `${gain > 0 ? "+" : ""}${fmt(gain)}`}</strong></div>
+        </>}
+      </div>
+      {stockRows.length > 0 && <div className={styles.detailAccounts}>
+        <h3>계좌별 보유</h3>
+        {stockRows.map((row) => <div key={row.id}><span>{row.broker} · {row.account}<small>{quantityFormat.format(row.quantity)}주 · 매입단가 {row.averageCost === null ? "—" : unitPrice(row.averageCost)}</small></span><button type="button" onClick={() => onEdit({ kind: "stock", id: `holding:${row.id}` })}>수정</button></div>)}
+      </div>}
+      {manual && <p className={styles.detailHint}>직접 입력 자산은 평가 금액만 관리하며 매입단가와 손익은 계산하지 않습니다.</p>}
+      <button type="button" className={styles.detailEdit} onClick={() => onEdit(selection)}>이 자산 수정 <Pencil size={16} /></button>
+    </section>
   );
 }
 
@@ -324,6 +438,11 @@ export default function PortfolioBuilder({
   quoteError,
   onImport,
   onEditHoldings,
+  selectedAsset,
+  focusAsset,
+  onSelectAsset = () => {},
+  onEditAsset = () => {},
+  onBack = () => {},
   onNavigate,
   onDirtyChange,
 }: Props) {
@@ -376,6 +495,15 @@ export default function PortfolioBuilder({
   const [flowKind, setFlowKind] = useState<"deposit" | "withdrawal">("deposit");
   const [flowNote, setFlowNote] = useState("");
   const [flowSaving, setFlowSaving] = useState(false);
+
+  useEffect(() => {
+    if (screen !== "edit" || !focusAsset || loading) return;
+    if (focusAsset.kind === "stock") return;
+    const id = focusAsset.kind === "crypto"
+      ? `edit-crypto-${focusAsset.id.replace(/^crypto:/, "")}`
+      : `edit-manual-${focusAsset.id}`;
+    requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }, [screen, focusAsset, loading]);
 
   useEffect(() => {
     let active = true;
@@ -824,6 +952,8 @@ export default function PortfolioBuilder({
   }
   async function save() {
     if (!draft) return;
+    if (draft.manualAssets.some((asset) => !asset.name.trim()))
+      return onNotice("직접 입력 자산 이름을 입력해 주세요.");
     const total = draft.buckets.reduce(
       (sum, bucket) => sum + bucket.targetPercent,
       0,
@@ -1134,9 +1264,7 @@ export default function PortfolioBuilder({
     }
   >();
   for (const holding of holdings) {
-    const id = holding.symbol
-      ? `${holding.market}:${holding.exchange ?? ""}:${holding.symbol.toUpperCase()}`
-      : `holding:${holding.id}`;
+    const id = stockAssetId(holding);
     const group = mobileStockGroups.get(id) ?? {
       id,
       name: holding.name,
@@ -1319,6 +1447,7 @@ export default function PortfolioBuilder({
       "자산 기록",
       "포트별 자산 추이와 입출금 기록을 확인하세요.",
     ],
+    detail: ["ASSET DETAIL", "자산 상세", "보유 현황과 평가손익을 확인하세요."],
   }[screen];
 
   if (loading)
@@ -1378,13 +1507,24 @@ export default function PortfolioBuilder({
               <button className={styles.save} onClick={save} disabled={saving}>
                 {saving ? "저장 중" : "변경 내용 저장"}
               </button>
-            ) : screen !== "dashboard" ? (
+            ) : screen !== "dashboard" && screen !== "detail" ? (
               <span className={styles.saved}>
                 <Check size={15} /> 저장됨
               </span>
             ) : null}
           </div>
         </div>
+      )}
+
+      {screen === "detail" && selectedAsset && (
+        <AssetDetail
+          selection={selectedAsset}
+          portfolio={draft}
+          holdings={holdings}
+          summary={mobileInvestments.find((asset) => asset.id === selectedAsset.id)}
+          onBack={onBack}
+          onEdit={onEditAsset}
+        />
       )}
 
       {screen === "dashboard" && (
@@ -1498,6 +1638,7 @@ export default function PortfolioBuilder({
               usdKrw={draft.usdKrw}
               gainView={gainView}
               dailyLoading={quotesRefreshing || cryptoRefreshing}
+              onSelectAsset={onSelectAsset}
             />
           </section>
           <div className={styles.desktopLiveStatus} role="status">
@@ -1581,6 +1722,7 @@ export default function PortfolioBuilder({
                   usdKrw={draft.usdKrw}
                   gainView={gainView}
                   dailyLoading={quotesRefreshing || cryptoRefreshing}
+                  onSelectAsset={onSelectAsset}
                 />
               </section>
             </div>
@@ -2310,7 +2452,20 @@ export default function PortfolioBuilder({
                     id={`edit-manual-${asset.id}`}
                     key={asset.id}
                   >
-                    <strong>{asset.name}</strong>
+                    <label className={styles.manualNameField}>
+                      <span>자산 이름</span>
+                      <input
+                        value={asset.name}
+                        maxLength={100}
+                        aria-label={`${asset.name || "직접 입력 자산"} 이름`}
+                        onChange={(event) => change({
+                          ...draft,
+                          manualAssets: draft.manualAssets.map((item) =>
+                            item.id === asset.id ? { ...item, name: event.target.value } : item,
+                          ),
+                        })}
+                      />
+                    </label>
                     <input
                       type="number"
                       min="0"
