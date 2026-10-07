@@ -135,7 +135,7 @@ pnpm --dir apps/web exec tsc --noEmit -p tsconfig.json
 pnpm build:web
 
 # KIS 국내 전일 종가 해석 테스트
-pnpm --dir apps/web exec node --test tests/kis-quote-values.test.mjs
+pnpm --dir apps/web exec node --test tests/kis-quote-values.test.mjs tests/client-session.test.mjs
 ```
 
 루트 `pnpm test`는 현재 TODO 안내를 출력하는 초기 스크립트입니다. 전체 테스트가 통과했다는 근거로 사용하지 않습니다. 위 KIS 테스트도 해당 응답 계산만 검증하며 인증·DB·UI 전체 검증을 대신하지 않습니다.
@@ -159,3 +159,15 @@ pnpm --dir apps/web exec node --test tests/kis-quote-values.test.mjs
 ## 10. 문서와 캡처 갱신
 
 실제 동작을 확인한 뒤 [사용자 설명서](USER_GUIDE.md), [기능 기준](FEATURES.md), [FAQ](FAQ.md)를 함께 갱신합니다. 캡처는 운영 자격 증명이나 개인 계좌 대신 QA 데이터로 촬영하고, 문서용 파일만 `docs/screenshots`에 보관합니다. 캡처의 데이터가 저장돼 있는 환경을 그대로 공유하지 않습니다.
+
+### 모바일 세션 복귀 점검
+
+브라우저 세션 조회는 `app/providers.tsx`와 `lib/client-session.ts`에서 처리합니다. NextAuth v4의 기본 조회는 네트워크 오류와 실제 빈 세션을 모두 `null`로 반환하므로, 앱은 `/api/auth/session`의 성공·실패를 직접 구분해 `SessionContext`에 전달합니다. OAuth와 쿠키 발급, 서버 API의 인증 검증은 NextAuth를 사용합니다.
+
+- 네트워크 실패·5xx·잘못된 응답: 기존 세션의 만료 시각까지만 유지하고 제한된 간격으로 재시도.
+- 성공한 빈 세션·401: 로그인 상태 해제.
+- `visibilitychange`, `pageshow`, `online`, `focus`: 중복 조회를 합쳐 재확인. 화면이 보이고 온라인일 때는 5분마다 확인.
+- 다른 탭의 로그아웃 알림: 기존 화면 상태 해제. 계정 변경 시 자산 화면 상태를 초기화.
+- 토큰과 세션은 localStorage에 저장하지 않음. API 접근은 서버 세션으로 검증.
+
+실기기에서는 로그인 후 앱 전환 → 복귀, 와이파이·모바일 데이터 전환, 브라우저 탭 종료 → 재접속을 구분해 점검하세요. 브라우저가 쿠키를 삭제한 상황이나 서버의 JWT 해독 오류는 네트워크 재시도만으로 해결되지 않습니다.
