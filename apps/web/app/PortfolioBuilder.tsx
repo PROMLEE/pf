@@ -38,6 +38,10 @@ type Candidate = {
 };
 type CryptoMarket = { marketCode: string; name: string; englishName: string };
 const portfolioCache = new Map<string, Portfolio | null>();
+type DailyCryptoQuotes = Record<
+  string,
+  { previousClose: number | null; checkedAt: string | null }
+>;
 type Props = {
   userId: string;
   screen:
@@ -56,6 +60,8 @@ type Props = {
     previousClose: number | null;
     checkedAt: string | null;
   }[];
+  dailyCryptoQuotes: DailyCryptoQuotes;
+  onDailyCryptoQuotes: (quotes: DailyCryptoQuotes) => void;
   quoteVersion: number;
   onHoldings: (rows: Holding[]) => void;
   onNotice: (message: string) => void;
@@ -201,11 +207,13 @@ function AssetList({
   manualAssets,
   usdKrw,
   gainView,
+  dailyLoading,
 }: {
   investments: AssetSummaryRow[];
   manualAssets: Portfolio["manualAssets"];
   usdKrw: number;
   gainView: "total" | "daily";
+  dailyLoading: boolean;
 }) {
   return (
     <>
@@ -251,7 +259,9 @@ function AssetList({
                     >
                       {gain === null
                         ? gainView === "daily"
-                          ? "전일 종가 확인 중"
+                          ? dailyLoading
+                            ? "일간 시세 조회 중"
+                            : "일간 시세 정보 없음"
                           : "매입가 정보 없음"
                         : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${pct(gainPercent)}`})`}
                     </small>
@@ -304,6 +314,8 @@ export default function PortfolioBuilder({
   screen,
   holdings,
   dailyStockQuotes,
+  dailyCryptoQuotes,
+  onDailyCryptoQuotes,
   quoteVersion,
   onHoldings,
   onNotice,
@@ -344,6 +356,7 @@ export default function PortfolioBuilder({
   const [cryptoBucketId, setCryptoBucketId] = useState("");
   const [lookingUpCrypto, setLookingUpCrypto] = useState(false);
   const [cryptoRefreshError, setCryptoRefreshError] = useState("");
+  const [cryptoRefreshing, setCryptoRefreshing] = useState(false);
   const [fxRefreshError, setFxRefreshError] = useState("");
   const cryptoRefreshInFlight = useRef(false);
   const lastCryptoFetchAt = useRef(0);
@@ -356,9 +369,6 @@ export default function PortfolioBuilder({
     "trade",
   );
   const [gainView, setGainView] = useState<"total" | "daily">("total");
-  const [dailyCryptoQuotes, setDailyCryptoQuotes] = useState<
-    Record<string, { previousClose: number | null; checkedAt: string | null }>
-  >({});
   const [cashInput, setCashInput] = useState("");
   const [excludedHoldingIds, setExcludedHoldingIds] = useState<string[]>([]);
   const [flowDate, setFlowDate] = useState(kstDate);
@@ -464,6 +474,7 @@ export default function PortfolioBuilder({
       )
         return;
       cryptoRefreshInFlight.current = true;
+      setCryptoRefreshing(true);
       lastCryptoFetchAt.current = Date.now();
       try {
         const response = await fetch("/api/crypto/quotes", { method: "POST" });
@@ -480,7 +491,7 @@ export default function PortfolioBuilder({
         if (!response.ok || !payload.quotes)
           throw new Error(payload.message || "빗썸 시세 조회 실패");
         if (active) {
-          setDailyCryptoQuotes(
+          onDailyCryptoQuotes(
             Object.fromEntries(
               payload.quotes.map((quote) => [
                 quote.marketCode,
@@ -525,6 +536,7 @@ export default function PortfolioBuilder({
           );
       } finally {
         cryptoRefreshInFlight.current = false;
+        setCryptoRefreshing(false);
       }
     }
     void refreshCrypto();
@@ -1486,6 +1498,7 @@ export default function PortfolioBuilder({
               manualAssets={draft.manualAssets}
               usdKrw={draft.usdKrw}
               gainView={gainView}
+              dailyLoading={quotesRefreshing || cryptoRefreshing}
             />
           </section>
           <div className={styles.desktopLiveStatus} role="status">
@@ -1569,6 +1582,7 @@ export default function PortfolioBuilder({
                   manualAssets={draft.manualAssets}
                   usdKrw={draft.usdKrw}
                   gainView={gainView}
+                  dailyLoading={quotesRefreshing || cryptoRefreshing}
                 />
               </section>
             </div>

@@ -7,6 +7,7 @@ import {
 } from "node:crypto";
 import type { Market } from "../app/holdings";
 import { db } from "./db";
+import { domesticPreviousClose } from "./kis-quote-values";
 
 const BASE =
   process.env.KIS_BASE_URL ?? "https://openapi.koreainvestment.com:9443";
@@ -388,15 +389,14 @@ export async function quoteKis(
         { FID_COND_MRKT_DIV_CODE: "J", FID_INPUT_ISCD: symbol },
       );
       const price = Number(output.stck_prpr);
-      const previousClose = Number(output.stck_prdy_clpr);
+      // inquire-price returns the change from the previous close, not
+      // stck_prdy_clpr (which belongs to a different KIS endpoint).
+      const previousClose = domesticPreviousClose(output);
       return Number.isFinite(price) && price > 0
         ? {
             ...base,
             price,
-            previousClose:
-              Number.isFinite(previousClose) && previousClose > 0
-                ? previousClose
-                : null,
+            previousClose,
             checkedAt: new Date().toISOString(),
           }
         : { ...base, error: "종목 코드 또는 시세를 확인할 수 없습니다" };

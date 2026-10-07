@@ -66,6 +66,10 @@ type DailyStockQuote = {
   previousClose: number | null;
   checkedAt: string | null;
 };
+type DailyCryptoQuotes = Record<
+  string,
+  { previousClose: number | null; checkedAt: string | null }
+>;
 const won = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 const dollars = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -115,6 +119,10 @@ export default function PortfolioPage() {
   const [dailyStockQuotes, setDailyStockQuotes] = useState<DailyStockQuote[]>(
     [],
   );
+  const [dailyCryptoQuotes, setDailyCryptoQuotes] = useState<DailyCryptoQuotes>(
+    {},
+  );
+  const lastQuoteAttemptAt = useRef(0);
   const [filter, setFilter] = useState<"ALL" | Market>("ALL");
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -189,7 +197,7 @@ export default function PortfolioPage() {
     try {
       const cached = JSON.parse(
         sessionStorage.getItem(
-          `pf-daily-quotes:${session?.user?.appUserId ?? "account"}`,
+          `pf-daily-quotes:v2:${session?.user?.appUserId ?? "account"}`,
         ) ?? "null",
       ) as { savedAt: number; quotes: DailyStockQuote[] } | null;
       if (
@@ -610,6 +618,7 @@ export default function PortfolioPage() {
   async function refreshQuotes(silent = false) {
     if (quoteInFlight.current) return;
     quoteInFlight.current = true;
+    lastQuoteAttemptAt.current = Date.now();
     try {
       sessionStorage.setItem(
         `pf-quote-refresh:${session?.user?.appUserId ?? "account"}`,
@@ -627,6 +636,7 @@ export default function PortfolioPage() {
         quotes: {
           market?: Market;
           symbol?: string;
+          marketCode?: string;
           exchange?: string | null;
           price: number | null;
           previousClose?: number | null;
@@ -649,9 +659,22 @@ export default function PortfolioPage() {
           checkedAt: quote.checkedAt ?? null,
         }));
       setDailyStockQuotes(daily);
+      setDailyCryptoQuotes(
+        Object.fromEntries(
+          result.quotes
+            .filter((quote) => typeof quote.marketCode === "string")
+            .map((quote) => [
+              quote.marketCode!,
+              {
+                previousClose: quote.previousClose ?? null,
+                checkedAt: quote.checkedAt ?? null,
+              },
+            ]),
+        ),
+      );
       try {
         sessionStorage.setItem(
-          `pf-daily-quotes:${session?.user?.appUserId ?? "account"}`,
+          `pf-daily-quotes:v2:${session?.user?.appUserId ?? "account"}`,
           JSON.stringify({ savedAt: Date.now(), quotes: daily }),
         );
       } catch {
@@ -689,10 +712,17 @@ export default function PortfolioPage() {
     const refreshWhenVisible = () => {
       if (document.visibilityState !== "visible" || quoteInFlight.current)
         return;
-      const last = Number(sessionStorage.getItem(key) ?? 0);
-      if (Date.now() - last < (dailyStockQuotes.length ? 5 : 1) * 60 * 1000)
-        return;
-      sessionStorage.setItem(key, String(Date.now()));
+      const hasDailyQuotes = dailyStockQuotes.some(
+        (quote) => quote.previousClose !== null,
+      );
+      let last = lastQuoteAttemptAt.current;
+      try {
+        if (hasDailyQuotes)
+          last = Math.max(last, Number(sessionStorage.getItem(key) ?? 0));
+      } catch {
+        // Refresh still works when session storage is unavailable.
+      }
+      if (Date.now() - last < (hasDailyQuotes ? 5 : 1) * 60 * 1000) return;
       void refreshQuotes(true);
     };
     refreshWhenVisible();
@@ -707,7 +737,7 @@ export default function PortfolioPage() {
     holdings.length,
     session?.user?.appUserId,
     view,
-    dailyStockQuotes.length,
+    dailyStockQuotes,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function migrateLegacy() {
@@ -1049,6 +1079,8 @@ export default function PortfolioPage() {
               }
               holdings={holdings}
               dailyStockQuotes={dailyStockQuotes}
+              dailyCryptoQuotes={dailyCryptoQuotes}
+              onDailyCryptoQuotes={setDailyCryptoQuotes}
               quoteVersion={quoteVersion}
               onHoldings={setHoldings}
               onNotice={setNotice}
@@ -1385,6 +1417,8 @@ export default function PortfolioPage() {
                   screen="edit"
                   holdings={holdings}
                   dailyStockQuotes={dailyStockQuotes}
+                  dailyCryptoQuotes={dailyCryptoQuotes}
+                  onDailyCryptoQuotes={setDailyCryptoQuotes}
                   quoteVersion={quoteVersion}
                   onHoldings={setHoldings}
                   onNotice={setNotice}
