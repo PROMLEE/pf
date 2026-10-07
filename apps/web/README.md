@@ -1,4 +1,4 @@
-# 개인 자산 화면
+# PortRhythm
 
 ## 인증과 데이터베이스
 
@@ -7,6 +7,8 @@
 로컬 QA 계정은 개발 환경에서 소셜 로그인 없이 화면을 점검할 때 사용합니다. 공유 DB의 별도 `GUEST` 사용자 ID를 준비하고 `.env.local`에 `LOCAL_ADMIN_USERNAME`, `LOCAL_ADMIN_PASSWORD`, `LOCAL_ADMIN_USER_ID`를 설정한 뒤 개발 서버를 재시작하세요. 로그인 화면의 **로컬 관리자 테스트 로그인**으로 들어갈 수 있습니다. 이 경로는 `NODE_ENV=development`와 `localhost` 또는 `127.0.0.1` 요청에서만 작동하며 배포 환경에는 제공되지 않습니다. QA 계정의 자산은 실제 소셜 계정의 자산과 분리됩니다. 비밀번호는 `.env.local`에만 두고 저장소에 커밋하지 마세요.
 
 자산 테이블 정의는 [sql/portfolio_schema.sql](../../sql/portfolio_schema.sql)에 있습니다. 공유 Supabase 프로젝트에 적용된 `portfolio` 스키마는 Data API에 노출하지 않았고 `anon`·`authenticated` 권한을 부여하지 않았습니다. 모든 자산 요청은 Next.js 서버에서 로그인 사용자 ID로 범위를 제한합니다. DB 비밀번호와 OAuth 비밀 키는 브라우저로 보내지 않습니다.
+
+공유 프로젝트의 기존 `public` 테이블은 [sql/public_rls_lockdown.sql](../../sql/public_rls_lockdown.sql)로 RLS를 켜고 `anon`·`authenticated`의 직접 테이블 권한을 제거했습니다. PortRhythm의 사용자 조회와 계정 생성은 서버의 Postgres 연결을 사용합니다.
 
 가상자산 보유량과 시세 저장 테이블은 [sql/portfolio_crypto_assets.sql](../../sql/portfolio_crypto_assets.sql)에 있습니다. 기존 공유 Supabase 프로젝트에 적용되어 있습니다.
 

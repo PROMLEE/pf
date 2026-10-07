@@ -674,7 +674,7 @@ export default function PortfolioPage() {
   if (authStatus === "loading")
     return (
       <div className={styles.splash}>
-        <span className={styles.logo}>P</span> 포트리듬을 준비하고 있습니다
+        <span className={styles.logo}>PR</span> PortRhythm을 준비하고 있습니다
       </div>
     );
 
@@ -683,10 +683,10 @@ export default function PortfolioPage() {
       <div className={styles.authShell}>
         <section className={styles.authVisual}>
           <div className={styles.authBrand}>
-            <span className={styles.logo}>P</span> 포트리듬
+            <span className={styles.logo}>PR</span> PortRhythm
           </div>
           <div className={styles.authPitch}>
-            <span className={styles.kicker}>PORT RHYTHM · YOUR ALLOCATION</span>
+            <span className={styles.kicker}>PORTRHYTHM · YOUR ALLOCATION</span>
             <h1>
               투자는 리듬을 타듯,
               <br />내 기준으로 꾸준히.
@@ -739,7 +739,7 @@ export default function PortfolioPage() {
               <small>워런 버핏 · 버크셔 해서웨이 1988 주주서한</small>
             </a>
           </div>
-          <small>PORT RHYTHM · 나만의 투자 비중</small>
+          <small>PORTRHYTHM · 나만의 투자 비중</small>
         </section>
         <section className={styles.authForm}>
           <div>
@@ -854,9 +854,9 @@ export default function PortfolioPage() {
         className={`${styles.sidebar} ${menuOpen ? styles.sidebarOpen : ""}`}
       >
         <div className={styles.brand}>
-          <span className={styles.logo}>P</span>
+          <span className={styles.logo}>PR</span>
           <div>
-            <strong>포트리듬</strong>
+            <strong>PortRhythm</strong>
             <small>투자는 리듬을 타듯</small>
           </div>
         </div>

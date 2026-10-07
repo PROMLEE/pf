@@ -334,6 +334,7 @@ export default function PortfolioBuilder({
   const [rebalanceMode, setRebalanceMode] = useState<"trade" | "add-only">(
     "trade",
   );
+  const [gainView, setGainView] = useState<"total" | "daily">("total");
   const [cashInput, setCashInput] = useState("");
   const [excludedHoldingIds, setExcludedHoldingIds] = useState<string[]>([]);
   const [flowDate, setFlowDate] = useState(kstDate);
@@ -1067,6 +1068,16 @@ export default function PortfolioBuilder({
             ? "현재가가 없는 종목이 있어 계산을 보류했습니다."
             : null;
   const dailyChange = dailyChangeUnavailableReason ? null : changeSincePrevious;
+  const displayedGain =
+    gainView === "total"
+      ? knownGains.count
+        ? knownGains.value
+        : null
+      : dailyChange;
+  const displayedGainNote =
+    gainView === "total"
+      ? `매입단가 확인 ${knownGains.count}/${gainEligibleCount}개`
+      : (dailyChangeUnavailableReason ?? "전일 기록 대비 · 등록된 입출금 제외");
   const mobileStockGroups = new Map<
     string,
     {
@@ -1289,36 +1300,42 @@ export default function PortfolioBuilder({
               <span>원</span>
             </div>
             <div className={styles.mobileMetricList}>
-              <div>
-                <span>
-                  전체 평가손익 <small>확인분</small>
-                </span>
+              <div className={styles.gainMetric}>
+                <div>
+                  <div
+                    className={styles.gainToggle}
+                    role="group"
+                    aria-label="수익 표시 기간"
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={gainView === "total"}
+                      onClick={() => setGainView("total")}
+                    >
+                      전체 수익
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={gainView === "daily"}
+                      onClick={() => setGainView("daily")}
+                    >
+                      일간 수익
+                    </button>
+                  </div>
+                  <small>{displayedGainNote}</small>
+                </div>
                 <strong
                   className={
-                    knownGains.value >= 0 ? styles.mobileUp : styles.mobileDown
-                  }
-                >
-                  {knownGains.count
-                    ? `${knownGains.value > 0 ? "+" : ""}${fmt(knownGains.value)}`
-                    : "—"}
-                </strong>
-              </div>
-              <div>
-                <span>
-                  당일 추정 손익 <small>전일 대비</small>
-                </span>
-                <strong
-                  className={
-                    dailyChange === null
+                    displayedGain === null
                       ? ""
-                      : dailyChange >= 0
+                      : displayedGain >= 0
                         ? styles.mobileUp
                         : styles.mobileDown
                   }
                 >
-                  {dailyChange === null
+                  {displayedGain === null
                     ? "—"
-                    : `${dailyChange > 0 ? "+" : ""}${fmt(dailyChange)}`}
+                    : `${displayedGain > 0 ? "+" : ""}${fmt(displayedGain)}`}
                 </strong>
               </div>
               <div>
@@ -1390,47 +1407,44 @@ export default function PortfolioBuilder({
                 </section>
                 <section className={styles.desktopGain}>
                   <div>
-                    <span>
-                      전체 평가손익 <small>확인분</small>
-                    </span>
-                    <strong
-                      className={
-                        knownGains.value >= 0
-                          ? styles.profitUp
-                          : styles.profitDown
-                      }
+                    <div
+                      className={styles.gainToggle}
+                      role="group"
+                      aria-label="수익 표시 기간"
                     >
-                      {knownGains.count
-                        ? `${knownGains.value > 0 ? "+" : ""}${fmt(knownGains.value)}`
-                        : "—"}
-                    </strong>
-                    <small>
-                      {knownGains.cost > 0
-                        ? `${knownGains.value > 0 ? "+" : ""}${pct((knownGains.value / knownGains.cost) * 100)} · `
-                        : ""}
-                      매입단가 확인 {knownGains.count}/{gainEligibleCount}개
-                    </small>
-                  </div>
-                  <div>
-                    <span>
-                      당일 추정 손익 <small>전일 대비</small>
-                    </span>
+                      <button
+                        type="button"
+                        aria-pressed={gainView === "total"}
+                        onClick={() => setGainView("total")}
+                      >
+                        전체 수익
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={gainView === "daily"}
+                        onClick={() => setGainView("daily")}
+                      >
+                        일간 수익
+                      </button>
+                    </div>
                     <strong
                       className={
-                        dailyChange === null
+                        displayedGain === null
                           ? ""
-                          : dailyChange >= 0
+                          : displayedGain >= 0
                             ? styles.profitUp
                             : styles.profitDown
                       }
                     >
-                      {dailyChange === null
+                      {displayedGain === null
                         ? "—"
-                        : `${dailyChange > 0 ? "+" : ""}${fmt(dailyChange)}`}
+                        : `${displayedGain > 0 ? "+" : ""}${fmt(displayedGain)}`}
                     </strong>
                     <small>
-                      {dailyChangeUnavailableReason ??
-                        "전일 기록 대비 · 등록된 입출금 제외"}
+                      {gainView === "total" && knownGains.cost > 0
+                        ? `${knownGains.value > 0 ? "+" : ""}${pct((knownGains.value / knownGains.cost) * 100)} · `
+                        : ""}
+                      {displayedGainNote}
                     </small>
                   </div>
                 </section>
