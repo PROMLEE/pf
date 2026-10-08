@@ -41,6 +41,7 @@ import PortfolioBuilder, { stockAssetId, type AssetSelection } from "./Portfolio
 import AssetIcon from "./AssetIcon";
 import UserGuide from "./UserGuide";
 import AccountSettings from "./AccountSettings";
+import AssetSortSelect, { compareAssets, isAssetSort, type AssetSort } from "./asset-sort";
 import styles from "./page.module.css";
 
 type View =
@@ -123,6 +124,17 @@ export default function PortfolioPage() {
   const { data: session, status: authStatus } = useSession();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [view, setView] = useState<View>("portfolio");
+  const [assetSort, setAssetSort] = useState<AssetSort>("value-desc");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`pf-asset-sort:${session?.user?.appUserId ?? "account"}`);
+      setAssetSort(isAssetSort(saved) ? saved : "value-desc");
+    } catch { /* Use the default when browser storage is unavailable. */ }
+  }, [session?.user?.appUserId]);
+  function chooseAssetSort(next: AssetSort) {
+    setAssetSort(next);
+    try { localStorage.setItem(`pf-asset-sort:${session?.user?.appUserId ?? "account"}`, next); } catch { /* Keep sorting for this visit. */ }
+  }
   const [showStartGuide, setShowStartGuide] = useState(false);
 
   useEffect(() => {
@@ -352,9 +364,17 @@ export default function PortfolioPage() {
             .includes(search.toLowerCase()),
         )
         .sort(
-          (a, b) => a.market.localeCompare(b.market) || valueOf(b) - valueOf(a),
+          (a, b) => {
+            // KRW and USD amounts are ranked within their own markets.
+            const monetary = assetSort.startsWith("value") || assetSort.startsWith("gain");
+            return (monetary ? a.market.localeCompare(b.market) : 0) || compareAssets(
+              { name: a.name, value: (a.currentPrice ?? a.capturedPrice) === null ? null : valueOf(a), gain: gainOf(a), gainPercent: gainPercentOf(a) },
+              { name: b.name, value: (b.currentPrice ?? b.capturedPrice) === null ? null : valueOf(b), gain: gainOf(b), gainPercent: gainPercentOf(b) },
+              assetSort,
+            );
+          },
         ),
-    [holdings, filter, search],
+    [holdings, filter, search, assetSort],
   );
 
   function go(next: View, asset = selectedAsset, source = detailSource) {
@@ -1221,6 +1241,8 @@ export default function PortfolioPage() {
               holdings={holdings}
               dailyStockQuotes={dailyStockQuotes}
               dailyCryptoQuotes={dailyCryptoQuotes}
+              assetSort={assetSort}
+              onAssetSort={chooseAssetSort}
               onDailyCryptoQuotes={setDailyCryptoQuotes}
               quoteVersion={quoteVersion}
               onHoldings={setHoldings}
@@ -1355,6 +1377,7 @@ export default function PortfolioPage() {
                       onChange={(event) => setSearch(event.target.value)}
                     />
                   </label>
+                  <AssetSortSelect value={assetSort} onChange={chooseAssetSort} className={styles.assetSort} marketGrouped={filter === "ALL"} />
                 </div>
                 <div className={styles.tableHead}>
                   <span>종목</span>
@@ -1562,6 +1585,8 @@ export default function PortfolioPage() {
                   holdings={holdings}
                   dailyStockQuotes={dailyStockQuotes}
                   dailyCryptoQuotes={dailyCryptoQuotes}
+                  assetSort={assetSort}
+                  onAssetSort={chooseAssetSort}
                   onDailyCryptoQuotes={setDailyCryptoQuotes}
                   quoteVersion={quoteVersion}
                   onHoldings={setHoldings}

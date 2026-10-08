@@ -1431,6 +1431,9 @@
 .detailForm label { display: grid; gap: 8px; color: var(--muted); font-size: 13px; }
 .detailForm input { width: 100%; min-height: 44px; box-sizing: border-box; font-size: 16px; }
 .detailFormActions { display: flex; gap: 10px; margin-top: 20px; }
+.assetSortBar { display: flex; justify-content: flex-end; margin: 0 0 12px; }
+.assetSortBar select { min-height: 38px; font-size: 12px; }
+@media (max-width: 760px) { .assetSortBar select { font-size: 16px; } }
 .detailForm [role="alert"] { color: #c03948; font-size: 13px; }
 .detailForm button:disabled, .detailAccounts button:disabled { opacity: .5; cursor: default; }
 .manualNameField { display: grid; gap: 4px; color: var(--muted); font-size: 10px; }

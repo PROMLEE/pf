@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { Holding, Market } from "./holdings";
 import AssetIcon from "./AssetIcon";
+import AssetSortSelect, { compareAssets, type AssetSort } from "./asset-sort";
 import Portfolio3D from "./Portfolio3D";
 import PortfolioVisuals from "./PortfolioVisuals";
 import {
@@ -71,6 +72,8 @@ type Props = {
     checkedAt: string | null;
   }[];
   dailyCryptoQuotes: DailyCryptoQuotes;
+  assetSort: AssetSort;
+  onAssetSort: (value: AssetSort) => void;
   onDailyCryptoQuotes: (quotes: DailyCryptoQuotes) => void;
   quoteVersion: number;
   onHoldings: (rows: Holding[]) => void;
@@ -224,6 +227,8 @@ function AssetList({
   gainView,
   dailyLoading,
   onSelectAsset,
+  assetSort,
+  onAssetSort,
 }: {
   investments: AssetSummaryRow[];
   manualAssets: Portfolio["manualAssets"];
@@ -231,16 +236,31 @@ function AssetList({
   gainView: "total" | "daily";
   dailyLoading: boolean;
   onSelectAsset: (asset: AssetSelection) => void;
+  assetSort: AssetSort;
+  onAssetSort: (value: AssetSort) => void;
 }) {
+  const sortedInvestments = [...investments].sort((a, b) => compareAssets(
+    { ...a, gain: gainView === "daily" ? a.dailyGain : a.gain, gainPercent: gainView === "daily" ? a.dailyGainPercent : a.gainPercent },
+    { ...b, gain: gainView === "daily" ? b.dailyGain : b.gain, gainPercent: gainView === "daily" ? b.dailyGainPercent : b.gainPercent },
+    assetSort,
+  ));
+  const sortedManual = [...manualAssets].sort((a, b) => compareAssets(
+    { name: a.name, value: manualAssetValueKrw(a, usdKrw), gain: null, gainPercent: null },
+    { name: b.name, value: manualAssetValueKrw(b, usdKrw), gain: null, gainPercent: null },
+    assetSort.startsWith("gain") || assetSort.startsWith("return") ? "value-desc" : assetSort,
+  ));
   return (
     <>
+      <div className={styles.assetSortBar}>
+        <AssetSortSelect value={assetSort} onChange={onAssetSort} />
+      </div>
       <div className={styles.mobileAssetGroup}>
         <h2>
           투자 <span>{investments.length}</span>
         </h2>
         {investments.length ? (
           <div className={styles.mobileAssetList}>
-            {investments.map((asset) => {
+            {sortedInvestments.map((asset) => {
               const gain = gainView === "total" ? asset.gain : asset.dailyGain;
               const gainPercent =
                 gainView === "total"
@@ -305,7 +325,7 @@ function AssetList({
             현금·기타 <span>{manualAssets.length}</span>
           </h2>
           <div className={styles.mobileAssetList}>
-            {manualAssets.map((asset) => (
+            {sortedManual.map((asset) => (
               <button
                 type="button"
                 className={styles.mobileAssetRow}
@@ -505,6 +525,8 @@ export default function PortfolioBuilder({
   holdings,
   dailyStockQuotes,
   dailyCryptoQuotes,
+  assetSort,
+  onAssetSort,
   onDailyCryptoQuotes,
   quoteVersion,
   onHoldings,
@@ -1748,6 +1770,8 @@ export default function PortfolioBuilder({
               gainView={gainView}
               dailyLoading={quotesRefreshing || cryptoRefreshing}
               onSelectAsset={onSelectAsset}
+              assetSort={assetSort}
+              onAssetSort={onAssetSort}
             />
           </section>
           <div className={styles.desktopLiveStatus} role="status">
@@ -1832,6 +1856,8 @@ export default function PortfolioBuilder({
                   gainView={gainView}
                   dailyLoading={quotesRefreshing || cryptoRefreshing}
                   onSelectAsset={onSelectAsset}
+              assetSort={assetSort}
+              onAssetSort={onAssetSort}
                 />
               </section>
             </div>
