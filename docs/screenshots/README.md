@@ -35,9 +35,12 @@
 
 ## 모바일
 
+`mobile-dashboard-compact.jpg`는 **2026-10-08, `99b2157` 기준**의 추가 캡처입니다. 로컬 개발 서버에서 같은 QA 계정으로 촬영했고 개발 도구를 열지 않았습니다. 수익 토글·정렬 선택과 축소된 상단/종목 여백, 하단 집계 안내를 보여줍니다. 기존 캡처는 위의 초기 구현 기준을 유지합니다.
+
 | 파일 | 내용 | 크기 |
 | --- | --- | --- |
 | [mobile-dashboard.jpg](mobile-dashboard.jpg) | 핵심 지표·투자 및 현금 목록·하단 탭 | 390 × 844 |
+| [mobile-dashboard-compact.jpg](mobile-dashboard-compact.jpg) | 최신 컴팩트 요약·수익 토글·정렬·하단 보조 정보 | 390 × 844 뷰포트 |
 | [mobile-crypto-detail.jpg](mobile-crypto-detail.jpg) | 비트코인 수량·매입단가·손익·수정 연결 | 390 × 844 |
 | [mobile-composition.jpg](mobile-composition.jpg) | 비중 그래프와 현재·목표 비교 | 375 × 916 |
 | [mobile-menu.jpg](mobile-menu.jpg) | 기능별로 분류한 전체 메뉴 | 375 × 1081 |
