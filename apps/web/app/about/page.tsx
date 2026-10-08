@@ -38,7 +38,6 @@ export default function AboutPage() {
             <figure className={styles.heroVisual} data-reveal>
               <div className={styles.visualBackdrop}><span>목표를 정하고.<br />현재를 확인하고.<br /><b>필요할 때 조정하고.</b></span></div>
               <img src="/about/mobile-dashboard.jpg" width={390} height={844} alt="총 평가액, 일간 손익, 정렬한 종목을 보여주는 PortRhythm 모바일 대시보드" fetchPriority="high" />
-              <figcaption>실제 서비스 화면 · QA 계정 예시 데이터</figcaption>
             </figure>
           </section>
 
@@ -53,7 +52,7 @@ export default function AboutPage() {
 
           <section className={`${styles.section} ${styles.screenSection}`} data-reveal>
             <div><span className={styles.eyebrow}>목표와 현재를 한눈에</span><h2>많아진 비중, 부족한 비중.<br />차이가 보이면 기준이 생깁니다.</h2><p>원형 그래프에서 포트를 선택해 평가액과 현재·목표 비중을 확인하세요. 같은 종목을 여러 계좌에 보유해도 내 투자 계획에 연결할 수 있습니다.</p><ul className={styles.checks}><li><Check size={16} />종목코드 규칙 또는 직접 자산 배정</li><li><Check size={16} />포트별 평가액과 비중 차이 확인</li><li><Check size={16} />포트별 추이와 입출금 기록</li></ul></div>
-            <figure className={styles.screen}><img src="/guide/desktop-composition.jpg" width={1280} height={720} loading="lazy" alt="원형 그래프와 포트별 현재·목표 비중을 비교하는 화면" /><figcaption>포트 비중 화면 · QA 계정 예시 데이터</figcaption></figure>
+            <figure className={styles.screen}><img src="/guide/desktop-composition.jpg" width={1280} height={720} loading="lazy" alt="원형 그래프와 포트별 현재·목표 비중을 비교하는 화면" /></figure>
           </section>
 
           <section className={styles.section} data-reveal>
@@ -63,7 +62,7 @@ export default function AboutPage() {
           </section>
 
           <section className={`${styles.section} ${styles.screenSection}`} data-reveal>
-            <figure className={styles.screen}><img src="/guide/desktop-rebalance.jpg" width={1265} height={1078} loading="lazy" alt="예상 주식 매수·매도 수량과 조정 후 비중을 보여주는 리밸런싱 화면" /><figcaption>리밸런싱 화면 · QA 계정 예시 데이터</figcaption></figure>
+            <figure className={styles.screen}><img src="/guide/desktop-rebalance.jpg" width={1265} height={1078} loading="lazy" alt="예상 주식 매수·매도 수량과 조정 후 비중을 보여주는 리밸런싱 화면" /></figure>
             <div><span className={styles.eyebrow}>차이를 보고, 수량으로 검토</span><h2>내 상황에 맞는<br />조정 방법을 고르세요.</h2><p>매도 후 매수와 신규 자금 매수를 비교하고, 이번에 조정하지 않을 종목은 제외하세요. 실제 거래는 증권사·거래소에서 직접 진행합니다.</p><p>주식은 1주 단위와 예산을 반영합니다. 가상자산은 초과·부족 금액을 검토하며, 비용·체결 가격에 따라 실제 결과는 달라질 수 있습니다.</p></div>
           </section>
 
