@@ -898,8 +898,8 @@ export default function PortfolioPage() {
           <div className={styles.authPitch}>
             <span className={styles.kicker}>PORTRHYTHM · YOUR ALLOCATION</span>
             <h1>
-              투자는 리듬을 타듯,
-              <br />내 기준으로 꾸준히.
+              투자는
+              <br />나만의 리듬으로.
             </h1>
             <p>
               목표 비중을 직접 설계하고 국내·미국 종목을 연결하세요. 현재 비중과
@@ -1081,7 +1081,7 @@ export default function PortfolioPage() {
           <span className={styles.logo}>PR</span>
           <div>
             <strong>PortRhythm</strong>
-            <small>투자는 리듬을 타듯</small>
+            <small>투자는 나만의 리듬으로</small>
           </div>
         </div>
         <div className={styles.navGroup}>

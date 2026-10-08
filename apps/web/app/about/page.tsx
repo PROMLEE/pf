@@ -5,11 +5,11 @@ import Experience, { RebalanceDemo } from "./Experience";
 import styles from "./about.module.css";
 
 export const metadata: Metadata = {
-  title: "PortRhythm 소개 | 내 투자 기준을, 꾸준히",
+  title: "PortRhythm 소개 | 투자는 나만의 리듬으로",
   description: "국내·미국 주식, 가상자산, 현금을 나만의 목표 비중으로 관리하세요. 실제 자산과 목표를 비교하고 다음 리밸런싱을 준비하는 PortRhythm.",
   alternates: { canonical: "https://pf.promleeblog.com/about" },
   openGraph: {
-    title: "PortRhythm — 투자는 리듬을 타듯",
+    title: "PortRhythm — 투자는 나만의 리듬으로",
     description: "내 목표 비중부터 다음 조정까지. 나만의 포트폴리오를 꾸준히 관리하세요.",
     url: "https://pf.promleeblog.com/about",
     type: "website",
@@ -30,7 +30,7 @@ export default function AboutPage() {
           <section className={styles.hero}>
             <div data-reveal>
               <span className={styles.eyebrow}>내 투자 기준을, 매일 확인할 수 있게</span>
-              <h1>투자는 리듬을 타듯.<br />내 기준으로 <em>꾸준히.</em></h1>
+              <h1>투자는<br /><em>나만의 리듬으로.</em></h1>
               <p>나만의 목표 비중과 실제 자산을 연결하세요.<br className={styles.desktopBreak} /> 어디가 많고 적은지 확인하고, 다음 조정을 준비합니다.</p>
               <div className={styles.actions}><Link href="/" className={styles.primary}>내 포트폴리오 시작하기 <ArrowRight size={18} /></Link><a href="#how-it-works" className={styles.textLink}>어떻게 관리하나요? ↓</a></div>
               <span className={styles.assetScope}>국내·미국 주식 / 가상자산 / 현금</span>

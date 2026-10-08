@@ -5,9 +5,9 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "PortRhythm | 투자는 리듬을 타듯",
+  title: "PortRhythm | 투자는 나만의 리듬으로",
   description:
-    "투자는 리듬을 타듯. 나만의 목표 비중을 설계하고 자산을 점검하며 리밸런싱하세요.",
+    "투자는 나만의 리듬으로. 나만의 목표 비중을 설계하고 자산을 점검하며 리밸런싱하세요.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
