@@ -1813,9 +1813,6 @@ export default function PortfolioPage() {
             />
           )}
         </main>
-        <footer className={styles.footer}>
-          PORTFOLIO · 개인 자산 관리를 위한 공간
-        </footer>
       </div>
       <nav
         className={`${styles.mobileNav} ${view === "portfolio" ? styles.mobileHomeNav : ""}`}

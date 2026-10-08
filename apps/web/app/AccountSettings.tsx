@@ -3,6 +3,7 @@
 import {
   BookOpen,
   ChevronRight,
+  ExternalLink,
   LogOut,
   Moon,
   Settings2,
@@ -126,12 +127,26 @@ export default function AccountSettings({
           </div>
         </details>
       </section>
-      <footer className={styles.footer}>
+      <div className={styles.signOutRow}>
         <button type="button" onClick={onSignOut}>
           <LogOut size={17} />
           로그아웃
         </button>
-        <span>PortRhythm · 투자는 리듬을 타듯</span>
+      </div>
+      <footer className={styles.serviceInfo} aria-label="서비스 정보">
+        <h2>PortRhythm</h2>
+        <p>투자는 리듬을 타듯, 내 기준으로 꾸준히.</p>
+        <nav aria-label="서비스 관련 링크">
+          <a
+            href="https://github.com/PROMLEE"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            개발자 GitHub <ExternalLink size={12} aria-hidden="true" />
+            <span className={styles.srOnly}> (새 탭)</span>
+          </a>
+        </nav>
+        <small>© {new Date().getFullYear()} PROMLEE. PortRhythm.</small>
       </footer>
     </div>
   );
