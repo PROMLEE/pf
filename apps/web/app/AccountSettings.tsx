@@ -138,11 +138,19 @@ export default function AccountSettings({
         <p>투자는 리듬을 타듯, 내 기준으로 꾸준히.</p>
         <nav aria-label="서비스 관련 링크">
           <a
-            href="https://github.com/PROMLEE"
+            href="https://github.com/PROMLEE/pf"
             target="_blank"
             rel="noopener noreferrer"
           >
-            개발자 GitHub <ExternalLink size={12} aria-hidden="true" />
+            GitHub 저장소 <ExternalLink size={12} aria-hidden="true" />
+            <span className={styles.srOnly}> (새 탭)</span>
+          </a>
+          <a
+            href="https://github.com/PROMLEE/pf/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            버그 제보·기능 제안 <ExternalLink size={12} aria-hidden="true" />
             <span className={styles.srOnly}> (새 탭)</span>
           </a>
         </nav>
