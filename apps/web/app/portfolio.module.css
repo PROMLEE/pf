@@ -1404,7 +1404,7 @@
 .desktopTotal strong { font-weight: 800; }
 .desktopGain > div { min-height: auto; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .desktopGain strong { font-size: 23px; }
-.desktopAssetPanel .mobileAssetRow { min-height: 68px; border-bottom: 0; }
+.desktopAssetPanel .mobileAssetRow { min-height: 56px; border-bottom: 0; }
 .mobileAssetRow { width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .mobileAssetRow:hover { background: var(--soft); }
 .mobileAssetRow:focus-visible { outline: 2px solid #087b83; outline-offset: 3px; }
@@ -1487,10 +1487,11 @@
   .mobileMetricList { border: 0; margin-top: 22px; }
   .mobileMetricList > div { border: 0; min-height: 64px; }
   .mobileDashboardTop button { border: 0; background: var(--soft); }
-  .mobileAssetRow { border-bottom: 0; min-height: 76px; }
+  .mobileAssetRow { border-bottom: 0; min-height: 60px; }
+  .mobileAssetName, .mobileAssetValue { gap: 3px; }
   .manualRow .manualNameField { grid-column: 1 / -1; }
   .detailTotal strong { font-size: 28px; }
-  .mobileAssetGroup { margin-top: 28px; }
+  .mobileAssetGroup { margin-top: 20px; }
   .allocationLegendRow { min-height: 40px; font-size: 12px; }
   .allocationLegendRow strong { font-size: 13px; }
   .allocationChart { width: 190px; }
