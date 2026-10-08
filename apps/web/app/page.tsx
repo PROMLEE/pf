@@ -57,6 +57,23 @@ type View =
   | "detail"
   | "settings"
   | "guide";
+const VIEWS: readonly View[] = [
+  "portfolio", "holdings", "edit", "strategy", "composition", "allocation",
+  "rebalance", "history", "import", "more", "detail", "settings", "guide",
+];
+
+function screenUrl(next: View, asset: AssetSelection | null, source: string) {
+  const url = new URL(window.location.href);
+  if (next === "portfolio") url.searchParams.delete("view");
+  else url.searchParams.set("view", next);
+  for (const key of ["asset", "kind", "source"]) url.searchParams.delete(key);
+  if (next === "detail" && asset) {
+    url.searchParams.set("asset", asset.id);
+    url.searchParams.set("kind", asset.kind);
+    url.searchParams.set("source", source);
+  }
+  return `${url.pathname}${url.search}${url.hash}`;
+}
 type Instrument = {
   market: Market;
   symbol: string;
@@ -123,6 +140,43 @@ export default function PortfolioPage() {
   const [detailSource, setDetailSource] = useState<"portfolio" | "holdings">("portfolio");
   const [editFocus, setEditFocus] = useState<AssetSelection | null>(null);
   const [portfolioDirty, setPortfolioDirty] = useState(false);
+  const navigationState = useRef({ dirty: false, url: "" });
+
+  useEffect(() => {
+    navigationState.current.dirty = portfolioDirty;
+  }, [portfolioDirty]);
+
+  useEffect(() => {
+    function restoreScreen() {
+      const params = new URLSearchParams(window.location.search);
+      const requested = params.get("view") as View;
+      let next: View = VIEWS.includes(requested) ? requested : "portfolio";
+      const id = params.get("asset");
+      const kind = params.get("kind");
+      const asset: AssetSelection | null = id && (kind === "stock" || kind === "crypto" || kind === "manual")
+        ? { id, kind } : null;
+      if (next === "detail" && !asset) next = "holdings";
+      setSelectedAsset(asset);
+      setDetailSource(params.get("source") === "holdings" ? "holdings" : "portfolio");
+      setView(next);
+      setEditFocus(null);
+      setEditingHoldingId(null);
+      setNotice("");
+      navigationState.current.url = window.location.href;
+    }
+    function onHistoryChange() {
+      if (navigationState.current.dirty && !window.confirm("저장하지 않은 포트폴리오 변경 사항을 버리고 이동할까요?")) {
+        window.history.pushState(null, "", navigationState.current.url);
+        return;
+      }
+      navigationState.current.dirty = false;
+      setPortfolioDirty(false);
+      restoreScreen();
+    }
+    restoreScreen();
+    window.addEventListener("popstate", onHistoryChange);
+    return () => window.removeEventListener("popstate", onHistoryChange);
+  }, []);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
@@ -303,7 +357,7 @@ export default function PortfolioPage() {
     [holdings, filter, search],
   );
 
-  function go(next: View) {
+  function go(next: View, asset = selectedAsset, source = detailSource) {
     if (
       portfolioDirty &&
       next !== view &&
@@ -316,6 +370,12 @@ export default function PortfolioPage() {
       setEditingHoldingId(null);
     }
     setView(next);
+    const url = screenUrl(next, asset, source);
+    if (url !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      window.history.pushState(null, "", url);
+    }
+    navigationState.current.url = window.location.href;
+    if (next !== view) navigationState.current.dirty = false;
     if (next !== view) window.scrollTo({ top: 0, behavior: "instant" });
     setNotice("");
   }
@@ -323,7 +383,7 @@ export default function PortfolioPage() {
   function openAsset(asset: AssetSelection, source: "portfolio" | "holdings") {
     setSelectedAsset(asset);
     setDetailSource(source);
-    go("detail");
+    go("detail", asset, source);
   }
 
   function editAsset(asset: AssetSelection) {
@@ -629,7 +689,7 @@ export default function PortfolioPage() {
       );
       setHoldings(result.holdings);
       setDraft([]);
-      setView("holdings");
+      go("holdings");
       setNotice(`${incoming.length}개 종목을 저장했습니다.`);
     } catch (error) {
       setNotice(
