@@ -388,7 +388,7 @@ export default function UserGuide({
         ))}
       </section>
       <footer data-reveal className={styles.end}>
-        <strong>투자는 나만의 리듬으로.</strong>
+        <strong>투자는 나만의 리듬으로. 내 기준을 지키며, 꾸준히.</strong>
         <p>현재 보유 자산을 확인한 후 목표 비중을 정해보세요.</p>
         {onNavigate ? (
           action("strategy", "내 목표 설계하기")

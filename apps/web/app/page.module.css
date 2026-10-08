@@ -1585,6 +1585,7 @@
 .authPitch .kicker { color: #8fe0d5; font-size: 11px; }
 .authPitch h1 { max-width: 600px; margin: 14px 0 18px; font-size: clamp(37px, 4vw, 61px); line-height: 1.14; }
 .authPitch > p { max-width: 470px; color: #c0dadf; font-size: 15px; line-height: 1.75; }
+.authPitch > p strong { display: block; margin-bottom: 8px; color: #fff; font-weight: 650; }
 .authVisual > small { color: #9bbfc4; }
 .authGraphic {
   max-width: 485px;

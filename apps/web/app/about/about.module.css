@@ -12,6 +12,7 @@
 .hero h1 { margin: 20px 0; font-size: clamp(36px, 4.7vw, 62px); line-height: 1.17; letter-spacing: -.065em; font-weight: 800; }
 .hero h1 em { font-style: normal; color: #347b7f; }
 .hero p { font-size: 17px; line-height: 1.85; color: var(--muted); }
+.hero p strong { display: block; margin-bottom: 8px; color: var(--ink); font-weight: 650; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: 26px; }
 .primary { display: inline-flex; align-items: center; justify-content: center; gap: 16px; padding: 15px 20px; min-height: 48px; border-radius: 8px; color: white; background: #276d73; font-size: 14px; font-weight: 750; transition: background .2s, transform .2s; }
 .primary:hover { background: #1b565e; transform: translateY(-2px); }

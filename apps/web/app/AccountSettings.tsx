@@ -136,7 +136,7 @@ export default function AccountSettings({
       </div>
       <footer className={styles.serviceInfo} aria-label="서비스 정보">
         <h2>PortRhythm</h2>
-        <p>투자는 나만의 리듬으로.</p>
+        <p>투자는 나만의 리듬으로. 내 기준을 지키며, 꾸준히.</p>
         <nav aria-label="서비스 관련 링크">
           <Link href="/about">서비스 소개 <ChevronRight size={12} aria-hidden="true" /></Link>
           <a

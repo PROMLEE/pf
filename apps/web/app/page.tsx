@@ -902,6 +902,7 @@ export default function PortfolioPage() {
               <br />나만의 리듬으로.
             </h1>
             <p>
+              <strong>내 기준을 지키며, 꾸준히.</strong>
               목표 비중을 직접 설계하고 국내·미국 종목을 연결하세요. 현재 비중과
               목표의 차이, 다음 조정이 필요한 자산까지 한눈에 볼 수 있습니다.
             </p>
