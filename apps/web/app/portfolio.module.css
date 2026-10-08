@@ -1500,3 +1500,97 @@
   .allocationDetail > strong { grid-column: 1 / -1; }
   .allocationDetail b { font-size: 13px; }
 }
+
+/* Keep calculation assumptions beside results; reveal trade provenance on demand. */
+.advice {
+  display: grid;
+  grid-template-columns: 9px minmax(200px, 1fr) minmax(200px, 1fr);
+  align-items: start;
+}
+.advice > .tradeDetail {
+  grid-column: 2 / -1;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+.tradeDetail small {
+  line-height: 1.7;
+  color: var(--muted);
+}
+.tradeDetail summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--blue);
+}
+.tradeDetail details > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.tradeDetail details strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+.rebalanceLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 16px;
+}
+.rebalanceLinks button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--blue);
+  font-size: 12px;
+}
+.ruleEntry {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+.ruleEntry .rule {
+  flex-wrap: wrap;
+  border-bottom: 0;
+}
+.candidateInfo {
+  display: grid;
+  gap: 7px;
+  padding: 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.candidateInfo label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.candidateInfo select {
+  max-width: 100%;
+  font-size: 12px;
+}
+.cashBudget {
+  margin-top: 14px;
+}
+.cashBudget select {
+  max-width: 100%;
+}
+@media (max-width: 700px) {
+  .advice {
+    grid-template-columns: 9px minmax(0, 1fr);
+  }
+  .advice > .tradeDetail {
+    grid-column: 2;
+  }
+  .candidateInfo {
+    padding: 0;
+  }
+}

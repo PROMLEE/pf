@@ -22,13 +22,14 @@ import {
   EXAMPLE_RULES,
   cryptoAssetValueKrw,
   holdingValueKrw,
+  holdingBucketId,
   manualAssetValueKrw,
   portfolioValues,
   type Bucket,
   type Portfolio,
   type Rule,
 } from "./portfolio-model";
-import { needsAdjustment, rebalance } from "./rebalance";
+import { needsAdjustment, rebalance, symbolKey } from "./rebalance";
 import styles from "./portfolio.module.css";
 
 type Candidate = {
@@ -589,6 +590,16 @@ export default function PortfolioBuilder({
     try { localStorage.setItem(`pf-gain-view:${userId}`, next); } catch { /* The toggle still works for this visit. */ }
   }
   const [cashInput, setCashInput] = useState("");
+  const [budgetMode, setBudgetMode] = useState<"input" | "theoretical">(
+    "input",
+  );
+  const [candidatePolicy, setCandidatePolicy] = useState<
+    "priority" | "fallback"
+  >("priority");
+  const [excludedBuySymbols, setExcludedBuySymbols] = useState<string[]>([]);
+  const [buyHoldingIds, setBuyHoldingIds] = useState<Record<string, string>>(
+    {},
+  );
   const [excludedHoldingIds, setExcludedHoldingIds] = useState<string[]>([]);
   const [flowDate, setFlowDate] = useState(kstDate);
   const [flowAmount, setFlowAmount] = useState("");
@@ -932,6 +943,22 @@ export default function PortfolioBuilder({
       `${candidate.name} 종목을 자동 배정 규칙에 추가했습니다. 저장하면 같은 코드의 보유 종목이 배정됩니다.`,
     );
   }
+  function moveRule(rule: Rule, direction: -1 | 1) {
+    if (!draft) return;
+    const sameBucket = draft.rules.filter(
+      (item) => item.bucketId === rule.bucketId,
+    );
+    const neighbor =
+      sameBucket[
+        sameBucket.findIndex((item) => item.id === rule.id) + direction
+      ];
+    if (!neighbor) return;
+    const reordered = [...draft.rules];
+    const from = reordered.findIndex((item) => item.id === rule.id);
+    const to = reordered.findIndex((item) => item.id === neighbor.id);
+    [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+    change({ ...draft, rules: reordered });
+  }
   function addManualAsset() {
     if (!draft || !manualName.trim())
       return onNotice("수동 자산 이름을 입력해 주세요.");
@@ -1224,10 +1251,17 @@ export default function PortfolioBuilder({
             draft,
             holdings,
             rebalanceMode,
-            cashInput.trim() && Number.isFinite(Number(cashInput))
-              ? Math.min(1e15, Math.max(0, Number(cashInput)))
-              : null,
+            budgetMode === "theoretical"
+              ? null
+              : cashInput.trim() && Number.isFinite(Number(cashInput))
+                ? Math.min(1e15, Math.max(0, Number(cashInput)))
+                : 0,
             new Set(excludedHoldingIds),
+            {
+              candidatePolicy,
+              excludedBuySymbols: new Set(excludedBuySymbols),
+              buyHoldingIds,
+            },
           )
         : {
             items: [],
@@ -1235,10 +1269,24 @@ export default function PortfolioBuilder({
             requiredCash: 0,
             residualCash: 0,
             newCash: 0,
+            buyBudget: 0,
             projectedUnassignedPercent: 0,
             ready: false,
+            candidates: [],
+            currentTotal: 0,
+            targetTotal: 0,
           },
-    [draft, holdings, rebalanceMode, cashInput, excludedHoldingIds],
+    [
+      draft,
+      holdings,
+      rebalanceMode,
+      cashInput,
+      budgetMode,
+      excludedHoldingIds,
+      candidatePolicy,
+      excludedBuySymbols,
+      buyHoldingIds,
+    ],
   );
   const rebalanceReady = Boolean(
     values &&
@@ -1253,7 +1301,9 @@ export default function PortfolioBuilder({
           needsAdjustment(
             item.bucket.targetPercent,
             item.current,
-            item.currentPercent,
+            rebalanceMode === "add-only"
+              ? item.bucket.targetPercent - item.fundedGapPercent
+              : item.currentPercent,
             draft?.tolerancePercent ?? 0,
           ),
       )
@@ -2692,28 +2742,84 @@ export default function PortfolioBuilder({
             </div>
             <p className={styles.methodNote}>
               허용 오차 ±{draft.tolerancePercent.toFixed(1)}%p
-              <button type="button" onClick={() => onNavigate("strategy")}>기준 변경</button>
-              {rebalanceMode === "add-only" && advice.requiredCash > 0
+              <button type="button" onClick={() => onNavigate("strategy")}>
+                기준 변경
+              </button>
+              {rebalanceMode === "add-only" && budgetMode === "theoretical" && advice.requiredCash > 0
                 ? ` · 목표 비중까지 이론상 필요한 신규 자금 약 ${fmt(advice.requiredCash)}`
                 : ""}
             </p>
             {rebalanceMode === "add-only" && (
-              <label className={styles.cashBudget}>
-                이번에 투입할 금액 (원)
-                <input
-                  type="number"
-                  min="0"
-                  max="1000000000000000"
-                  step="1"
-                  value={cashInput}
-                  onChange={(event) => setCashInput(event.target.value)}
-                  placeholder="비우면 이론상 필요 금액"
-                />
-              </label>
+              <>
+                <label className={styles.cashBudget}>
+                  예산 기준
+                  <select
+                    value={budgetMode}
+                    onChange={(event) =>
+                      setBudgetMode(
+                        event.target.value as "input" | "theoretical",
+                      )
+                    }
+                  >
+                    <option value="input">내 금액 입력</option>
+                    <option value="theoretical">
+                      이론상 필요 금액으로 계산
+                    </option>
+                  </select>
+                </label>
+                {budgetMode === "input" && (
+                  <label className={styles.cashBudget}>
+                    이번에 투입할 금액 (원)
+                    <input
+                      type="number"
+                      min="0"
+                      max="1000000000000000"
+                      step="1"
+                      value={cashInput}
+                      onChange={(event) => setCashInput(event.target.value)}
+                      placeholder="금액 입력 · 빈칸은 0원"
+                    />
+                  </label>
+                )}
+                <p className={styles.help}>
+                  {budgetMode === "theoretical"
+                    ? "현재 비중에서 매도 없이 목표 비중에 도달하기 위한 계산 예산입니다. 적정 투자금 추천이 아닙니다."
+                    : "입력한 신규 자금만 사용합니다. 금액을 입력하지 않으면 매수 제안을 계산하지 않습니다."}{" "}
+                  기존 현금 잔고는 매수 예산에 자동으로 포함하지 않습니다.
+                </p>
+              </>
             )}
+            <div className={styles.previewSummary} aria-label="이번 계산 기준">
+              <span>현재 자산 {fmt(advice.currentTotal)}</span>
+              <span>
+                {rebalanceMode === "add-only" ? "추가 예산" : "예상 매도 대금"}{" "}
+                {fmt(advice.buyBudget)}
+              </span>
+              <span>계산 기준 총액 {fmt(advice.targetTotal)}</span>
+            </div>
+            <label className={styles.cashBudget}>
+              후보 선택
+              <select
+                value={candidatePolicy}
+                onChange={(event) =>
+                  setCandidatePolicy(
+                    event.target.value as "priority" | "fallback",
+                  )
+                }
+              >
+                <option value="priority">포트별 첫 후보만 사용</option>
+                <option value="fallback">
+                  매수할 수 없으면 다음 후보 검토
+                </option>
+              </select>
+            </label>
+            <p className={styles.help}>
+              후보 순서는 아래에서 변경할 수 있습니다. 자동 대체를 선택하면 다른
+              종목을 매수할 수 있으므로 투자 의도를 확인하세요.
+            </p>
             <details className={styles.exclusions}>
               <summary>
-                이번 조정에서 제외할 보유 종목 {excludedHoldingIds.length}개{" "}
+                계좌별 매도 제외 {excludedHoldingIds.length}개{" "}
                 <ChevronDown size={14} />
               </summary>
               <div>
@@ -2730,8 +2836,8 @@ export default function PortfolioBuilder({
                         )
                       }
                     />
-                    {holding.broker} · {holding.name} (
-                    {holding.symbol || "코드 없음"})
+                    {holding.broker} · {holding.account || "계좌 미입력"} ·{" "}
+                    {holding.name} ({holding.symbol || "코드 없음"})
                   </label>
                 ))}
                 {!holdings.length && (
@@ -2739,9 +2845,41 @@ export default function PortfolioBuilder({
                 )}
               </div>
             </details>
+            <details className={styles.exclusions}>
+              <summary>
+                종목별 추가 매수 제외 {excludedBuySymbols.length}개{" "}
+                <ChevronDown size={14} />
+              </summary>
+              <div>
+                {draft.rules.map((rule) => {
+                  const key = symbolKey(rule.market, rule.symbol);
+                  return (
+                    <label key={rule.id}>
+                      <input
+                        type="checkbox"
+                        checked={excludedBuySymbols.includes(key)}
+                        onChange={(event) =>
+                          setExcludedBuySymbols((keys) =>
+                            event.target.checked
+                              ? [...keys, key]
+                              : keys.filter((value) => value !== key),
+                          )
+                        }
+                      />
+                      {rule.name || rule.symbol} · {rule.market} {rule.symbol}
+                    </label>
+                  );
+                })}
+                {!draft.rules.length && (
+                  <small>등록된 매수 후보가 없습니다.</small>
+                )}
+              </div>
+            </details>
             <p className={styles.help}>
               예상 수량은 1주 단위이며 수수료·세금·환전 비용은 포함하지
-              않습니다. 계좌별 주문 가능 금액도 확인하세요.
+              않습니다. 매도 대금을 계좌 간 이동할 수 있다고 가정하므로 계좌별
+              주문 가능 금액·결제일을 별도로 확인하세요. 매도 제외는 해당 보유
+              항목에만 적용하며 추가 매수에는 영향을 주지 않습니다.
             </p>
             {!rebalanceReady ? (
               <div className={styles.rebalanceStatus}>
@@ -2765,7 +2903,7 @@ export default function PortfolioBuilder({
               <>
                 <p className={styles.rebalanceStatus}>
                   {inRangeCount > 0
-                    ? `${inRangeCount}개 포트는 허용 오차 안에 있습니다.`
+                    ? `${inRangeCount}개 포트는 ${rebalanceMode === "add-only" ? "추가 자금 반영 기준으로 " : "현재 기준으로 "}허용 오차 안에 있습니다.`
                     : ""}
                   {!actionItems.length ? " 현재 조정할 포트가 없습니다." : ""}
                 </p>
@@ -2780,11 +2918,7 @@ export default function PortfolioBuilder({
                       ? "add"
                       : itemTrades.some((trade) => trade.side === "sell")
                         ? "sell"
-                        : item.gapPercent > 0
-                          ? "add"
-                          : rebalanceMode === "trade"
-                            ? "sell"
-                            : "hold";
+                        : "hold";
                     return (
                       <div
                         key={item.bucket.id}
@@ -2798,26 +2932,86 @@ export default function PortfolioBuilder({
                           <strong>
                             <span className={styles.actionTag}>
                               {action === "add"
-                                ? "추가"
+                                ? "매수 제안"
                                 : action === "sell"
-                                  ? "매도"
-                                  : "유지"}
+                                  ? "매도 제안"
+                                  : "제안 없음"}
                             </span>
                             {item.bucket.name}
                           </strong>
                           <small>
+                            {rebalanceMode === "add-only" ? "투입 전" : "현재"}{" "}
                             목표와 차이 {item.gapPercent > 0 ? "+" : ""}
-                            {item.gapPercent.toFixed(1)}%p · 조정 후 예상{" "}
-                            {pct(item.projectedPercent)}
+                            {item.gapPercent.toFixed(1)}%p
+                            {rebalanceMode === "add-only"
+                              ? ` · 투입 후 차이 ${item.fundedGapPercent > 0 ? "+" : ""}${item.fundedGapPercent.toFixed(1)}%p`
+                              : ""}{" "}
+                            · 주식 제안 후 예상 {pct(item.projectedPercent)}
                           </small>
                         </div>
                         <p>{item.advice}</p>
+                        <div className={styles.tradeDetail}>
+                          {Math.abs(item.remainingGapKrw) >= 1 && (
+                            <small>
+                              주식 제안 후 목표 금액 대비{" "}
+                              {item.remainingGapKrw > 0 ? "부족" : "초과"}{" "}
+                              {fmt(Math.abs(item.remainingGapKrw))}
+                            </small>
+                          )}
+                          {item.separateReview && (
+                            <small>{item.separateReview}</small>
+                          )}
+                          {itemTrades.length > 0 && (
+                            <details>
+                              <summary>적용 가격·계좌 확인</summary>
+                              {itemTrades.map((trade, index) => (
+                                <div
+                                  key={`${trade.holdingId || trade.ruleId}:${trade.side}:${index}`}
+                                >
+                                  <strong>
+                                    {trade.symbol} · {trade.shares}주{" "}
+                                    {trade.side === "buy" ? "매수" : "매도"}
+                                  </strong>
+                                  <span>
+                                    주당{" "}
+                                    {trade.currency === "USD"
+                                      ? `$${trade.unitPrice.toFixed(4)}`
+                                      : fmt(trade.unitPrice)}{" "}
+                                    · {trade.priceSource} · 조회{" "}
+                                    {timeLabel(trade.checkedAt)}
+                                  </span>
+                                  {trade.usdKrw && (
+                                    <span>
+                                적용 환율 1 USD = {quantityFormat.format(trade.usdKrw)}원 ·{" "}
+                                      {draft.usdKrwMode === "auto"
+                                        ? `자동 기준환율 ${draft.usdKrwRateDate || ""}`
+                                        : "직접 입력 환율"}
+                                    </span>
+                                  )}
+                                  <span>
+                                    {trade.broker
+                                      ? `${trade.broker} · ${trade.account || "계좌 미입력"}`
+                                      : "신규 보유 항목 · 거래 계좌 선택 필요"}
+                                  </span>
+                                  <span>{trade.selectionReason}</span>
+                                  {!trade.holdingId && (
+                                    <span>
+                                      직접 거래 후 자산 수정에서 새 보유 항목을
+                                      등록하고 이 포트에 배정해야 미리보기와
+                                      일치합니다.
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </details>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
                 <div className={styles.previewSummary}>
-                  <strong>조정 후 미리보기</strong>
+                  <strong>주식 제안만 반영한 미리보기</strong>
                   <span>
                     제안{" "}
                     {
@@ -2832,18 +3026,29 @@ export default function PortfolioBuilder({
                     건 매도
                   </span>
                   <span>
-                    주식 제안 후 남는 자금 약 {fmt(advice.residualCash)}
+                    미배정 잔여 자금 약 {fmt(advice.residualCash)}
                     {advice.projectedUnassignedPercent > 0
                       ? ` · 전체의 ${pct(advice.projectedUnassignedPercent)}`
                       : ""}
                   </span>
                 </div>
-                {draft.cryptoAssets.length > 0 && (
-                  <p className={styles.help}>
-                    가상자산 수량 조정은 직접 검토 항목이며 조정 후 예상
-                    비중·잔여 자금에는 반영하지 않습니다.
-                  </p>
-                )}
+                <p className={styles.help}>
+                  가상자산·직접 입력 자산의 거래는 별도 검토합니다. 잔여 자금은
+                  포트에 배정하지 않으며 총액에는 포함합니다. 제안 확인 →
+                  증권사·거래소에서 직접 거래 → 실제 잔고 수정 순서로
+                  반영하세요.
+                </p>
+                <div className={styles.rebalanceLinks}>
+                  <button type="button" onClick={onEditHoldings}>
+                    거래 후 자산 수정 <ArrowRight size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("allocation")}
+                  >
+                    배정 충돌 확인·수정 <ArrowRight size={14} />
+                  </button>
+                </div>
               </>
             )}
           </section>
@@ -2851,7 +3056,9 @@ export default function PortfolioBuilder({
       )}
       {screen === "rebalance" && (
         <>
-          <details className={`${styles.panel} ${styles.collapsible} ${styles.candidateSection}`}>
+          <details
+            className={`${styles.panel} ${styles.collapsible} ${styles.candidateSection}`}
+          >
             <summary className={styles.panelHead}>
               <div>
                 <h2>매수 후보 종목</h2>
@@ -2862,7 +3069,9 @@ export default function PortfolioBuilder({
             </summary>
             <p className={styles.help}>
               매수에 사용할 종목을 포트별로 등록하세요. 등록된 후보와 보유
-              종목을 기준으로 위의 조정 수량을 계산합니다.
+              종목을 기준으로 위의 조정 수량을 계산합니다. 포트별 순서가 매수
+              우선순위입니다. 포트 변경·삭제는 같은 코드의 기존 자동 배정에도
+              영향을 주며, 직접 배정은 유지됩니다.
             </p>
             <div className={styles.ownedRulesHead}>
               <strong>후보 종목 검색</strong>
@@ -2925,95 +3134,204 @@ export default function PortfolioBuilder({
               <span>{draft.rules.length}개</span>
             </div>
             <div className={styles.rules}>
-              {draft.rules.map((rule) => (
-                <div key={rule.id} className={styles.rule}>
-                  <span
-                    className={styles.dot}
-                    style={{
-                      background:
-                        draft.buckets.find(
-                          (bucket) => bucket.id === rule.bucketId,
-                        )?.color ?? "#aaa",
-                    }}
-                  />
-                  <strong>{rule.name || rule.symbol}</strong>
-                  <small>
-                    {rule.market} · {rule.symbol}
-                  </small>
-                  <label className={styles.ruleBucket}>
-                    <select
-                      value={rule.bucketId}
-                      aria-label={`${rule.name || rule.symbol} 배정 포트`}
-                      onChange={(event) =>
-                        change({
-                          ...draft,
-                          rules: draft.rules.map((item) =>
-                            item.id === rule.id
-                              ? { ...item, bucketId: event.target.value }
-                              : item,
-                          ),
-                        })
-                      }
-                    >
-                      {draft.buckets.map((bucket) => (
-                        <option key={bucket.id} value={bucket.id}>
-                          {bucket.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <details className={styles.ruleAdvanced}>
-                    <summary>
-                      임시 가격
-                      {rule.manualPrice
-                        ? ` ${won.format(rule.manualPrice)}`
-                        : ""}
-                    </summary>
-                    <label>
-                      시세가 없을 때 매수 수량 계산용 ·{" "}
-                      {rule.market === "KR" ? "원" : "달러"}
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={rule.manualPrice ?? ""}
-                        placeholder="비워두면 자동 시세 사용"
-                        aria-label={`${rule.name || rule.symbol} 임시 가격`}
-                        onChange={(event) =>
+              {draft.rules.map((rule) => {
+                const order = draft.rules.filter(
+                  (item) => item.bucketId === rule.bucketId,
+                );
+                const rank = order.findIndex((item) => item.id === rule.id);
+                const eligible = holdings.filter(
+                  (holding) =>
+                    holding.market === rule.market &&
+                    holding.symbol === rule.symbol &&
+                    holdingBucketId(draft, holding) === rule.bucketId,
+                );
+                const affected = holdings.filter(
+                  (holding) =>
+                    holding.market === rule.market &&
+                    holding.symbol === rule.symbol &&
+                    draft.assignments.find(
+                      (item) => item.holdingId === holding.id,
+                    )?.source !== "manual",
+                );
+                const applied = advice.candidates.find(
+                  (item) => item.ruleId === rule.id,
+                );
+                return (
+                  <div key={rule.id} className={styles.ruleEntry}>
+                    <div className={styles.rule}>
+                      <span
+                        className={styles.dot}
+                        style={{
+                          background:
+                            draft.buckets.find(
+                              (bucket) => bucket.id === rule.bucketId,
+                            )?.color ?? "#aaa",
+                        }}
+                      />
+                      <strong>{rule.name || rule.symbol}</strong>
+                      <small>우선순위 {rank + 1}</small>
+                      <button
+                        type="button"
+                        className={styles.iconButton}
+                        aria-label={`${rule.symbol} 우선순위 올리기`}
+                        disabled={rank === 0}
+                        onClick={() => moveRule(rule, -1)}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.iconButton}
+                        aria-label={`${rule.symbol} 우선순위 내리기`}
+                        disabled={rank === order.length - 1}
+                        onClick={() => moveRule(rule, 1)}
+                      >
+                        ↓
+                      </button>
+                      <small>
+                        {rule.market} · {rule.symbol}
+                      </small>
+                      <label className={styles.ruleBucket}>
+                        <select
+                          value={rule.bucketId}
+                          aria-label={`${rule.name || rule.symbol} 배정 포트`}
+                          onChange={(event) =>
+                            change({
+                              ...draft,
+                              rules: draft.rules.map((item) =>
+                                item.id === rule.id
+                                  ? { ...item, bucketId: event.target.value }
+                                  : item,
+                              ),
+                            })
+                          }
+                        >
+                          {draft.buckets.map((bucket) => (
+                            <option key={bucket.id} value={bucket.id}>
+                              {bucket.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <details className={styles.ruleAdvanced}>
+                        <summary>
+                          임시 가격
+                          {rule.manualPrice
+                            ? ` ${won.format(rule.manualPrice)}`
+                            : ""}
+                        </summary>
+                        <label>
+                          새 종목의 조회 시세가 없을 때 사용 ·{" "}
+                          {rule.market === "KR" ? "원" : "달러"}
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={rule.manualPrice ?? ""}
+                            placeholder="비워두면 자동 시세 사용"
+                            aria-label={`${rule.name || rule.symbol} 임시 가격`}
+                            onChange={(event) =>
+                              change({
+                                ...draft,
+                                rules: draft.rules.map(
+                                  (item): Rule =>
+                                    item.id === rule.id
+                                      ? {
+                                          ...item,
+                                          manualPrice: event.target.value
+                                            ? Number(event.target.value)
+                                            : null,
+                                        }
+                                      : item,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                      </details>
+                      <button
+                        className={styles.iconButton}
+                        aria-label={`${rule.symbol} 규칙 삭제`}
+                        onClick={() =>
                           change({
                             ...draft,
-                            rules: draft.rules.map(
-                              (item): Rule =>
-                                item.id === rule.id
-                                  ? {
-                                      ...item,
-                                      manualPrice: event.target.value
-                                        ? Number(event.target.value)
-                                        : null,
-                                    }
-                                  : item,
+                            rules: draft.rules.filter(
+                              (item) => item.id !== rule.id,
                             ),
                           })
                         }
-                      />
-                    </label>
-                  </details>
-                  <button
-                    className={styles.iconButton}
-                    aria-label={`${rule.symbol} 규칙 삭제`}
-                    onClick={() =>
-                      change({
-                        ...draft,
-                        rules: draft.rules.filter(
-                          (item) => item.id !== rule.id,
-                        ),
-                      })
-                    }
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              ))}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    <div className={styles.candidateInfo}>
+                      {applied && (
+                        <>
+                          <span>
+                            {applied.status === "selected"
+                              ? "매수 제안에 선택"
+                              : applied.status === "blocked"
+                                ? "사용 불가"
+                                : "선택 안 됨"}{" "}
+                            · {applied.reason}
+                          </span>
+                          <span>
+                            적용 주당 가격{" "}
+                            {applied.unitPrice > 0
+                              ? `${applied.currency === "USD" ? applied.unitPrice.toFixed(4) : won.format(applied.unitPrice)}${applied.currency === "USD" ? " USD" : "원"}`
+                              : "미확인"}{" "}
+                            · {applied.priceSource} · 조회{" "}
+                            {timeLabel(applied.checkedAt)}
+                          </span>
+                          {rule.manualPrice !== null &&
+                            applied.priceSource !== "후보 임시 가격" && (
+                              <span>
+                                임시 가격은 적용하지 않습니다. 보유 항목 평가
+                                가격 또는 조회 시세를 사용 중입니다.
+                              </span>
+                            )}
+                        </>
+                      )}
+                      {eligible.length > 0 && (
+                        <label>
+                          매수 계좌{" "}
+                          <select
+                            value={buyHoldingIds[rule.id] ?? ""}
+                            aria-label={`${rule.name || rule.symbol} 매수 계좌`}
+                            onChange={(event) =>
+                              setBuyHoldingIds((ids) => ({
+                                ...ids,
+                                [rule.id]: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">
+                              자동 · 같은 포트의 첫 보유 계좌
+                            </option>
+                            {eligible.map((holding) => (
+                              <option key={holding.id} value={holding.id}>
+                                {holding.broker} ·{" "}
+                                {holding.account || "계좌 미입력"}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      {affected.length > 0 && (
+                        <span>
+                          포트 변경·삭제 시 자동 배정에 영향:{" "}
+                          {affected
+                            .map(
+                              (holding) =>
+                                `${holding.name} (${holding.broker} · ${holding.account || "계좌 미입력"})`,
+                            )
+                            .join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </details>
         </>

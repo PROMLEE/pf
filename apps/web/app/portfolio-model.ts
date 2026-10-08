@@ -134,28 +134,27 @@ export function cryptoAssetValueKrw(asset: CryptoAsset) {
   return asset.quantity * (asset.quotedPriceKrw ?? 0);
 }
 
+export function holdingBucketId(portfolio: Portfolio, holding: Holding) {
+  const assignment = portfolio.assignments.find(
+    (item) => item.holdingId === holding.id,
+  );
+  return assignment?.source === "manual"
+    ? assignment.bucketId
+    : (portfolio.rules.find(
+        (rule) =>
+          rule.market === holding.market && rule.symbol === holding.symbol,
+      )?.bucketId ?? null);
+}
+
 export function portfolioValues(portfolio: Portfolio, holdings: Holding[]) {
   const values = new Map(portfolio.buckets.map((bucket) => [bucket.id, 0]));
-  const assignments = new Map(
-    portfolio.assignments.map((item) => [item.holdingId, item]),
-  );
-  const rules = new Map(
-    portfolio.rules.map((rule) => [
-      `${rule.market}:${rule.symbol}`,
-      rule.bucketId,
-    ]),
-  );
   let unassigned = 0;
   let missingPrices = 0;
   for (const holding of holdings) {
     if (holding.currentPrice === null && holding.capturedPrice === null)
       missingPrices++;
     const value = holdingValueKrw(holding, portfolio.usdKrw);
-    const assignment = assignments.get(holding.id);
-    const bucketId =
-      assignment?.source === "manual"
-        ? assignment.bucketId
-        : (rules.get(`${holding.market}:${holding.symbol}`) ?? null);
+    const bucketId = holdingBucketId(portfolio, holding);
     if (bucketId && values.has(bucketId)) {
       values.set(bucketId, (values.get(bucketId) ?? 0) + value);
     } else {
