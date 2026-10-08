@@ -321,7 +321,7 @@ export default function UserGuide({
       <section id="guide-edit" data-chapter className={styles.section}>
         <h2 data-reveal>거래 후에는 여기서 수정하세요</h2>
         <p>
-          대시보드에서 자산을 눌러 상세를 확인한 뒤 수정으로 이동할 수 있습니다.
+          대시보드에서 자산을 누르면 상세 화면에서 해당 자산을 바로 수정하고 저장할 수 있습니다.
         </p>
         <ul className={styles.editList}>
           <li>

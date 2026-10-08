@@ -83,7 +83,6 @@ type Props = {
   selectedAsset?: AssetSelection | null;
   focusAsset?: AssetSelection | null;
   onSelectAsset?: (asset: AssetSelection) => void;
-  onEditAsset?: (asset: AssetSelection) => void;
   onBack?: () => void;
   onNavigate: (
     screen: "strategy" | "allocation" | "rebalance" | "history",
@@ -96,6 +95,7 @@ const quantityFormat = new Intl.NumberFormat("ko-KR", {
 });
 const fmt = (value: number) => `${won.format(value)}원`;
 const pct = (value: number) => `${value.toFixed(1)}%`;
+const gainPct = (value: number) => `${value.toFixed(2)}%`;
 const kstDate = () =>
   new Intl.DateTimeFormat("sv-SE", {
     timeZone: "Asia/Seoul",
@@ -286,7 +286,7 @@ function AssetList({
                             ? "일간 시세 조회 중"
                             : "일간 시세 정보 없음"
                           : "매입가 정보 없음"
-                        : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${pct(gainPercent)}`})`}
+                        : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${gainPct(gainPercent)}`})`}
                     </small>
                   </div>
                 </button>
@@ -344,15 +344,37 @@ function AssetDetail({
   holdings,
   summary,
   onBack,
-  onEdit,
+  onSaveStock,
+  onSavePortfolio,
+  onEditingChange,
 }: {
   selection: AssetSelection;
   portfolio: Portfolio;
   holdings: Holding[];
   summary?: AssetSummaryRow;
   onBack: () => void;
-  onEdit: (asset: AssetSelection) => void;
+  onSaveStock: (id: string, quantity: number, averageCost: number | null) => Promise<void>;
+  onSavePortfolio: (next: Portfolio) => Promise<void>;
+  onEditingChange: (editing: boolean) => void;
 }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editCost, setEditCost] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const editForm = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (!editing) return;
+    editForm.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    editForm.current?.querySelector("input")?.focus({ preventScroll: true });
+  }, [editing]);
+  useEffect(() => {
+    onEditingChange(editing !== null);
+    return () => onEditingChange(false);
+  }, [editing, onEditingChange]);
+  useEffect(() => { setEditing(null); setError(""); }, [selection.id]);
   const stockRows = selection.kind === "stock"
     ? holdings.filter((row) => stockAssetId(row) === selection.id || `holding:${row.id}` === selection.id)
     : [];
@@ -388,6 +410,43 @@ function AssetDetail({
   const bucketId = manual?.bucketId ?? crypto?.bucketId ??
     (first ? portfolio.assignments.find((item) => item.holdingId === first.id)?.bucketId : null);
   const bucketName = portfolio.buckets.find((bucket) => bucket.id === bucketId)?.name ?? "미분류";
+  function beginEdit(row?: Holding) {
+    setEditing(row?.id ?? selection.id);
+    setEditQuantity(String(row?.quantity ?? crypto?.quantity ?? ""));
+    setEditCost(String(row?.averageCost ?? crypto?.averageCostKrw ?? ""));
+    setEditName(manual?.name ?? "");
+    setEditValue(String(manual?.valueUsd ?? manual?.valueKrw ?? ""));
+    setError("");
+  }
+  async function submitEdit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing || saving) return;
+    const quantity = Number(editQuantity);
+    const cost = editCost.trim() ? Number(editCost) : null;
+    const amount = Number(editValue);
+    if (manual ? !editName.trim() || !editValue.trim() || !Number.isFinite(amount) || amount < 0 :
+      !editQuantity.trim() || !Number.isFinite(quantity) || quantity < 0 || (first && (quantity <= 0 || Math.abs(quantity - Math.round(quantity * 1e6) / 1e6) > 1e-9)) ||
+      (cost !== null && (!Number.isFinite(cost) || cost <= 0))) {
+      setError(manual ? "자산 이름과 0 이상의 금액을 입력해 주세요." : "유효한 수량과 양수 매입단가를 입력해 주세요. 주식 수량은 소수점 6자리까지입니다.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      if (first) await onSaveStock(editing, quantity, cost);
+      else await onSavePortfolio({
+        ...portfolio,
+        cryptoAssets: portfolio.cryptoAssets.map((asset) => asset.id === crypto?.id ? { ...asset, quantity, averageCostKrw: cost } : asset),
+        manualAssets: portfolio.manualAssets.map((asset) => asset.id === manual?.id ? {
+          ...asset, name: editName.trim(), valueKrw: asset.valueUsd === null ? amount : amount * portfolio.usdKrw,
+          valueUsd: asset.valueUsd === null ? null : amount,
+        } : asset),
+      });
+      setEditing(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "저장하지 못했습니다.");
+    } finally { setSaving(false); }
+  }
   return (
     <section className={styles.assetDetail} aria-label={`${name} 상세 정보`}>
       <button type="button" className={styles.detailBack} onClick={onBack}>← 이전 화면</button>
@@ -399,7 +458,7 @@ function AssetDetail({
         <span>평가 금액</span>
         <strong>{manual ? fmt(manualAssetValueKrw(manual, portfolio.usdKrw)) : value === null ? "—" : fmt(value)}</strong>
         {!manual && <small className={gain === null ? "" : gain >= 0 ? styles.mobileUp : styles.mobileDown}>
-          {gain === null ? "매입단가 정보 없음" : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${pct(gainPercent)}`})`}
+          {gain === null ? "매입단가 정보 없음" : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${gainPct(gainPercent)}`})`}
         </small>}
       </div>
       <div className={styles.detailFacts}>
@@ -415,10 +474,27 @@ function AssetDetail({
       </div>
       {stockRows.length > 0 && <div className={styles.detailAccounts}>
         <h3>계좌별 보유</h3>
-        {stockRows.map((row) => <div key={row.id}><span>{row.broker} · {row.account}<small>{quantityFormat.format(row.quantity)}주 · 매입단가 {row.averageCost === null ? "—" : unitPrice(row.averageCost)}</small></span><button type="button" onClick={() => onEdit({ kind: "stock", id: `holding:${row.id}` })}>수정</button></div>)}
+        {stockRows.map((row) => <div key={row.id}><span>{row.broker} · {row.account}<small>{quantityFormat.format(row.quantity)}주 · 매입단가 {row.averageCost === null ? "—" : unitPrice(row.averageCost)}</small></span><button type="button" disabled={editing !== null} onClick={() => beginEdit(row)}>수정</button></div>)}
       </div>}
       {manual && <p className={styles.detailHint}>직접 입력 자산은 평가 금액만 관리하며 매입단가와 손익은 계산하지 않습니다.</p>}
-      <button type="button" className={styles.detailEdit} onClick={() => onEdit(selection)}>이 자산 수정 <Pencil size={16} /></button>
+      {!first && !editing && <button type="button" className={styles.detailEdit} onClick={() => beginEdit()}>자산 수정 <Pencil size={16} /></button>}
+      {editing && <form ref={editForm} className={styles.detailForm} onSubmit={submitEdit} aria-label="이 자산 수정">
+        <h3>{first ? `${stockRows.find((row) => row.id === editing)?.account} 보유 정보 수정` : "자산 정보 수정"}</h3>
+        <fieldset disabled={saving}>
+          {manual ? <>
+            <label>자산 이름<input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={100} required /></label>
+            <label>{manual.valueUsd === null ? "금액 (원)" : "금액 (USD)"}<input type="number" min="0" step="any" value={editValue} onChange={(event) => setEditValue(event.target.value)} required /></label>
+          </> : <>
+            <label>보유 수량<input type="number" min={first ? "0.000001" : "0"} step={first ? "0.000001" : "any"} value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} required /></label>
+            <label>평균 매입단가 ({unit})<input type="number" min="0" step="any" value={editCost} onChange={(event) => setEditCost(event.target.value)} placeholder="모르면 비워두세요" /></label>
+          </>}
+        </fieldset>
+        {error && <p role="alert">{error}</p>}
+        <div className={styles.detailFormActions}>
+          <button type="submit" className={styles.detailEdit} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+          <button type="button" className={styles.ghost} disabled={saving} onClick={() => { setEditing(null); setError(""); }}>취소</button>
+        </div>
+      </form>}
     </section>
   );
 }
@@ -441,7 +517,6 @@ export default function PortfolioBuilder({
   selectedAsset,
   focusAsset,
   onSelectAsset = () => {},
-  onEditAsset = () => {},
   onBack = () => {},
   onNavigate,
   onDirtyChange,
@@ -453,7 +528,8 @@ export default function PortfolioBuilder({
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [dirty, setDirty] = useState(false);
-  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  const [detailDirty, setDetailDirty] = useState(false);
+  useEffect(() => onDirtyChange(dirty || detailDirty), [dirty, detailDirty, onDirtyChange]);
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
   const [ruleMarket, setRuleMarket] = useState<Market>("KR");
@@ -488,6 +564,13 @@ export default function PortfolioBuilder({
     "trade",
   );
   const [gainView, setGainView] = useState<"total" | "daily">("total");
+  useEffect(() => {
+    try { setGainView(localStorage.getItem(`pf-gain-view:${userId}`) === "daily" ? "daily" : "total"); } catch { /* Keep the default when storage is unavailable. */ }
+  }, [userId]);
+  function chooseGainView(next: "total" | "daily") {
+    setGainView(next);
+    try { localStorage.setItem(`pf-gain-view:${userId}`, next); } catch { /* The toggle still works for this visit. */ }
+  }
   const [cashInput, setCashInput] = useState("");
   const [excludedHoldingIds, setExcludedHoldingIds] = useState<string[]>([]);
   const [flowDate, setFlowDate] = useState(kstDate);
@@ -1523,7 +1606,33 @@ export default function PortfolioBuilder({
           holdings={holdings}
           summary={mobileInvestments.find((asset) => asset.id === selectedAsset.id)}
           onBack={onBack}
-          onEdit={onEditAsset}
+          onEditingChange={setDetailDirty}
+          onSaveStock={async (id, quantity, averageCost) => {
+            const response = await fetch("/api/holdings", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id, quantity, averageCost }),
+            });
+            const result = await response.json() as { holdings?: Holding[]; message?: string };
+            if (!response.ok || !result.holdings) throw new Error(result.message || "자산을 저장하지 못했습니다.");
+            onHoldings(result.holdings.map((row) => {
+              const previous = holdings.find((item) => item.id === row.id);
+              return previous ? { ...row, currentPrice: previous.currentPrice, quoteLabel: previous.quoteLabel, quoteCheckedAt: previous.quoteCheckedAt } : row;
+            }));
+            onNotice("보유 수량과 매입단가를 저장했습니다.");
+          }}
+          onSavePortfolio={async (next) => {
+            const response = await fetch("/api/portfolio", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(next),
+            });
+            const result = await response.json() as { portfolio?: Portfolio; message?: string };
+            if (!response.ok || !result.portfolio) throw new Error(result.message || "자산을 저장하지 못했습니다.");
+            setDraft(result.portfolio);
+            portfolioCache.set(userId, result.portfolio);
+            onNotice("자산 정보를 저장했습니다.");
+          }}
         />
       )}
 
@@ -1561,14 +1670,14 @@ export default function PortfolioBuilder({
                     <button
                       type="button"
                       aria-pressed={gainView === "total"}
-                      onClick={() => setGainView("total")}
+                      onClick={() => chooseGainView("total")}
                     >
                       전체 수익
                     </button>
                     <button
                       type="button"
                       aria-pressed={gainView === "daily"}
-                      onClick={() => setGainView("daily")}
+                      onClick={() => chooseGainView("daily")}
                     >
                       일간 수익
                     </button>
@@ -1605,7 +1714,7 @@ export default function PortfolioBuilder({
                 >
                   {displayedGainPercent === null
                     ? "—"
-                    : `${displayedGainPercent > 0 ? "+" : ""}${pct(displayedGainPercent)}`}
+                    : `${displayedGainPercent > 0 ? "+" : ""}${gainPct(displayedGainPercent)}`}
                 </strong>
               </div>
             </div>
@@ -1673,14 +1782,14 @@ export default function PortfolioBuilder({
                       <button
                         type="button"
                         aria-pressed={gainView === "total"}
-                        onClick={() => setGainView("total")}
+                        onClick={() => chooseGainView("total")}
                       >
                         전체 수익
                       </button>
                       <button
                         type="button"
                         aria-pressed={gainView === "daily"}
-                        onClick={() => setGainView("daily")}
+                        onClick={() => chooseGainView("daily")}
                       >
                         일간 수익
                       </button>
@@ -1700,7 +1809,7 @@ export default function PortfolioBuilder({
                     </strong>
                     <small>
                       {displayedGainPercent !== null
-                        ? `${displayedGainPercent > 0 ? "+" : ""}${pct(displayedGainPercent)} · `
+                        ? `${displayedGainPercent > 0 ? "+" : ""}${gainPct(displayedGainPercent)} · `
                         : ""}
                       {displayedGainNote}
                     </small>

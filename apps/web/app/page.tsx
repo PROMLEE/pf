@@ -386,14 +386,6 @@ export default function PortfolioPage() {
     go("detail", asset, source);
   }
 
-  function editAsset(asset: AssetSelection) {
-    setEditFocus(asset);
-    if (asset.kind === "stock") {
-      const row = holdings.find((item) => `holding:${item.id}` === asset.id || stockAssetId(item) === asset.id);
-      if (row) beginHoldingEdit(row);
-    }
-    go("edit");
-  }
 
   useEffect(() => {
     if (view !== "edit" || !editingHoldingId) return;
@@ -1240,7 +1232,6 @@ export default function PortfolioPage() {
               onEditHoldings={() => go("edit")}
               selectedAsset={selectedAsset}
               onSelectAsset={(asset) => openAsset(asset, "portfolio")}
-              onEditAsset={editAsset}
               onBack={() => go(detailSource)}
               onNavigate={go}
               onDirtyChange={setPortfolioDirty}
@@ -1582,8 +1573,7 @@ export default function PortfolioPage() {
                   onEditHoldings={() => go("edit")}
                   selectedAsset={selectedAsset}
                   onSelectAsset={(asset) => openAsset(asset, "portfolio")}
-                  onEditAsset={editAsset}
-                  onBack={() => go(detailSource)}
+                      onBack={() => go(detailSource)}
                   focusAsset={editFocus}
                   onNavigate={go}
                   onDirtyChange={setPortfolioDirty}
