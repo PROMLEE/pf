@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Script from "next/script";
+import "./pretendard.css";
 import "./globals.css";
 import Providers from "./providers";
 

@@ -63,6 +63,6 @@ docs/          설명서·기능 안내·홍보글·실제 캡처
 harness/       저장소 운영 도구
 ```
 
-현재 실행되는 서비스의 화면·인증·API는 `apps/web`에 있습니다. React, TypeScript, Next.js, PostgreSQL, Tesseract.js, Three.js를 사용하며, SUIT 글꼴의 라이선스는 [SUIT-LICENSE.txt](apps/web/public/fonts/SUIT-LICENSE.txt)에 포함돼 있습니다.
+현재 실행되는 서비스의 화면·인증·API는 `apps/web`에 있습니다. React, TypeScript, Next.js, PostgreSQL, Tesseract.js, Three.js를 사용합니다. 글꼴은 [Pretendard](https://github.com/orioncactus/pretendard) v1.3.9의 가변 다이나믹 서브셋을 자체 제공하며, 화면에 필요한 문자 묶음만 로드합니다. 라이선스는 [Pretendard-LICENSE.txt](apps/web/public/fonts/Pretendard-LICENSE.txt)에 포함돼 있습니다.
 
 문서 기준일: **2026-10-08**. 캡처 조건은 [캡처 안내](docs/screenshots/README.md)를 참고하세요.

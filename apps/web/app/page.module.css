@@ -49,7 +49,7 @@
   border-radius: 10px;
   background: #4278f5;
   color: #fff;
-  font-family: "DM Sans", sans-serif;
+  font-family: inherit;
   font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.14em;
@@ -1552,7 +1552,7 @@
 /* Calm, high-contrast financial workspace. */
 .shell { background: var(--bg); }
 .sidebar { background: #102e3a; border-right: 1px solid #23434d; }
-.logo { background: #0d898a; box-shadow: 0 7px 18px #052f3740; font-family: "SUIT Variable", sans-serif; }
+.logo { background: #0d898a; box-shadow: 0 7px 18px #052f3740; font-family: inherit; }
 .brand strong { letter-spacing: .08em; }
 .navGroup > span { color: #81a5ae; }
 .navGroup button { color: #b0c8cf; }
