@@ -609,7 +609,7 @@
   margin-bottom: 17px;
 }
 .assetSort { min-height: 39px; max-width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; }
-@media (max-width: 760px) { .assetSort { font-size: 16px; } }
+@media (max-width: 760px) { .assetSort { font-size: 12px; } }
 .tabs {
   display: flex;
   gap: 4px;
@@ -1762,6 +1762,7 @@
   .mobileHomeWorkspace {
     background: var(--surface);
   }
+  .mobileHomeWorkspace .topbar { height: 52px; }
   .mobileHomeWorkspace .content {
     min-height: calc(100dvh - 68px);
     padding: 0 20px calc(80px + env(safe-area-inset-bottom));

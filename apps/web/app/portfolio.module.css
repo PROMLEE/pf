@@ -1269,7 +1269,7 @@
   .mobileDashboard { display: block; min-height: calc(100dvh - 168px); padding: 20px 5px 30px; }
   .mobileDashboardTop { display: flex; align-items: center; justify-content: space-between; color: #657d85; font-size: 14px; font-weight: 700; }
   .mobileDashboardTop button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid #dce7e9; border-radius: 50%; background: #fff; color: #37626a; }
-  .mobileTotal { margin-top: 18px; color: #18333d; font-size: clamp(34px, 9vw, 48px); font-weight: 800; letter-spacing: -.055em; line-height: 1.13; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mobileTotal { margin-top: 8px; color: #18333d; font-size: clamp(34px, 9vw, 48px); font-weight: 800; letter-spacing: -.055em; line-height: 1.13; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .mobileTotal span { margin-left: 3px; font-size: .55em; letter-spacing: -.03em; }
   .mobileMetricList { margin-top: 24px; border-top: 1px solid #dbe5e7; }
   .mobileMetricList > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; border-bottom: 1px solid #dbe5e7; }
@@ -1398,7 +1398,7 @@
 .rule strong { font-size: 13px; }
 .rule small { font-size: 11px; }
 .performanceSummary > div { border: 0; background: var(--soft); }
-.desktopMetricGrid { gap: 18px; padding: 24px 26px; border-radius: 12px; background: var(--surface); }
+.desktopMetricGrid { gap: 12px; padding: 18px 22px; border-radius: 12px; background: var(--surface); }
 .desktopTotal { min-height: auto; padding: 0; background: transparent; color: var(--ink); }
 .desktopTotal > span, .desktopTotal small { color: var(--muted); }
 .desktopTotal strong { font-weight: 800; }
@@ -1438,8 +1438,8 @@
 .dashboardControls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
 .dashboardControls select { width: 150px; min-width: 0; min-height: 34px; font-size: 12px; padding: 5px 8px; }
 @media (max-width: 760px) {
-  .dashboardControls { margin: 20px 0 4px; }
-  .dashboardControls select { width: 150px; font-size: 16px; }
+  .dashboardControls { margin: 12px 0 2px; }
+  .dashboardControls select { width: 124px; min-height: 32px; font-size: 12px; }
   .dashboardControls .gainToggle { flex-shrink: 0; }
   .dashboardControls .gainToggle button { padding: 4px 7px; font-size: 10px; }
   .mobileDashboard .mobileMetricList { margin-top: 0; }
@@ -1483,15 +1483,15 @@
   .advice > div { min-width: 0; gap: 6px; }
   .advice p { grid-column: 2; margin: 0; text-align: left; font-size: 14px; }
   .previewSummary { display: grid; gap: 8px; padding: 18px 16px; }
-  .mobileDashboard { padding: 18px 0 28px; }
+  .mobileDashboard { padding: 10px 0 24px; }
   .mobileMetricList { border: 0; margin-top: 22px; }
-  .mobileMetricList > div { border: 0; min-height: 64px; }
+  .mobileMetricList > div { border: 0; min-height: 48px; }
   .mobileDashboardTop button { border: 0; background: var(--soft); }
   .mobileAssetRow { border-bottom: 0; min-height: 60px; }
   .mobileAssetName, .mobileAssetValue { gap: 3px; }
   .manualRow .manualNameField { grid-column: 1 / -1; }
   .detailTotal strong { font-size: 28px; }
-  .mobileAssetGroup { margin-top: 20px; }
+  .mobileAssetGroup { margin-top: 16px; }
   .allocationLegendRow { min-height: 40px; font-size: 12px; }
   .allocationLegendRow strong { font-size: 13px; }
   .allocationChart { width: 190px; }
