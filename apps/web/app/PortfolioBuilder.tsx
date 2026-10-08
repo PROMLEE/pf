@@ -228,7 +228,6 @@ function AssetList({
   dailyLoading,
   onSelectAsset,
   assetSort,
-  onAssetSort,
 }: {
   investments: AssetSummaryRow[];
   manualAssets: Portfolio["manualAssets"];
@@ -237,7 +236,6 @@ function AssetList({
   dailyLoading: boolean;
   onSelectAsset: (asset: AssetSelection) => void;
   assetSort: AssetSort;
-  onAssetSort: (value: AssetSort) => void;
 }) {
   const sortedInvestments = [...investments].sort((a, b) => compareAssets(
     { ...a, gain: gainView === "daily" ? a.dailyGain : a.gain, gainPercent: gainView === "daily" ? a.dailyGainPercent : a.gainPercent },
@@ -251,9 +249,6 @@ function AssetList({
   ));
   return (
     <>
-      <div className={styles.assetSortBar}>
-        <AssetSortSelect value={assetSort} onChange={onAssetSort} />
-      </div>
       <div className={styles.mobileAssetGroup}>
         <h2>
           투자 <span>{investments.length}</span>
@@ -1506,6 +1501,15 @@ export default function PortfolioBuilder({
     gainView === "total"
       ? `매입단가 확인 ${knownGains.count}/${gainEligibleCount}개`
       : `전일 종가 확인 ${dailyKnown.count}/${mobileInvestments.length}개 · 현재 보유 수량 기준`;
+  const dashboardControls = (
+    <div className={styles.dashboardControls}>
+      <div className={styles.gainToggle} role="group" aria-label="수익 표시 기간">
+        <button type="button" aria-pressed={gainView === "total"} onClick={() => chooseGainView("total")}>전체 수익</button>
+        <button type="button" aria-pressed={gainView === "daily"} onClick={() => chooseGainView("daily")}>일간 수익</button>
+      </div>
+      <AssetSortSelect value={assetSort} onChange={onAssetSort} />
+    </div>
+  );
   const latestCryptoQuote = draft?.cryptoAssets
     .map((asset) => asset.quoteCheckedAt)
     .filter((date): date is string => Boolean(date))
@@ -1681,29 +1685,11 @@ export default function PortfolioBuilder({
               {won.format(values?.total ?? 0)}
               <span>원</span>
             </div>
+            {dashboardControls}
             <div className={styles.mobileMetricList}>
               <div className={styles.gainMetric}>
                 <div>
-                  <div
-                    className={styles.gainToggle}
-                    role="group"
-                    aria-label="수익 표시 기간"
-                  >
-                    <button
-                      type="button"
-                      aria-pressed={gainView === "total"}
-                      onClick={() => chooseGainView("total")}
-                    >
-                      전체 수익
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={gainView === "daily"}
-                      onClick={() => chooseGainView("daily")}
-                    >
-                      일간 수익
-                    </button>
-                  </div>
+                  <span>{gainView === "daily" ? "일간 손익" : "전체 손익"}</span>
                   <small>{displayedGainNote}</small>
                 </div>
                 <strong
@@ -1771,7 +1757,6 @@ export default function PortfolioBuilder({
               dailyLoading={quotesRefreshing || cryptoRefreshing}
               onSelectAsset={onSelectAsset}
               assetSort={assetSort}
-              onAssetSort={onAssetSort}
             />
           </section>
           <div className={styles.desktopLiveStatus} role="status">
@@ -1790,6 +1775,7 @@ export default function PortfolioBuilder({
           </div>
           <div className={styles.desktopOverview}>
             <div className={styles.desktopPrimary}>
+              {dashboardControls}
               <div className={styles.desktopMetricGrid}>
                 <section className={styles.desktopTotal}>
                   <span>총 평가액</span>
@@ -1798,26 +1784,7 @@ export default function PortfolioBuilder({
                 </section>
                 <section className={styles.desktopGain}>
                   <div>
-                    <div
-                      className={styles.gainToggle}
-                      role="group"
-                      aria-label="수익 표시 기간"
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={gainView === "total"}
-                        onClick={() => chooseGainView("total")}
-                      >
-                        전체 수익
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={gainView === "daily"}
-                        onClick={() => chooseGainView("daily")}
-                      >
-                        일간 수익
-                      </button>
-                    </div>
+                    <span>{gainView === "daily" ? "일간 손익" : "전체 손익"}</span>
                     <strong
                       className={
                         displayedGain === null
@@ -1856,8 +1823,7 @@ export default function PortfolioBuilder({
                   gainView={gainView}
                   dailyLoading={quotesRefreshing || cryptoRefreshing}
                   onSelectAsset={onSelectAsset}
-              assetSort={assetSort}
-              onAssetSort={onAssetSort}
+                  assetSort={assetSort}
                 />
               </section>
             </div>

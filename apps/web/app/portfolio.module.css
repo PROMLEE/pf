@@ -1431,9 +1431,15 @@
 .detailForm label { display: grid; gap: 8px; color: var(--muted); font-size: 13px; }
 .detailForm input { width: 100%; min-height: 44px; box-sizing: border-box; font-size: 16px; }
 .detailFormActions { display: flex; gap: 10px; margin-top: 20px; }
-.assetSortBar { display: flex; justify-content: flex-end; margin: 0 0 12px; }
-.assetSortBar select { min-height: 38px; font-size: 12px; }
-@media (max-width: 760px) { .assetSortBar select { font-size: 16px; } }
+.dashboardControls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.dashboardControls select { width: 150px; min-width: 0; min-height: 34px; font-size: 12px; padding: 5px 8px; }
+@media (max-width: 760px) {
+  .dashboardControls { margin: 20px 0 4px; }
+  .dashboardControls select { width: 150px; font-size: 16px; }
+  .dashboardControls .gainToggle { flex-shrink: 0; }
+  .dashboardControls .gainToggle button { padding: 4px 7px; font-size: 10px; }
+  .mobileDashboard .mobileMetricList { margin-top: 0; }
+}
 .detailForm [role="alert"] { color: #c03948; font-size: 13px; }
 .detailForm button:disabled, .detailAccounts button:disabled { opacity: .5; cursor: default; }
 .manualNameField { display: grid; gap: 4px; color: var(--muted); font-size: 10px; }
