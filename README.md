@@ -2,6 +2,8 @@
 
 서비스: [pf.promleeblog.com](https://pf.promleeblog.com)
 
+[서비스 소개](https://pf.promleeblog.com/about) · [사용 가이드](https://pf.promleeblog.com/guide)
+
 **투자는 리듬을 타듯, 내 기준으로 꾸준히.**
 
 PortRhythm은 국내·미국 주식, 가상자산, 현금의 보유 현황을 목표 비중과 연결하는 개인 포트폴리오 관리 웹 앱입니다. 사용자가 포트를 설계하고 자산을 배정한 뒤, 현재 비중의 차이와 리밸런싱 제안을 확인합니다.

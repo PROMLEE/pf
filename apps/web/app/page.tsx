@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
+import Link from "next/link";
 import {
   ArrowRight,
   Camera,
@@ -1028,7 +1029,10 @@ export default function PortfolioPage() {
                 )}
               </div>
             )}
-            <a className={styles.authGuideLink} href="/guide">처음이신가요? 사용 가이드 보기 <ArrowRight size={16} /></a>
+            <nav className={styles.authInfoLinks} aria-label="서비스 안내">
+              <Link className={styles.authGuideLink} href="/about">PortRhythm은 어떤 서비스인가요? <ArrowRight size={16} /></Link>
+              <Link className={styles.authGuideLink} href="/guide">처음이신가요? 사용 가이드 보기 <ArrowRight size={16} /></Link>
+            </nav>
             <div className={styles.authPrivacy}>
               <ShieldCheck size={18} /> 캡처 이미지는 브라우저에서 분석하고
               저장하지 않습니다.

@@ -1837,7 +1837,8 @@
   .menuSection { padding-bottom: 14px; }
 }
 
-.authGuideLink { display: inline-flex; align-items: center; gap: 8px; margin-top: 22px; font-size: 14px; color: var(--blue); text-decoration: none; }
+.authInfoLinks { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 22px; }
+.authGuideLink { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--blue); text-decoration: none; }
 .startGuide { display: flex; align-items: center; gap: 14px; background: var(--soft); color: var(--ink); border-radius: 12px; padding: 18px 20px; margin-bottom: 22px; }
 .startGuide > svg { color: var(--blue); flex-shrink: 0; }
 .startGuide > div { flex: 1; }

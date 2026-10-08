@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   BookOpen,
   ChevronRight,
@@ -137,6 +138,7 @@ export default function AccountSettings({
         <h2>PortRhythm</h2>
         <p>투자는 리듬을 타듯, 내 기준으로 꾸준히.</p>
         <nav aria-label="서비스 관련 링크">
+          <Link href="/about">서비스 소개 <ChevronRight size={12} aria-hidden="true" /></Link>
           <a
             href="https://github.com/PROMLEE/pf"
             target="_blank"

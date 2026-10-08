@@ -12,7 +12,10 @@ export const metadata: Metadata = {
 export default function GuidePage() {
   return (
     <main className={styles.public}>
-      <Link href="/">PR · PortRhythm</Link>
+      <nav className={styles.publicNav} aria-label="서비스 안내">
+        <Link href="/">PR · PortRhythm</Link>
+        <Link href="/about">서비스 소개 →</Link>
+      </nav>
       <UserGuide />
     </main>
   );
