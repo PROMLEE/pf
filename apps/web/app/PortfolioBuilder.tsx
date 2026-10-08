@@ -1726,29 +1726,6 @@ export default function PortfolioBuilder({
                 </strong>
               </div>
             </div>
-            <details className={styles.mobileMetricNote}>
-              <summary>손익 집계 기준</summary>
-              <p>
-                전체 손익은 매입단가와 현재가가 확인된 주식·가상자산{" "}
-                {knownGains.count}/{gainEligibleCount}개 기준입니다. 현금은 손익
-                계산에 포함되지 않습니다. 일간 손익은 각 시장의 전일 종가와
-                현재가 차이에 현재 보유 수량을 곱해 계산합니다. 환율 변동과
-                현금은 제외합니다.
-              </p>
-            </details>
-            <div className={styles.mobileQuoteTime}>
-              <span
-                className={quotesRefreshing ? styles.livePulse : styles.liveDot}
-              />
-              {quotesRefreshing
-                ? "시세 갱신 중"
-                : `최근 시세 ${timeLabel(latestPriceTime)}`}
-            </div>
-            {(quoteError || fxRefreshError) && (
-              <div className={styles.mobileDataError}>
-                {quoteError || fxRefreshError}
-              </div>
-            )}
             <AssetList
               investments={mobileInvestments}
               manualAssets={draft.manualAssets}
@@ -1758,21 +1735,32 @@ export default function PortfolioBuilder({
               onSelectAsset={onSelectAsset}
               assetSort={assetSort}
             />
+            <div className={styles.dashboardMetadata}>
+              <details className={styles.mobileMetricNote}>
+                <summary>손익 집계 기준</summary>
+                <p>
+                  전체 손익은 매입단가와 현재가가 확인된 주식·가상자산{" "}
+                  {knownGains.count}/{gainEligibleCount}개 기준입니다. 현금은 손익
+                  계산에 포함되지 않습니다. 일간 손익은 각 시장의 전일 종가와
+                  현재가 차이에 현재 보유 수량을 곱해 계산합니다. 환율 변동과
+                  현금은 제외합니다.
+                </p>
+              </details>
+              <div className={styles.mobileQuoteTime}>
+                <span
+                  className={quotesRefreshing ? styles.livePulse : styles.liveDot}
+                />
+                {quotesRefreshing
+                  ? "시세 갱신 중"
+                  : `최근 시세 ${timeLabel(latestPriceTime)}`}
+              </div>
+              {(quoteError || fxRefreshError) && (
+                <div className={styles.mobileDataError}>
+                  {quoteError || fxRefreshError}
+                </div>
+              )}
+            </div>
           </section>
-          <div className={styles.desktopLiveStatus} role="status">
-            <span
-              className={quotesRefreshing ? styles.livePulse : styles.liveDot}
-            />
-            <span>
-              {quotesRefreshing
-                ? "시세 갱신 중"
-                : `최근 시세 ${timeLabel(latestPriceTime)}`}
-            </span>
-            <span>주식 약 5분 · 빗썸 약 1분 간격</span>
-            {(quoteError || fxRefreshError) && (
-              <em>{quoteError || fxRefreshError}</em>
-            )}
-          </div>
           <div className={styles.desktopOverview}>
             <div className={styles.desktopPrimary}>
               {dashboardControls}
@@ -1849,56 +1837,72 @@ export default function PortfolioBuilder({
                   리밸런싱 보기 <ArrowRight size={15} />
                 </button>
               </section>
-              <details className={styles.dataDetails}>
-                <summary>
-                  가격·환율 기준 보기 <ChevronDown size={15} />
-                </summary>
-                <div
-                  className={styles.dataStatus}
-                  aria-label="평가 데이터 기준 시각"
-                >
-                  <strong>평가 기준</strong>
-                  <span>
-                    KIS 가격 {priceFromQuote}개 · 최근 확인{" "}
-                    {timeLabel(latestQuote)}
-                  </span>
-                  <span>
-                    캡처 가격 {priceFromCapture}개
-                    {oldestCapture
-                      ? ` · 가장 오래된 ${timeLabel(oldestCapture)}`
-                      : ""}
-                  </span>
-                  <span>
-                    {draft.usdKrwMode === "auto"
-                      ? "자동 기준환율"
-                      : "직접 입력 환율"}{" "}
-                    USD {won.format(draft.usdKrw)}원
-                  </span>
-                  {draft.cryptoAssets.length > 0 && (
-                    <span>
-                      빗썸 원화 시세{" "}
-                      {
-                        draft.cryptoAssets.filter(
-                          (asset) => asset.quotedPriceKrw !== null,
-                        ).length
-                      }
-                      /{draft.cryptoAssets.length}개
-                    </span>
-                  )}
-                  {cryptoRefreshError && <em>{cryptoRefreshError}</em>}
-                  {(values?.missingPrices ?? 0) > 0 && (
-                    <em>
-                      가격 없는 자산 {values?.missingPrices}개는 평가액에서 제외
-                    </em>
-                  )}
-                </div>
-              </details>
-              <p className={styles.desktopMetricNote}>
-                평가손익은 매입단가가 확인된 주식·가상자산 기준이며 환차손익은
-                포함하지 않습니다. 일간 손익은 각 시장 전일 종가와 현재가의
-                차이를 현재 보유 수량에 적용하며 환율 변동과 현금은 제외합니다.
-              </p>
             </aside>
+          </div>
+          <div className={styles.dashboardMetadata}>
+            <div className={styles.desktopLiveStatus} role="status">
+              <span
+                className={quotesRefreshing ? styles.livePulse : styles.liveDot}
+              />
+              <span>
+                {quotesRefreshing
+                  ? "시세 갱신 중"
+                  : `최근 시세 ${timeLabel(latestPriceTime)}`}
+              </span>
+              <span>주식 약 5분 · 빗썸 약 1분 간격</span>
+              {(quoteError || fxRefreshError) && (
+                <em>{quoteError || fxRefreshError}</em>
+              )}
+            </div>
+            <details className={styles.dataDetails}>
+              <summary>
+                가격·환율 기준 보기 <ChevronDown size={15} />
+              </summary>
+              <div
+                className={styles.dataStatus}
+                aria-label="평가 데이터 기준 시각"
+              >
+                <strong>평가 기준</strong>
+                <span>
+                  KIS 가격 {priceFromQuote}개 · 최근 확인{" "}
+                  {timeLabel(latestQuote)}
+                </span>
+                <span>
+                  캡처 가격 {priceFromCapture}개
+                  {oldestCapture
+                    ? ` · 가장 오래된 ${timeLabel(oldestCapture)}`
+                    : ""}
+                </span>
+                <span>
+                  {draft.usdKrwMode === "auto"
+                    ? "자동 기준환율"
+                    : "직접 입력 환율"}{" "}
+                  USD {won.format(draft.usdKrw)}원
+                </span>
+                {draft.cryptoAssets.length > 0 && (
+                  <span>
+                    빗썸 원화 시세{" "}
+                    {
+                      draft.cryptoAssets.filter(
+                        (asset) => asset.quotedPriceKrw !== null,
+                      ).length
+                    }
+                    /{draft.cryptoAssets.length}개
+                  </span>
+                )}
+                {cryptoRefreshError && <em>{cryptoRefreshError}</em>}
+                {(values?.missingPrices ?? 0) > 0 && (
+                  <em>
+                    가격 없는 자산 {values?.missingPrices}개는 평가액에서 제외
+                  </em>
+                )}
+              </div>
+            </details>
+            <p className={styles.desktopMetricNote}>
+              평가손익은 매입단가가 확인된 주식·가상자산 기준이며 환차손익은
+              포함하지 않습니다. 일간 손익은 각 시장 전일 종가와 현재가의
+              차이를 현재 보유 수량에 적용하며 환율 변동과 현금은 제외합니다.
+            </p>
           </div>
         </>
       )}

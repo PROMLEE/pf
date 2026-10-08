@@ -1191,6 +1191,10 @@
 .desktopLiveStatus { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; color: #607d85; font-size: 11px; }
 .desktopLiveStatus > span:nth-of-type(2) { color: #93a4a8; }
 .desktopLiveStatus em { flex-basis: 100%; color: #a35d35; font-style: normal; }
+.dashboardMetadata { margin-top: 24px; display: grid; gap: 8px; }
+.dashboardMetadata .dataDetails { border: 0; background: transparent; }
+.dashboardMetadata .dataDetails summary { justify-content: flex-start; gap: 8px; padding: 4px 0; }
+.dashboardMetadata .mobileMetricNote, .dashboardMetadata .mobileQuoteTime { margin: 0; }
 .desktopOverview { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(310px, .82fr); align-items: start; gap: 14px; }
 .desktopPrimary, .desktopSide { display: grid; align-content: start; gap: 14px; min-width: 0; }
 .desktopMetricGrid { display: grid; gap: 10px; }
