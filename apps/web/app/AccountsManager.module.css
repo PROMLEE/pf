@@ -160,8 +160,8 @@
   gap: 8px;
 }
 .actions button:first-child {
-  background: var(--blue);
-  color: white;
+  background: var(--action-fill);
+  color: var(--action-ink);
 }
 .actions button:last-child {
   background: var(--surface);
@@ -435,3 +435,5 @@
 .moveReview .actions {
   margin-top: 4px;
 }
+
+.valuation small, .form small, .facts small, .moveReview small, .move { font-size:13px; }

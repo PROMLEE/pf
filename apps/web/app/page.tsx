@@ -44,6 +44,7 @@ import PortfolioBuilder, { stockAssetId, type AssetSelection } from "./Portfolio
 import AssetIcon from "./AssetIcon";
 import UserGuide from "./UserGuide";
 import AccountsManager from "./AccountsManager";
+import { protectUnsavedChanges } from "./unsaved-changes";
 import AccountSettings from "./AccountSettings";
 import AssetSortSelect, { compareAssets, isAssetSort, type AssetSort } from "./asset-sort";
 import styles from "./page.module.css";
@@ -159,9 +160,6 @@ export default function PortfolioPage() {
   const [portfolioDirty, setPortfolioDirty] = useState(false);
   const navigationState = useRef({ dirty: false, url: "" });
 
-  useEffect(() => {
-    navigationState.current.dirty = portfolioDirty;
-  }, [portfolioDirty]);
 
   useEffect(() => {
     function restoreScreen() {
@@ -229,6 +227,12 @@ export default function PortfolioPage() {
   const [holdingQuantity, setHoldingQuantity] = useState("");
   const [holdingCost, setHoldingCost] = useState("");
   const [holdingSaving, setHoldingSaving] = useState(false);
+  const editedHolding = holdings.find(row => row.id === editingHoldingId);
+  const holdingDirty = Boolean(view === "edit" && editedHolding && (holdingQuantity !== String(editedHolding.quantity) || holdingCost !== (editedHolding.averageCost === null ? "" : String(editedHolding.averageCost))));
+  const unsavedChanges = portfolioDirty || holdingDirty || (view === "import" && draft.length > 0);
+  useEffect(() => { navigationState.current.dirty = unsavedChanges; }, [unsavedChanges]);
+  useEffect(() => protectUnsavedChanges(window, unsavedChanges), [unsavedChanges]);
+
   const [localAdminOpen, setLocalAdminOpen] = useState(false);
   const [localAdminName, setLocalAdminName] = useState("");
   const [localAdminPassword, setLocalAdminPassword] = useState("");
@@ -384,7 +388,7 @@ export default function PortfolioPage() {
 
   function go(next: View, asset = selectedAsset, source = detailSource) {
     if (
-      portfolioDirty &&
+      unsavedChanges &&
       next !== view &&
       !window.confirm("저장하지 않은 변경 사항을 버리고 이동할까요?")
     )

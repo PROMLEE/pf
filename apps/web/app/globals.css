@@ -5,6 +5,8 @@
   --line: #dde7ea;
   --navy: #102f3b;
   --blue: #087b83;
+  --action-fill: #087b83;
+  --action-ink: #ffffff;
   --bg: #f7f8fa;
   --surface: #ffffff;
   --soft: #f3f5f7;
@@ -12,6 +14,9 @@
 
 html[data-theme="dark"] {
   color-scheme: dark;
+  --blue: #80dbd6;
+  --action-fill: #80dbd6;
+  --action-ink: #102f3b;
   --ink: #e9f1f2;
   --muted: #9aaeb3;
   --line: #30434a;

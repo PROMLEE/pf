@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 import ts from 'typescript';
 const code=ts.transpileModule(await readFile(new URL('../app/history-performance.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
-const {historyPerformance:p,kstTime,kstDay,dailyObservations}=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const {historyPerformance:p,kstTime,kstDay,dailyObservations,dailyPositionChanges}=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 const snapshot=(at,value)=>({date:kstDay(at),recordedAt:at,valueKrw:value});
 const flow=(at,value)=>({id:at,date:kstDay(at),occurredAt:at,amountKrw:value,note:''});
 const start='2026-10-09T01:00:00Z',end='2026-10-09T03:00:00Z';
@@ -26,3 +26,12 @@ test('observation offsets sort chronologically, not lexically',()=>assert.equal(
 test('deleted flows are excluded even if passed in a combined list',()=>assert.equal(p(points,[{...flow('2026-10-09T02:00:00Z',500),deletedAt:'2026-10-09T04:00:00Z'}]).adjusted,600));
 
 test('daily summaries keep the last observed checkpoint for each day',()=>{const result=dailyObservations([...points,snapshot('2026-10-08T01:00:00Z',800)]);assert.equal(result.length,2);assert.equal(result[1].valueKrw,1600);});
+
+test('input-change dates include intraday changes even when final positions return to the baseline',()=>{
+ const rows=[{...snapshot(start,1000),positionSignature:'A'},{...snapshot('2026-10-09T02:00:00Z',1200),positionSignature:'B'},{...snapshot(end,1000),positionSignature:'A'}];
+ assert.deepEqual([...dailyPositionChanges(rows)],['2026-10-09']);
+});
+test('a missing baseline is never claimed as a confirmed position change',()=>{
+ const rows=[{...snapshot(start,1000),positionSignature:null},{...snapshot(end,1000),positionSignature:'A'}];
+ assert.equal(dailyPositionChanges(rows).size,0);
+});

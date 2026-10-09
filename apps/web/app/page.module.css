@@ -1568,7 +1568,7 @@
 .topPrivate svg { color: #198b79; }
 .topAvatar, .avatar { background: #e1f2ef; color: #136b68; }
 .content { width: min(1350px, 100%); }
-.kicker { color: #087b83; }
+.kicker { color: var(--blue); }
 .pageHead h1 { color: var(--ink); font-size: 28px; }
 .pageHead p { color: var(--muted); font-size: 13px; }
 .primaryButton { background: #087b83; box-shadow: 0 7px 17px #087b8326; }
@@ -1660,7 +1660,7 @@
 .assetIcon { background: #e3f2f0; color: #14796f; }
 .miniRow:nth-child(even) .assetIcon { background: #e8eff5; color: #416d8d; }
 .brokerRow > span { background: #e7f3f0; color: #2a8276; }
-.linkButton, .savedCodeButton { color: #087b83; }
+.linkButton, .savedCodeButton { color: var(--blue); }
 .pill { background: #edf6f4; color: #347b79; }
 .panelNote { background: #f2f7f6; color: #637f86; font-size: 11px; }
 .tabs { background: #ebf2f2; }
@@ -1705,7 +1705,7 @@
   gap: 5px;
   border: 0;
   background: transparent;
-  color: #087b83;
+  color: var(--blue);
   font-weight: 700;
   cursor: pointer;
 }
@@ -1806,8 +1806,8 @@
 .primaryButton { box-shadow: none; }
 .panel, .metrics article, .holdingStats > div { border: 0; box-shadow: none; }
 .holdingDetailLink { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
-.holdingDetailLink:hover { color: #087b83; }
-.holdingDetailLink:focus-visible { outline: 2px solid #087b83; outline-offset: 3px; }
+.holdingDetailLink:hover { color: var(--blue); }
+.holdingDetailLink:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 .metrics article, .holdingStats > div { background: var(--surface); }
 .editIntro { border: 0; background: var(--soft); border-radius: 10px; }
 .themeToggle { border: 0; background: transparent; }
@@ -1833,7 +1833,7 @@
   .panel { padding: 18px 0; border-radius: 0; }
   .mobileNav { border-top: 0; background: var(--surface); box-shadow: 0 -4px 18px #102f3b06; padding-top: 10px; }
   .mobileNav button { min-width: 60px; min-height: 44px; gap: 5px; font-size: 10px; }
-  .mobileNav .mobileActive { color: #087b83; font-weight: 750; }
+  .mobileNav .mobileActive { color: var(--blue); font-weight: 750; }
   .allMenu .pageHead { margin-bottom: 12px; }
   .menuSection { padding-bottom: 14px; }
 }
@@ -1850,7 +1850,7 @@
 @media(max-width: 600px) { .startGuide { position: relative; flex-wrap: wrap; padding: 16px 36px 14px 16px; gap: 10px; } .startGuide > svg { display: none; } .startGuide > div { flex-basis: 100%; } .startGuide .startGuideDismiss { position: absolute; right: 8px; top: 9px; } }
 
 .editStatus { grid-column: 1 / -1; color: var(--blue); font-size: 13px; margin: 0; }
-.holdingEdit > button:first-of-type { background: var(--blue); color: #fff; border: 0; }
+.holdingEdit > button:first-of-type { background: var(--action-fill); color: var(--action-ink); border: 0; }
 @media (max-width: 640px) {
   .editAssetCard { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 32px; gap: 10px 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
   .editAssetCard .holdingName { grid-column: 1 / 3; }

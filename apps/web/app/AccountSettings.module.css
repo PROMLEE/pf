@@ -288,3 +288,22 @@
   overflow: hidden;
   clip-path: inset(50%);
 }
+
+.exportButton {
+  color: var(--action-ink);
+  background: var(--action-fill);
+  border: 0;
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.exportButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.exportButton:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}

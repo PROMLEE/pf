@@ -81,3 +81,26 @@ export function dailyObservations(points: Snapshot[]) {
   for (const point of ordered) days.set(point.date, point);
   return [...days.values()];
 }
+
+/** Mark input changes at observed checkpoints; this is not a transaction history. */
+export function dailyPositionChanges(points: Snapshot[]) {
+  const result = new Set<string>();
+  let previous: string | null = null;
+  const ordered = [...points].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (a.recordedAt ? Date.parse(a.recordedAt) : -Infinity) -
+        (b.recordedAt ? Date.parse(b.recordedAt) : -Infinity) ||
+      0,
+  );
+  for (const point of ordered) {
+    if (!point.positionSignature) {
+      previous = null;
+      continue;
+    }
+    if (previous !== null && previous !== point.positionSignature)
+      result.add(point.date);
+    previous = point.positionSignature;
+  }
+  return result;
+}

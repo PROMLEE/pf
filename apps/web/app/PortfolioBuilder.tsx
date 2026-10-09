@@ -32,7 +32,7 @@ import {
   type Portfolio,
   type Rule,
 } from "./portfolio-model";
-import { historyPerformance, kstTime, dailyObservations } from "./history-performance";
+import { historyPerformance, kstTime, dailyObservations, dailyPositionChanges } from "./history-performance";
 import { needsAdjustment, rebalance, symbolKey } from "./rebalance";
 import styles from "./portfolio.module.css";
 
@@ -209,6 +209,7 @@ function Trend({
         ))}
       </svg>
       </div>
+      <p className={styles.trendRange}>표시 범위 · 최저 {new Intl.NumberFormat("ko-KR", {notation: "compact", maximumFractionDigits: 1}).format(min)}원 ~ 최고 {new Intl.NumberFormat("ko-KR", {notation: "compact", maximumFractionDigits: 1}).format(max)}원</p>
       <div className={styles.trendDates}>
         <span>{points[0].date}</span>
         {points.length > 1 && <span>{points.at(-1)?.date}</span>}
@@ -406,10 +407,18 @@ function AssetDetail({
     editForm.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     editForm.current?.querySelector("input")?.focus({ preventScroll: true });
   }, [editing]);
+  const editedStock = holdings.find(row => row.id === editing);
+  const editedCrypto = portfolio.cryptoAssets.find(asset => `crypto:${asset.id}` === editing);
+  const editedManual = portfolio.manualAssets.find(asset => asset.id === editing);
+  const editDirty = Boolean(editing && (editedManual
+    ? editName !== editedManual.name || editValue !== String(editedManual.valueUsd ?? editedManual.valueKrw)
+    : editedStock || editedCrypto
+      ? editQuantity !== String(editedStock?.quantity ?? editedCrypto?.quantity ?? "") || editCost !== String(editedStock?.averageCost ?? editedCrypto?.averageCostKrw ?? "")
+      : false));
   useEffect(() => {
-    onEditingChange(editing !== null);
+    onEditingChange(editDirty);
     return () => onEditingChange(false);
-  }, [editing, onEditingChange]);
+  }, [editDirty, onEditingChange]);
   useEffect(() => { setEditing(null); setError(""); }, [selection.id]);
   const stockRows = selection.kind === "stock"
     ? holdings.filter((row) => stockAssetId(row) === selection.id || `holding:${row.id}` === selection.id)
@@ -493,10 +502,12 @@ function AssetDetail({
       <div className={styles.detailTotal}>
         <span>평가 금액</span>
         <strong>{manual ? fmt(manualAssetValueKrw(manual, portfolio.usdKrw)) : value === null ? "—" : fmt(value)}</strong>
+        {!manual && <span>매입단가 기준 평가손익 · 전체 보유분</span>}
         {!manual && <small className={gain === null ? "" : gain >= 0 ? styles.mobileUp : styles.mobileDown}>
           {gain === null ? "매입단가 정보 없음" : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${gainPct(gainPercent)}`})`}
         </small>}
       </div>
+      {!manual && <p className={styles.detailHint}>전일 종가 대비 일간 손익과 기준이 다릅니다. 실현 손익은 제외하며 외화 자산은 현재 적용 환율로 환산합니다.</p>}
       <div className={styles.detailFacts}>
         {manual ? <>
           <div><span>입력 금액</span><strong>{manual.valueUsd === null ? fmt(manual.valueKrw) : `$${manual.valueUsd.toLocaleString("en-US")}`}</strong></div>
@@ -549,8 +560,8 @@ function AssetDetail({
         </fieldset>
         {error && <p role="alert">{error}</p>}
         <div className={styles.detailFormActions}>
-          <span className={styles.saved} role="status">미저장 · 저장하면 이 자산에 반영됩니다</span>
-          <button type="submit" className={styles.detailEdit} disabled={saving || assigning}>{saving ? "저장 중…" : "저장"}</button>
+          <span className={styles.saved} role="status">{editDirty ? "미저장 · 저장하면 이 자산에 반영됩니다" : "저장된 보유 정보"}</span>
+          <button type="submit" className={styles.detailEdit} disabled={saving || assigning || !editDirty}>{saving ? "저장 중…" : "저장"}</button>
           <button type="button" className={styles.ghost} disabled={saving} onClick={() => { setEditing(null); setError(""); }}>취소</button>
         </div>
       </form>}
@@ -1408,7 +1419,9 @@ export default function PortfolioBuilder({
     const points = draft?.snapshots.filter((point) => point.bucketKey === bucketKey && (!historyCutoff || point.date >= historyCutoff)) ?? [];
     return dailyObservations(points);
   }
-  const history = periodPoints(trendKey).map((point) => ({
+  const historyRows = periodPoints(trendKey);
+  const changedDays = dailyPositionChanges(draft?.snapshots.filter(point => point.bucketKey === "__TOTAL__") ?? []);
+  const history = historyRows.map((point) => ({
     date: point.date,
     at: Date.parse(`${point.date}T00:00:00+09:00`),
     value: point.valueKrw,
@@ -2957,9 +2970,8 @@ export default function PortfolioBuilder({
             </details>
             <p className={styles.help}>
               예상 수량은 1주 단위이며 수수료·세금·환전 비용은 포함하지
-              않습니다. 매도 대금을 계좌 간 이동할 수 있다고 가정하므로 계좌별
-              주문 가능 금액·결제일을 별도로 확인하세요. 매도 제외는 해당 보유
-              항목에만 적용하며 추가 매수에는 영향을 주지 않습니다.
+              않습니다. {rebalanceMode === "trade" && "매도 대금을 계좌 간 이동할 수 있다고 가정하므로 계좌별 주문 가능 금액·결제일을 별도로 확인하세요. "}
+              {rebalanceMode === "trade" ? "매도 제외는 해당 보유 항목에만 적용하며 추가 매수에는 영향을 주지 않습니다." : "입력한 추가 자금으로만 매수 수량을 계산합니다. 기존 현금 잔고는 자동 포함하지 않습니다."}
             </p>
             {!rebalanceReady ? (
               <div className={styles.rebalanceStatus}>
@@ -3448,6 +3460,11 @@ export default function PortfolioBuilder({
               <small>일별 마지막 평가액</small>
             </div>
             <Trend key={`${trendKey}:${historyPeriod}`} points={history} color={trendColor} />
+            <details className={styles.historyTable}>
+              <summary>일별 기록 보기 · {historyRows.length}일</summary>
+              <p className={styles.help}>선택한 포트·기간의 마지막 관측값입니다. 보유 정보 변경 표지는 전체 자산의 수량·단가·입력 금액 등 저장 정보가 이전 관측과 달라졌다는 의미이며 거래 내역이 아닙니다.</p>
+              <table><thead><tr><th scope="col">날짜</th><th scope="col">평가액</th><th scope="col">보유 정보</th></tr></thead><tbody>{historyRows.map(point => <tr key={point.date}><td>{point.date}</td><td>{fmt(point.valueKrw)}</td><td>{changedDays.has(point.date) ? "변경 기록" : point.positionSignature ? "—" : "비교 정보 없음"}</td></tr>)}</tbody></table>
+            </details>
             {trendKey === "__TOTAL__" && (
               <div className={styles.performanceSummary}>
                 <div>
@@ -3545,13 +3562,13 @@ export default function PortfolioBuilder({
                       {flow.amountKrw > 0 ? "+" : ""}
                       {fmt(flow.amountKrw)}
                     </strong>
-                    <button type="button" className={styles.iconButton} onClick={() => editFlow(flow)} disabled={dirty || flowSaving} aria-label={`${flow.date} 입출금 수정`}><Pencil size={16} /></button>
+                    <button type="button" className={styles.iconButton} onClick={() => editFlow(flow)} disabled={dirty || flowSaving} aria-label={`${flow.date} ${flow.amountKrw > 0 ? "입금" : "출금"} ${fmt(Math.abs(flow.amountKrw))} ${flow.note || "메모 없음"} 내역 ${flow.id} 수정`}><Pencil size={16} /></button>
                     <button
                       type="button"
                       className={styles.iconButton}
                       onClick={() => removeFlow(flow.id)}
                       disabled={dirty || flowSaving}
-                      aria-label={`${flow.date} 입출금 삭제`}
+                      aria-label={`${flow.date} ${flow.amountKrw > 0 ? "입금" : "출금"} ${fmt(Math.abs(flow.amountKrw))} ${flow.note || "메모 없음"} 내역 ${flow.id} 삭제`}
                     >
                       <Trash2 size={14} />
                     </button>
