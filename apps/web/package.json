@@ -11,7 +11,8 @@
     "test:cash-flows": "node --test tests/cash-flows.test.mjs",
     "test:history": "node --test tests/history-performance.test.mjs",
     "test:assignment": "node --test tests/assignment.test.mjs",
-    "test:number-input": "node --test tests/number-input.test.mjs"
+    "test:number-input": "node --test tests/number-input.test.mjs",
+    "test:accounts": "node --test tests/accounts.test.mjs"
   },
   "dependencies": {
     "adm-zip": "0.6.1",

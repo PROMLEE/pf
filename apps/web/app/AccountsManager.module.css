@@ -1,0 +1,375 @@
+.manager {
+  color: var(--ink);
+}
+.header,
+.accountHead,
+.stockHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.header {
+  margin-bottom: 24px;
+}
+.header h1 {
+  margin: 0;
+  font-size: 25px;
+}
+.header p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.manager button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 13px;
+  color: var(--blue);
+  background: var(--soft);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.manager button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.manager button:focus-visible,
+.manager input:focus-visible,
+.manager select:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.manager input,
+.manager select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-height: 44px;
+  width: 100%;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 30px;
+}
+.accountList {
+  border-right: 1px solid var(--line);
+  padding-right: 20px;
+}
+.accountList h2 {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.accountList h2 span {
+  margin-left: 6px;
+  color: var(--blue);
+}
+.accountList > button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  justify-content: flex-start;
+  margin-bottom: 6px;
+  padding: 14px 10px;
+}
+.accountList > button[aria-pressed="true"] {
+  background: var(--soft);
+}
+.accountList button > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.accountList strong {
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.accountList small {
+  display: block;
+  color: var(--muted);
+  margin-top: 5px;
+  font-size: 12px;
+}
+.accountList button > span:last-child {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.accountHead {
+  margin-bottom: 12px;
+}
+.accountHead h2 {
+  font-size: 22px;
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.accountHead small,
+.accountHead > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.metadata {
+  margin-bottom: 28px;
+}
+.metadata summary {
+  cursor: pointer;
+  color: var(--blue);
+  font-size: 13px;
+  padding: 8px 0;
+}
+.form {
+  padding: 18px;
+  margin: 14px 0 24px;
+  background: var(--soft);
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+}
+.form h2,
+.form h3 {
+  font-size: 16px;
+  margin: 0;
+}
+.form label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+}
+.form small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.actions button:first-child {
+  background: var(--blue);
+  color: white;
+}
+.actions button:last-child {
+  background: var(--surface);
+  color: var(--muted);
+}
+.numbers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.stockHead h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.search {
+  display: flex;
+  gap: 8px;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+}
+.search button {
+  white-space: nowrap;
+  background: var(--surface);
+}
+.matches {
+  display: grid;
+  max-height: 220px;
+  overflow: auto;
+}
+.matches button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  justify-content: space-between;
+  text-align: left;
+}
+.selected {
+  margin: 0;
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 700;
+}
+.selected span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 5px;
+}
+.stocks > article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 1fr);
+  gap: 14px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.stockIdentity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.stockIdentity button {
+  display: block;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  color: var(--ink);
+  min-width: 0;
+}
+.stockIdentity strong {
+  display: block;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.stockIdentity small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 5px;
+}
+.facts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 22px;
+  text-align: right;
+}
+.facts small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.facts strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.rowActions {
+  grid-column: 1/-1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  align-items: center;
+}
+.move {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.move select {
+  width: auto;
+  max-width: 260px;
+  min-height: 36px;
+  font-size: 12px;
+}
+.empty {
+  padding: 40px 12px;
+  text-align: center;
+  color: var(--muted);
+}
+.empty h2,
+.empty h3 {
+  color: var(--ink);
+  font-size: 17px;
+}
+.empty p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.error {
+  color: #bc344a;
+  font-size: 13px;
+  background: var(--soft);
+  padding: 12px;
+  border-radius: 8px;
+}
+.status {
+  font-size: 13px;
+  color: var(--blue);
+  margin-top: 18px;
+}
+.mobileSelect {
+  display: none;
+}
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .accountList {
+    display: none;
+  }
+  .mobileSelect {
+    display: block;
+  }
+  .mobileSelect label {
+    display: grid;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .header {
+    align-items: flex-start;
+  }
+  .header h1 {
+    font-size: 22px;
+  }
+  .header > button {
+    flex-shrink: 0;
+  }
+  .header p {
+    max-width: 210px;
+  }
+  .accountHead h2 {
+    font-size: 19px;
+  }
+  .stocks > article {
+    grid-template-columns: 1fr;
+  }
+  .facts {
+    justify-content: space-between;
+  }
+  .facts > div:first-child {
+    text-align: left;
+  }
+  .rowActions {
+    justify-content: space-between;
+  }
+  .move select {
+    max-width: 210px;
+  }
+  .form {
+    padding: 16px;
+  }
+  .numbers {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width:760px) {
+  .rowActions { gap:10px; }
+  .rowActions > button { flex-shrink:0; white-space:nowrap; min-width:64px; }
+  .move { flex:1; min-width:0; white-space:nowrap; }
+  .move select { flex:1; min-width:0; width:0; max-width:none; }
+}

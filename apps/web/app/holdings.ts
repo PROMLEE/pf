@@ -2,6 +2,7 @@ export type Market = "KR" | "US";
 
 export type Holding = {
   id: string;
+  accountId?: string;
   broker: string;
   account: string;
   market: Market;

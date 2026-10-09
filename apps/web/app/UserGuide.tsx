@@ -6,6 +6,7 @@ import styles from "./UserGuide.module.css";
 
 type Destination =
   | "strategy"
+  | "accounts"
   | "import"
   | "edit"
   | "allocation"
@@ -26,9 +27,9 @@ const steps: {
   },
   {
     title: "보유 자산 등록하기",
-    text: "주식은 잔고 캡처를 분석하거나 직접 입력하세요. 인식한 종목코드·수량·매입단가는 저장 전에 확인합니다. 비트코인과 현금은 자산 수정에서 추가하세요.",
-    destination: "import",
-    action: "주식 등록",
+    text: "계좌 관리에서 증권사·계좌명을 만들고 종목을 검색해 직접 등록하세요. 잔고 캡처도 사용할 수 있습니다. 비트코인과 현금은 자산 수정에서 추가하세요.",
+    destination: "accounts",
+    action: "계좌·종목 등록",
   },
   {
     title: "자산을 포트에 연결하기",

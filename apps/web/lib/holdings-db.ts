@@ -1,12 +1,14 @@
 import type { PoolClient } from "pg";
 import type { Holding } from "../app/holdings";
 import { db } from "./db";
+import { resolveAccount } from "./accounts-db";
 import { recordSnapshot } from "./portfolio-db";
 
 type Row = {
   id: string;
   broker: string;
   account_label: string;
+  account_id: string;
   market: "KR" | "US";
   name: string;
   symbol: string;
@@ -27,6 +29,7 @@ function fromRow(row: Row): Holding {
     id: row.id,
     broker: row.broker,
     account: row.account_label,
+    accountId: row.account_id,
     market: row.market,
     name: row.name,
     symbol: row.symbol,
@@ -46,7 +49,7 @@ function fromRow(row: Row): Holding {
 
 async function select(client: Pick<PoolClient, "query">, userId: string) {
   const result = await client.query<Row>(
-    `select id, broker, account_label, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, captured_at, current_price, quote_label, quote_checked_at
+    `select id, broker, account_label, account_id, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, captured_at, current_price, quote_label, quote_checked_at
      from portfolio.holdings where user_id = $1 order by created_at desc, name asc`,
     [userId],
   );
@@ -57,11 +60,38 @@ export async function listHoldings(userId: string) {
   return select(db(), userId);
 }
 
-export async function addHoldings(userId: string, incoming: Holding[]) {
+export async function addHoldings(
+  userId: string,
+  incoming: Holding[],
+  insertOnly = false,
+) {
   const client = await db().connect();
   try {
     await client.query("begin");
-    for (const row of incoming) {
+    for (const input of incoming) {
+      const account = await resolveAccount(
+        client,
+        userId,
+        input.broker,
+        input.account,
+        input.accountId,
+      );
+      const row = {
+        ...input,
+        broker: account.broker,
+        account: account.name,
+        accountId: account.id,
+      };
+      if (insertOnly) {
+        const duplicate = await client.query(
+          `select id from portfolio.holdings where user_id=$1 and account_id=$2 and market=$3 and symbol=$4`,
+          [userId, account.id, row.market, row.symbol],
+        );
+        if (duplicate.rowCount)
+          throw new Error(
+            "이미 보유한 종목입니다. 기존 종목의 수량을 수정해 주세요.",
+          );
+      }
       let previousAssignment:
         | { bucket_id: string | null; assignment_source: "auto" | "manual" }
         | undefined;
@@ -94,8 +124,8 @@ export async function addHoldings(userId: string, incoming: Holding[]) {
         : (matchedRule?.rows[0]?.bucket_id ?? null);
       await client.query(
         `insert into portfolio.holdings
-         (id, user_id, broker, account_label, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, captured_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+         (id, user_id, broker, account_label, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, captured_at, account_id)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [
           crypto.randomUUID(),
           userId,
@@ -111,6 +141,7 @@ export async function addHoldings(userId: string, incoming: Holding[]) {
           row.capturedPrice,
           row.averageCost,
           row.capturedAt,
+          row.accountId,
         ],
       );
     }
@@ -232,20 +263,76 @@ export async function setQuote(
   );
 }
 
-export async function updateHoldingAssignment(userId: string, id: string, bucketId: string | null, source: "auto" | "manual") {
+export async function updateHoldingAssignment(
+  userId: string,
+  id: string,
+  bucketId: string | null,
+  source: "auto" | "manual",
+) {
   const client = await db().connect();
   try {
     await client.query("begin");
-    const result = await client.query(`update portfolio.holdings h set
+    const result = await client.query(
+      `update portfolio.holdings h set
       assignment_source = $4,
       bucket_id = case when $4 = 'auto' then (select r.bucket_id from portfolio.rules r where r.user_id = $1 and r.market = h.market and r.symbol = h.symbol limit 1) else $3 end,
       updated_at = now()
-      where h.user_id = $1 and h.id = $2 and ($3::uuid is null or exists(select 1 from portfolio.buckets b where b.user_id = $1 and b.id = $3))`, [userId,id,bucketId,source]);
-    if (result.rowCount !== 1) { await client.query("rollback"); return null; }
-    const snapshots = await recordSnapshot(userId,client);
-    const holdings = await select(client,userId);
+      where h.user_id = $1 and h.id = $2 and ($3::uuid is null or exists(select 1 from portfolio.buckets b where b.user_id = $1 and b.id = $3))`,
+      [userId, id, bucketId, source],
+    );
+    if (result.rowCount !== 1) {
+      await client.query("rollback");
+      return null;
+    }
+    const snapshots = await recordSnapshot(userId, client);
+    const holdings = await select(client, userId);
     await client.query("commit");
-    return {holdings, snapshots};
-  } catch (error) { await client.query("rollback"); throw error; }
-  finally { client.release(); }
+    return { holdings, snapshots };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function moveHoldingAccount(
+  userId: string,
+  id: string,
+  accountId: string,
+) {
+  const client = await db().connect();
+  try {
+    await client.query("begin");
+    const account = await resolveAccount(client, userId, "", "", accountId);
+    const owned = await client.query<{ market: string; symbol: string }>(
+      `select market,symbol from portfolio.holdings where user_id=$1 and id=$2 for update`,
+      [userId, id],
+    );
+    if (!owned.rows[0]) {
+      await client.query("rollback");
+      return null;
+    }
+    const duplicate = await client.query(
+      `select id from portfolio.holdings where user_id=$1 and account_id=$2 and market=$3 and symbol=$4 and id<>$5 and symbol<>''`,
+      [userId, accountId, owned.rows[0].market, owned.rows[0].symbol, id],
+    );
+    if (duplicate.rowCount)
+      throw new Error(
+        "옮길 계좌에 같은 종목이 있습니다. 수량을 확인해 각각 수정해 주세요.",
+      );
+    await client.query(
+      `update portfolio.holdings set account_id=$3,broker=$4,account_label=$5,updated_at=now() where user_id=$1 and id=$2`,
+      [userId, id, accountId, account.broker, account.name],
+    );
+    await recordSnapshot(userId, client);
+    const holdings = await select(client, userId);
+    await client.query("commit");
+    return { holdings };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

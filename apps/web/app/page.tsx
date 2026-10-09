@@ -43,6 +43,7 @@ import {
 import PortfolioBuilder, { stockAssetId, type AssetSelection } from "./PortfolioBuilder";
 import AssetIcon from "./AssetIcon";
 import UserGuide from "./UserGuide";
+import AccountsManager from "./AccountsManager";
 import AccountSettings from "./AccountSettings";
 import AssetSortSelect, { compareAssets, isAssetSort, type AssetSort } from "./asset-sort";
 import styles from "./page.module.css";
@@ -50,6 +51,7 @@ import styles from "./page.module.css";
 type View =
   | "portfolio"
   | "holdings"
+  | "accounts"
   | "edit"
   | "strategy"
   | "composition"
@@ -62,7 +64,7 @@ type View =
   | "settings"
   | "guide";
 const VIEWS: readonly View[] = [
-  "portfolio", "holdings", "edit", "strategy", "composition", "allocation",
+  "portfolio", "holdings", "accounts", "edit", "strategy", "composition", "allocation",
   "rebalance", "history", "import", "more", "detail", "settings", "guide",
 ];
 
@@ -152,7 +154,7 @@ export default function PortfolioPage() {
     try { localStorage.setItem(`pf-guide-dismissed:${session?.user?.appUserId ?? "account"}`, "1"); } catch { /* Dismiss for this visit when storage is unavailable. */ }
   }
   const [selectedAsset, setSelectedAsset] = useState<AssetSelection | null>(null);
-  const [detailSource, setDetailSource] = useState<"portfolio" | "holdings">("portfolio");
+  const [detailSource, setDetailSource] = useState<"portfolio" | "holdings" | "accounts">("portfolio");
   const [editFocus, setEditFocus] = useState<AssetSelection | null>(null);
   const [portfolioDirty, setPortfolioDirty] = useState(false);
   const navigationState = useRef({ dirty: false, url: "" });
@@ -172,7 +174,7 @@ export default function PortfolioPage() {
         ? { id, kind } : null;
       if (next === "detail" && !asset) next = "holdings";
       setSelectedAsset(asset);
-      setDetailSource(params.get("source") === "holdings" ? "holdings" : "portfolio");
+      setDetailSource(params.get("source") === "accounts" ? "accounts" : params.get("source") === "holdings" ? "holdings" : "portfolio");
       setView(next);
       setEditFocus(null);
       setEditingHoldingId(null);
@@ -403,7 +405,7 @@ export default function PortfolioPage() {
     setNotice("");
   }
 
-  function openAsset(asset: AssetSelection, source: "portfolio" | "holdings") {
+  function openAsset(asset: AssetSelection, source: "portfolio" | "holdings" | "accounts") {
     setSelectedAsset(asset);
     setDetailSource(source);
     go("detail", asset, source);
@@ -1048,6 +1050,7 @@ export default function PortfolioPage() {
   const nav = [
     { id: "portfolio" as View, label: "대시보드", Icon: LayoutDashboard },
     { id: "holdings" as View, label: "보유 자산", Icon: Wallet },
+    { id: "accounts" as View, label: "계좌 관리", Icon: Wallet },
     { id: "edit" as View, label: "자산 수정", Icon: Pencil },
     { id: "strategy" as View, label: "목표 설계", Icon: Settings2 },
     { id: "composition" as View, label: "포트 비중", Icon: PieChart },
@@ -1061,7 +1064,7 @@ export default function PortfolioPage() {
   const navLabel = view === "more" ? "전체 메뉴" : view === "detail" ? "자산 상세" : nav.find((item) => item.id === view)?.label;
   const menuSections = [
     { label: "포트폴리오", ids: ["strategy", "composition", "rebalance"] },
-    { label: "자산 관리", ids: ["holdings", "edit", "allocation", "import"] },
+    { label: "자산 관리", ids: ["accounts", "holdings", "edit", "allocation", "import"] },
     { label: "기록과 계정", ids: ["history", "settings", "guide"] },
   ];
   const menuDescriptions: Partial<Record<View, string>> = {
@@ -1069,6 +1072,7 @@ export default function PortfolioPage() {
     composition: "현재 비중과 목표 비교",
     rebalance: "매수·매도 수량 확인",
     holdings: "종목별 평가액과 손익",
+    accounts: "증권사·계좌명과 계좌별 종목 관리",
     edit: "수량, 매입단가, 자산 이름 수정",
     allocation: "보유 자산의 포트 지정",
     import: "증권사 잔고 캡처로 등록",
@@ -1091,8 +1095,8 @@ export default function PortfolioPage() {
           {nav.map(({ id, label, Icon }, index) => (
             <Fragment key={id}>
               {index === 0 && <span>자산</span>}
-              {index === 3 && <span>포트폴리오</span>}
-              {index === 7 && <span>도구</span>}
+              {id === "strategy" && <span>포트폴리오</span>}
+              {id === "history" && <span>도구</span>}
               <button
                 className={view === id ? styles.navActive : ""}
                 onClick={() => go(id)}
@@ -1166,6 +1170,7 @@ export default function PortfolioPage() {
           </button>
         </header>
         <main className={styles.content}>
+          {view === "accounts" && <AccountsManager userId={session.user?.appUserId ?? ""} holdings={holdings} onHoldings={(rows)=>{setHoldings(rows);setQuoteVersion(version=>version+1);}} onNotice={setNotice} onDirty={setPortfolioDirty} onOpenAsset={row=>openAsset({id:`holding:${row.id}`,kind:"stock"},"accounts")} onRefreshQuotes={()=>void refreshQuotes(true)} />}
           {view === "guide" && <UserGuide onNavigate={go} />}
           {view === "portfolio" && showStartGuide && (
             <section className={styles.startGuide} aria-label="처음 시작 안내">

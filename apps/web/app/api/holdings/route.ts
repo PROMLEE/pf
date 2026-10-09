@@ -8,6 +8,7 @@ import {
   updateHoldingAmounts,
   updateHoldingInstrument,
   updateHoldingAssignment,
+  moveHoldingAccount,
 } from "../../../lib/holdings-db";
 
 export const runtime = "nodejs";
@@ -26,6 +27,11 @@ function valid(row: Holding) {
   return (
     row !== null &&
     typeof row === "object" &&
+    (row.accountId === undefined ||
+      (typeof row.accountId === "string" &&
+        /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(
+          row.accountId,
+        ))) &&
     typeof row.broker === "string" &&
     row.broker.trim().length > 0 &&
     row.broker.length <= 80 &&
@@ -93,8 +99,12 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   try {
-    const data = (await request.json()) as { holdings?: Holding[] };
+    const data = (await request.json()) as {
+      holdings?: Holding[];
+      insertOnly?: boolean;
+    };
     if (
+      (data.insertOnly !== undefined && typeof data.insertOnly !== "boolean") ||
       !Array.isArray(data.holdings) ||
       data.holdings.length < 1 ||
       data.holdings.length > 100 ||
@@ -106,12 +116,26 @@ export async function POST(request: Request) {
       );
     }
     return NextResponse.json({
-      holdings: await addHoldings(userId, data.holdings),
+      holdings: await addHoldings(
+        userId,
+        data.holdings,
+        data.insertOnly === true,
+      ),
     });
-  } catch {
+  } catch (error) {
     return NextResponse.json(
-      { message: "종목을 저장하지 못했습니다" },
-      { status: 500 },
+      {
+        message:
+          error instanceof Error && /이미 보유|계좌를 찾지/.test(error.message)
+            ? error.message
+            : "종목을 저장하지 못했습니다",
+      },
+      {
+        status:
+          error instanceof Error && /이미 보유|계좌를 찾지/.test(error.message)
+            ? 409
+            : 500,
+      },
     );
   }
 }
@@ -161,6 +185,7 @@ export async function PATCH(request: Request) {
   try {
     const body = (await request.json()) as {
       id?: string;
+      accountId?: string;
       bucketId?: string | null;
       assignmentSource?: "auto" | "manual";
       quantity?: number;
@@ -170,14 +195,63 @@ export async function PATCH(request: Request) {
       symbol?: string;
       exchange?: string | null;
     };
+    if (body.accountId !== undefined) {
+      const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+      if (
+        typeof body.id !== "string" ||
+        !uuid.test(body.id) ||
+        typeof body.accountId !== "string" ||
+        !uuid.test(body.accountId)
+      )
+        return NextResponse.json(
+          { message: "계좌와 종목을 확인해 주세요" },
+          { status: 400 },
+        );
+      try {
+        const result = await moveHoldingAccount(
+          userId,
+          body.id,
+          body.accountId,
+        );
+        return result
+          ? NextResponse.json(result)
+          : NextResponse.json(
+              { message: "종목을 찾지 못했습니다" },
+              { status: 404 },
+            );
+      } catch (error) {
+        if (error instanceof Error && /계좌를 찾지/.test(error.message))
+          return NextResponse.json({ message: error.message }, { status: 404 });
+        if (error instanceof Error && /같은 종목/.test(error.message))
+          return NextResponse.json({ message: error.message }, { status: 409 });
+        throw error;
+      }
+    }
     if (body.assignmentSource !== undefined) {
       const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
-      if (!body.id || !uuid.test(body.id) || !["auto", "manual"].includes(body.assignmentSource) ||
-          (body.bucketId !== null && (typeof body.bucketId !== "string" || !uuid.test(body.bucketId))) ||
-          (body.assignmentSource === "auto" && body.bucketId !== null))
-        return NextResponse.json({message:"종목과 포트 배정을 확인해 주세요"},{status:400});
-      const result = await updateHoldingAssignment(userId,body.id,body.bucketId ?? null,body.assignmentSource);
-      if (!result) return NextResponse.json({message:"종목 또는 포트를 찾지 못했습니다"},{status:404});
+      if (
+        !body.id ||
+        !uuid.test(body.id) ||
+        !["auto", "manual"].includes(body.assignmentSource) ||
+        (body.bucketId !== null &&
+          (typeof body.bucketId !== "string" || !uuid.test(body.bucketId))) ||
+        (body.assignmentSource === "auto" && body.bucketId !== null)
+      )
+        return NextResponse.json(
+          { message: "종목과 포트 배정을 확인해 주세요" },
+          { status: 400 },
+        );
+      const result = await updateHoldingAssignment(
+        userId,
+        body.id,
+        body.bucketId ?? null,
+        body.assignmentSource,
+      );
+      if (!result)
+        return NextResponse.json(
+          { message: "종목 또는 포트를 찾지 못했습니다" },
+          { status: 404 },
+        );
       return NextResponse.json(result);
     }
     if (body.quantity !== undefined) {
