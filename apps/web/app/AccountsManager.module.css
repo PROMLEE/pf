@@ -367,9 +367,71 @@
     grid-template-columns: 1fr;
   }
 }
-@media (max-width:760px) {
-  .rowActions { gap:10px; }
-  .rowActions > button { flex-shrink:0; white-space:nowrap; min-width:64px; }
-  .move { flex:1; min-width:0; white-space:nowrap; }
-  .move select { flex:1; min-width:0; width:0; max-width:none; }
+@media (max-width: 760px) {
+  .rowActions {
+    gap: 10px;
+  }
+  .rowActions > button {
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-width: 64px;
+  }
+  .move {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .move select {
+    flex: 1;
+    min-width: 0;
+    width: 0;
+    max-width: none;
+  }
+}
+
+.valuation {
+  display: grid;
+  gap: 7px;
+  margin: 16px 0 20px;
+}
+.valuation > span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.valuation > strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.valuation small,
+.moveReview small {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.verification {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.verification strong {
+  font-variant-numeric: tabular-nums;
+}
+.moveReview {
+  grid-column: 1/-1;
+  display: grid;
+  gap: 10px;
+  background: var(--soft);
+  padding: 16px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.moveReview p {
+  margin: 0;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.moveReview .actions {
+  margin-top: 4px;
 }

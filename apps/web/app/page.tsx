@@ -1072,12 +1072,12 @@ export default function PortfolioPage() {
     composition: "현재 비중과 목표 비교",
     rebalance: "매수·매도 수량 확인",
     holdings: "종목별 평가액과 손익",
-    accounts: "증권사·계좌명과 계좌별 종목 관리",
+    accounts: "증권 계좌·주식·ETF",
     edit: "수량, 매입단가, 자산 이름 수정",
     allocation: "보유 자산의 포트 지정",
     import: "증권사 잔고 캡처로 등록",
     history: "포트별 자산 변화 확인",
-    settings: "계정·화면 설정과 이용 안내",
+    settings: "로그인·화면 설정",
     guide: "처음 시작하는 순서와 기능 설명",
   };
 

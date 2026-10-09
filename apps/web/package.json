@@ -12,7 +12,7 @@
     "test:history": "node --test tests/history-performance.test.mjs",
     "test:assignment": "node --test tests/assignment.test.mjs",
     "test:number-input": "node --test tests/number-input.test.mjs",
-    "test:accounts": "node --test tests/accounts.test.mjs"
+    "test:accounts": "node --test tests/accounts.test.mjs tests/account-valuation.test.mjs"
   },
   "dependencies": {
     "adm-zip": "0.6.1",

@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { Plus, Pencil, ArrowRight, Wallet } from "lucide-react";
 import type { Holding, Market } from "./holdings";
-import type { BrokerageAccount } from "./accounts-model";
+import {
+  accountValuation,
+  purchaseTotal,
+  type BrokerageAccount,
+} from "./accounts-model";
 import AssetIcon from "./AssetIcon";
 import NumberInput from "./NumberInput";
 import styles from "./AccountsManager.module.css";
@@ -61,6 +65,10 @@ export default function AccountsManager({
   const [searching, setSearching] = useState(false),
     [quantity, setQuantity] = useState(""),
     [cost, setCost] = useState("");
+  const [pendingMove, setPendingMove] = useState<{
+    holdingId: string;
+    targetId: string;
+  } | null>(null);
   const selected = accounts.find((a) => a.id === selectedId);
   const rows = holdings.filter(
     (row) =>
@@ -69,11 +77,25 @@ export default function AccountsManager({
         row.broker === selected?.broker &&
         row.account === selected?.name),
   );
-  const dirty = Boolean(
-    (creating && (newBroker || newName)) ||
-      (selected && (broker !== selected.broker || name !== selected.name)) ||
-      (formOpen && (instrument || quantity || cost)),
+  const accountDirty = Boolean(
+    selected && (broker !== selected.broker || name !== selected.name),
   );
+  const editingRow = holdings.find((row) => row.id === editingId);
+  const stockDirty = Boolean(
+    formOpen &&
+      (editingRow
+        ? quantity !== String(editingRow.quantity) ||
+          cost !==
+            (editingRow.averageCost === null
+              ? ""
+              : String(editingRow.averageCost))
+        : instrument || query || quantity || cost),
+  );
+  const createDirty = Boolean(creating && (newBroker || newName));
+  const inputDirty = accountDirty || stockDirty || createDirty;
+  const dirty = inputDirty || Boolean(pendingMove);
+  const valuation = accountValuation(rows);
+  const totalCost = purchaseTotal(quantity, cost);
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
@@ -125,6 +147,7 @@ export default function AccountsManager({
     }
   }, [accountStorageKey, selectedId]);
   function resetStock() {
+    setPendingMove(null);
     setFormOpen(false);
     setEditingId(null);
     setInstrument(null);
@@ -266,6 +289,12 @@ export default function AccountsManager({
       !window.confirm("저장하지 않은 입력을 버리고 이 종목을 수정할까요?")
     )
       return;
+    setPendingMove(null);
+    setCreating(false);
+    setNewBroker("");
+    setNewName("");
+    setBroker(selected?.broker ?? "");
+    setName(selected?.name ?? "");
     setEditingId(row.id);
     setInstrument({
       market: row.market,
@@ -280,7 +309,8 @@ export default function AccountsManager({
     setError("");
   }
   async function move(row: Holding, id: string) {
-    if (dirty || id === row.accountId) return;
+    if (busy || inputDirty || !id || id === (row.accountId ?? selectedId))
+      return;
     setBusy(true);
     setError("");
     try {
@@ -292,8 +322,9 @@ export default function AccountsManager({
         }),
       );
       onHoldings(result.holdings);
+      setPendingMove(null);
       onNotice(
-        `${row.name} · ${accounts.find((a) => a.id === id)?.name}로 이동 완료`,
+        `${row.name} · ${accounts.find((a) => a.id === id)?.name} 계좌 이동 완료`,
       );
     } catch (error) {
       setError(error instanceof Error ? error.message : "계좌 이동 실패");
@@ -336,6 +367,10 @@ export default function AccountsManager({
           }}
         >
           <h2>새 계좌</h2>
+          <small>
+            앱에서 관리할 계좌를 등록합니다. 실제 증권 계좌 개설이나 잔고 자동
+            연결은 아닙니다.
+          </small>
           <label>
             증권사
             <input
@@ -439,6 +474,38 @@ export default function AccountsManager({
                 </div>
                 <span>{rows.length}종목</span>
               </div>
+              <div
+                className={styles.valuation}
+                aria-label="계좌 주식 ETF 평가액"
+              >
+                <span>주식·ETF 평가액</span>
+                <strong>
+                  {valuation.KR.count > 0
+                    ? `${amount(valuation.KR.priced ? valuation.KR.value : null, "KR")}${valuation.US.count > 0 ? " · " : ""}`
+                    : ""}
+                  {valuation.US.count > 0
+                    ? amount(
+                        valuation.US.priced ? valuation.US.value : null,
+                        "US",
+                      )
+                    : ""}
+                  {rows.length === 0 ? "—" : ""}
+                </strong>
+                <small>
+                  원화·달러 각각 합산 · 현금·코인 제외 · 환율 환산 전
+                </small>
+                <small>
+                  {valuation.unpriced > 0
+                    ? `가격 미확인 ${valuation.unpriced}종목 제외 · `
+                    : ""}
+                  {valuation.captured > 0
+                    ? `캡처 가격 ${valuation.captured}종목 포함 · `
+                    : ""}
+                  {valuation.oldestCheckedAt
+                    ? `가장 오래된 시세 확인 · ${new Date(valuation.oldestCheckedAt).toLocaleString("ko-KR")}`
+                    : "조회 시세 없음"}
+                </small>
+              </div>
               <details className={styles.metadata}>
                 <summary>계좌 정보 수정</summary>
                 <form
@@ -469,11 +536,16 @@ export default function AccountsManager({
                       disabled={busy}
                     />
                   </label>
+                  <small>
+                    이 계좌의 {rows.length}개 종목에 적용
+                    {accountDirty ? " · 계좌 정보 미저장" : ""}
+                  </small>
                   <div className={styles.actions}>
                     <button
                       type="submit"
                       disabled={
                         busy ||
+                        Boolean(pendingMove) ||
                         (broker === selected.broker && name === selected.name)
                       }
                     >
@@ -596,7 +668,7 @@ export default function AccountsManager({
                   )}
                   <div className={styles.numbers}>
                     <label>
-                      보유 수량
+                      현재 총보유 수량 · 주
                       <NumberInput
                         value={quantity}
                         onValueChange={setQuantity}
@@ -620,6 +692,21 @@ export default function AccountsManager({
                       />
                     </label>
                   </div>
+                  <small>
+                    이번 거래 수량이 아니라, 거래 후 현재 보유한 전체 수량을
+                    입력하세요.
+                  </small>
+                  <p className={styles.verification} role="status">
+                    총매입금액 검산{" "}
+                    <strong>
+                      {totalCost === null
+                        ? "수량과 평균 단가를 입력하면 표시됩니다"
+                        : amount(totalCost, instrument?.market ?? market)}
+                    </strong>
+                    <small>
+                      총보유 수량 × 주당 평균 매입단가 · 수수료 별도
+                    </small>
+                  </p>
                   <small>
                     종목명·코드는 한국투자증권 종목 마스터로 확인합니다.
                     현재가는 저장 후 조회합니다.
@@ -692,20 +779,94 @@ export default function AccountsManager({
                           계좌 이동
                           <select
                             aria-label={`${row.name} 보유 계좌`}
-                            value={row.accountId ?? selectedId}
-                            disabled={busy || dirty}
+                            value={
+                              pendingMove?.holdingId === row.id
+                                ? pendingMove.targetId
+                                : ""
+                            }
+                            disabled={
+                              busy ||
+                              formOpen ||
+                              inputDirty ||
+                              Boolean(
+                                pendingMove && pendingMove.holdingId !== row.id,
+                              )
+                            }
                             onChange={(event) =>
-                              void move(row, event.target.value)
+                              setPendingMove(
+                                event.target.value
+                                  ? {
+                                      holdingId: row.id,
+                                      targetId: event.target.value,
+                                    }
+                                  : null,
+                              )
                             }
                           >
-                            {accounts.map((account) => (
-                              <option key={account.id} value={account.id}>
-                                {account.broker} · {account.name}
-                              </option>
-                            ))}
+                            <option value="">이동할 계좌 선택</option>
+                            {accounts
+                              .filter(
+                                (account) =>
+                                  account.id !== (row.accountId ?? selectedId),
+                              )
+                              .map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.broker} · {account.name}
+                                </option>
+                              ))}
                           </select>
                         </label>
                       </div>
+                      {pendingMove?.holdingId === row.id && (
+                        <div
+                          className={styles.moveReview}
+                          role="region"
+                          aria-label={`${row.name} 계좌 이동 확인`}
+                        >
+                          <strong>
+                            {row.name} ·{" "}
+                            {row.quantity.toLocaleString("ko-KR", {
+                              maximumFractionDigits: 6,
+                            })}
+                            주
+                          </strong>
+                          <p>
+                            {selected.broker} · {selected.name}
+                            <br />→{" "}
+                            {
+                              accounts.find(
+                                (a) => a.id === pendingMove.targetId,
+                              )?.broker
+                            }{" "}
+                            ·{" "}
+                            {
+                              accounts.find(
+                                (a) => a.id === pendingMove.targetId,
+                              )?.name
+                            }
+                          </p>
+                          <small>
+                            앱의 등록 계좌만 변경합니다. 실제 증권사 이체는
+                            아닙니다. 수량·매입단가·포트 배정은 유지됩니다.
+                          </small>
+                          <div className={styles.actions}>
+                            <button
+                              disabled={busy}
+                              onClick={() =>
+                                void move(row, pendingMove.targetId)
+                              }
+                            >
+                              {busy ? "이동 중" : "확인 후 이동"}
+                            </button>
+                            <button
+                              disabled={busy}
+                              onClick={() => setPendingMove(null)}
+                            >
+                              취소
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -723,7 +884,15 @@ export default function AccountsManager({
       )}
       {dirty && (
         <p className={styles.status} role="status">
-          미저장 · 계좌 정보 또는 종목 입력을 저장해 주세요.
+          미저장 ·{" "}
+          {[
+            createDirty && "새 계좌 입력",
+            accountDirty && "계좌 정보 변경",
+            stockDirty && (editingId ? "보유 종목 수정" : "종목 추가 입력"),
+            pendingMove && "계좌 이동 확인",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
       )}
     </section>
