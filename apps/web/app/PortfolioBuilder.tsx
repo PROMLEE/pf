@@ -171,16 +171,16 @@ function Trend({
   const range = max - min || 1;
   const timed = points.every((point) => point.at !== undefined && Number.isFinite(point.at));
   const timeRange = timed ? (points.at(-1)?.at ?? 0) - (points[0].at ?? 0) : 0;
-  const sameDay = points[0].date.split(" ")[0] === points.at(-1)?.date.split(" ")[0];
-  const axisLabel = (date: string) => sameDay && date.includes(" ") ? date.split(" ")[1] === "·" ? "시각 미기록" : date.split(" ")[1] : date.split(" ")[0];
   const coords = points.map((point, index) => ({
-    x: points.length === 1 ? 365 : 150 + (timed && timeRange > 0 ? ((point.at ?? 0) - (points[0].at ?? 0)) / timeRange : index / (points.length - 1)) * 428,
+    x: points.length === 1 ? 300 : 22 + (timed && timeRange > 0 ? ((point.at ?? 0) - (points[0].at ?? 0)) / timeRange : index / (points.length - 1)) * 556,
     y: points.length === 1 ? 82 : 138 - ((point.value - min) / range) * 112,
   }));
   return (
     <div className={styles.trend}>
-      <svg viewBox="0 0 600 160" role="group" aria-label="기록 시점별 평가금액 추이">
-        {[26, 82, 138].map((y, i) => <g key={y}><path d={`M150 ${y} H578`} stroke="var(--line)" /><text x="4" y={y + 5} fill="var(--muted)" fontSize="20">{won.format(max - i * (max - min) / 2)}원</text></g>)}
+      <div className={styles.trendPlot}>
+      <div className={styles.trendScale} aria-hidden="true">{[max, (max + min) / 2, min].map((value, index) => <span key={index}>{won.format(value)}원</span>)}</div>
+      <svg viewBox="0 0 600 160" role="group" aria-label="일별 평가금액 추이">
+        {[26, 82, 138].map((y) => <path key={y} d={`M22 ${y} H578`} stroke="var(--line)" />)}
         {points.length > 1 && (
           <polyline
             points={coords.map((point) => `${point.x},${point.y}`).join(" ")}
@@ -191,12 +191,8 @@ function Trend({
           />
         )}
         {coords.map((point, index) => (
-          <circle
-            key={`${points[index].date}:${index}`}
-            cx={point.x}
-            cy={point.y}
-            r={selected === index ? "7" : "5"}
-            fill={color}
+          <g
+            key={points[index].date}
             tabIndex={0}
             role="button"
             aria-label={`${points[index].date} 평가액 ${fmt(points[index].value)}`}
@@ -204,15 +200,18 @@ function Trend({
             onFocus={() => setSelected(index)}
             onClick={() => setSelected(index)}
             onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(index); } }}
-          />
+          >
+            <circle cx={point.x} cy={point.y} r="20" fill="transparent" />
+            <circle cx={point.x} cy={point.y} r={selected === index ? "7" : "4"} fill={color} pointerEvents="none" />
+          </g>
         ))}
       </svg>
-      <p className={styles.chartReadout} aria-live="polite">{active ? `${active.date} · ${fmt(active.value)}` : "그래프의 점을 누르면 기록 시점과 평가액을 확인할 수 있습니다."}</p>
-      <div>
-        <span>{axisLabel(points[0].date)}</span>
-        <strong>{fmt(points.at(-1)?.value ?? 0)}</strong>
-        <span>{axisLabel(points.at(-1)?.date ?? "")}</span>
       </div>
+      <div className={styles.trendDates}>
+        <span>{points[0].date}</span>
+        {points.length > 1 && <span>{points.at(-1)?.date}</span>}
+      </div>
+      <p className={styles.chartReadout} aria-live="polite">{active ? <><span>{active.date}</span><strong>{fmt(active.value)}</strong></> : "그래프를 누르면 날짜와 평가액을 확인할 수 있습니다."}</p>
       {points.length === 1 && (
         <p className={styles.trendHint}>
           기록이 한 건입니다. 다음 기록부터 추이가 선으로 표시됩니다.
@@ -620,7 +619,6 @@ export default function PortfolioBuilder({
     if (quotesRefreshing) lastCryptoFetchAt.current = Date.now();
   }, [quotesRefreshing]);
   const [historyPeriod, setHistoryPeriod] = useState("all");
-  const [historyDay, setHistoryDay] = useState(kstDate);
   const [trendKey, setTrendKey] = useState("__TOTAL__");
   const [show3d, setShow3d] = useState(false);
   const [rebalanceMode, setRebalanceMode] = useState<"trade" | "add-only">(
@@ -1403,16 +1401,15 @@ export default function PortfolioBuilder({
     : 0;
   const targetTotal =
     draft?.buckets.reduce((sum, bucket) => sum + bucket.targetPercent, 0) ?? 0;
-  const intraday = historyPeriod === "today" || historyPeriod === "day";
-  const historyCutoff = historyPeriod === "all" ? "" : historyPeriod === "today" ? kstDate() : historyPeriod === "day" ? historyDay : new Date(Date.now() - Number(historyPeriod) * 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const historyCutoff = historyPeriod === "all" ? "" : new Date(Date.now() - Number(historyPeriod) * 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   function periodPoints(bucketKey: string) {
-    const points = draft?.snapshots.filter((point) => point.bucketKey === bucketKey && (!historyCutoff || point.date >= historyCutoff) && (!intraday || point.date === historyCutoff)) ?? [];
-    return intraday ? [...points].sort((a,b) => (a.recordedAt ?? "").localeCompare(b.recordedAt ?? "")) : dailyObservations(points);
+    const points = draft?.snapshots.filter((point) => point.bucketKey === bucketKey && (!historyCutoff || point.date >= historyCutoff)) ?? [];
+    return dailyObservations(points);
   }
   const history = periodPoints(trendKey).map((point) => ({
-    date: intraday ? `${point.date}${point.recordedAt ? ` ${kstTime(point.recordedAt, true)}` : " · 시각 미기록"}` : point.date,
-    at: intraday ? point.recordedAt ? Date.parse(point.recordedAt) : undefined : Date.parse(`${point.date}T00:00:00+09:00`),
-    value:point.valueKrw,
+    date: point.date,
+    at: Date.parse(`${point.date}T00:00:00+09:00`),
+    value: point.valueKrw,
   }));
   const trendColor =
     draft?.buckets.find((bucket) => bucket.id === trendKey)?.color ?? "#4B72E8";
@@ -3456,11 +3453,10 @@ export default function PortfolioBuilder({
                   </option>
                 ))}
               </select>
-              <select value={historyPeriod} onChange={(event) => setHistoryPeriod(event.target.value)} aria-label="기록 조회 기간"><option value="all">전체 기간</option><option value="today">오늘 · 시점별</option><option value="day">날짜 선택 · 시점별</option><option value="30">최근 30일</option><option value="90">최근 90일</option><option value="365">최근 1년</option></select>
-              {historyPeriod === "day" && <input type="date" aria-label="시점별 기록 날짜" value={historyDay} onChange={(event) => setHistoryDay(event.target.value)} />}
-              <small>{intraday ? "시각별 평가액 · 직접 저장한 시점 보존" : "일별 마지막 평가액 · 오늘이나 날짜 선택에서 시점별 확인"}</small>
+              <select value={historyPeriod} onChange={(event) => setHistoryPeriod(event.target.value)} aria-label="기록 조회 기간"><option value="all">전체 기간</option><option value="30">최근 30일</option><option value="90">최근 90일</option><option value="365">최근 1년</option></select>
+              <small>일별 마지막 평가액</small>
             </div>
-            <Trend key={`${trendKey}:${historyPeriod}:${historyDay}`} points={history} color={trendColor} />
+            <Trend key={`${trendKey}:${historyPeriod}`} points={history} color={trendColor} />
             {trendKey === "__TOTAL__" && (
               <div className={styles.performanceSummary}>
                 <div>

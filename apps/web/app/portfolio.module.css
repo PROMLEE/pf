@@ -1649,3 +1649,16 @@
 .detailAllocation summary { cursor: pointer; font-weight: 650; }
 .detailAllocation label { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; }
 .detailAllocation select { min-height: 44px; width: 100%; }
+
+.trend .trendPlot { display: flex; align-items: stretch; gap: 16px; }
+.trendPlot svg { flex: 1; min-width: 0; width: 0; }
+.trendScale { display: flex; flex-direction: column; justify-content: space-between; padding: 4.3% 0 3.6%; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.trendDates { margin-top: 4px; }
+.trend .chartReadout { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; margin: 8px 0 0; font-size: 13px; }
+.trend g[role="button"] { cursor: pointer; }
+.trend g[role="button"]:focus-visible { outline: 2px solid var(--blue); }
+@media (max-width: 640px) {
+  .trend .trendScale { display: none; }
+  .trendPlot svg { height: 150px; }
+  .trend { padding: 14px 12px 10px; }
+}
