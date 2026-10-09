@@ -8,7 +8,9 @@
     "start": "next start --hostname 127.0.0.1",
     "lint": "next lint",
     "test:rebalance": "node --test tests/rebalance.test.mjs",
-    "test:cash-flows": "node --test tests/cash-flows.test.mjs"
+    "test:cash-flows": "node --test tests/cash-flows.test.mjs",
+    "test:history": "node --test tests/history-performance.test.mjs",
+    "test:assignment": "node --test tests/assignment.test.mjs"
   },
   "dependencies": {
     "adm-zip": "0.6.1",

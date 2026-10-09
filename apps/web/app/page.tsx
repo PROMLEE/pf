@@ -602,7 +602,7 @@ export default function PortfolioPage() {
       setHoldings(result.holdings);
       setQuoteVersion((version) => version + 1);
       setEditingHoldingId(null);
-      setNotice("보유 수량과 매입단가를 저장했습니다.");
+      setNotice(`${holdings.find((row) => row.id === editingHoldingId)?.name ?? "종목"} 저장 완료 · ${quantity.toLocaleString("ko-KR", {maximumFractionDigits:6})}주 · 주당 평균 매입단가 ${averageCost === null ? "미입력" : `${averageCost.toLocaleString("ko-KR")} ${holdings.find((row) => row.id === editingHoldingId)?.market === "US" ? "USD" : "원"}`}`);
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "자산을 수정하지 못했습니다.",
@@ -1397,7 +1397,7 @@ export default function PortfolioPage() {
                     const price = row.currentPrice ?? row.capturedPrice;
                     return (
                       <Fragment key={row.id}>
-                        <div className={styles.holdingRow} id={`edit-stock-${row.id}`}>
+                        <div className={`${styles.holdingRow} ${view === "edit" ? styles.editAssetCard : ""}`} id={`edit-stock-${row.id}`}>
                           <div className={styles.holdingName}>
                             <AssetIcon
                               kind="stock"
@@ -1429,7 +1429,7 @@ export default function PortfolioPage() {
                           </div>
                           <div>
                             <label>수량</label>
-                            {won.format(row.quantity)}주
+                            {row.quantity.toLocaleString("ko-KR", {maximumFractionDigits:6})}주
                           </div>
                           <div>
                             <label>가격</label>
@@ -1479,6 +1479,7 @@ export default function PortfolioPage() {
                         </div>
                         {view === "edit" && editingHoldingId === row.id && (
                           <div className={styles.holdingEdit}>
+                            <p className={styles.editStatus} role="status">미저장 · 이 종목만 수정 후 저장하세요.</p>
                             <div className={styles.editTitle}>
                               <strong>{row.name}</strong>
                               <span>
@@ -1492,19 +1493,21 @@ export default function PortfolioPage() {
                                 min="0"
                                 step="0.000001"
                                 value={holdingQuantity}
+                                disabled={holdingSaving}
                                 onChange={(event) =>
                                   setHoldingQuantity(event.target.value)
                                 }
                               />
                             </label>
                             <label>
-                              주당 매입단가 (
+                              주당 평균 매입단가 (
                               {row.market === "US" ? "USD" : "KRW"})
                               <input
                                 type="number"
                                 min="0"
                                 step="0.000001"
                                 value={holdingCost}
+                                disabled={holdingSaving}
                                 onChange={(event) =>
                                   setHoldingCost(event.target.value)
                                 }
@@ -1521,6 +1524,7 @@ export default function PortfolioPage() {
                             <button
                               type="button"
                               onClick={() => setEditingHoldingId(null)}
+                              disabled={holdingSaving}
                             >
                               취소
                             </button>

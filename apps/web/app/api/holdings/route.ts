@@ -7,6 +7,7 @@ import {
   removeHolding,
   updateHoldingAmounts,
   updateHoldingInstrument,
+  updateHoldingAssignment,
 } from "../../../lib/holdings-db";
 
 export const runtime = "nodejs";
@@ -160,6 +161,8 @@ export async function PATCH(request: Request) {
   try {
     const body = (await request.json()) as {
       id?: string;
+      bucketId?: string | null;
+      assignmentSource?: "auto" | "manual";
       quantity?: number;
       averageCost?: number | null;
       market?: "KR" | "US";
@@ -167,6 +170,16 @@ export async function PATCH(request: Request) {
       symbol?: string;
       exchange?: string | null;
     };
+    if (body.assignmentSource !== undefined) {
+      const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+      if (!body.id || !uuid.test(body.id) || !["auto", "manual"].includes(body.assignmentSource) ||
+          (body.bucketId !== null && (typeof body.bucketId !== "string" || !uuid.test(body.bucketId))) ||
+          (body.assignmentSource === "auto" && body.bucketId !== null))
+        return NextResponse.json({message:"종목과 포트 배정을 확인해 주세요"},{status:400});
+      const result = await updateHoldingAssignment(userId,body.id,body.bucketId ?? null,body.assignmentSource);
+      if (!result) return NextResponse.json({message:"종목 또는 포트를 찾지 못했습니다"},{status:404});
+      return NextResponse.json(result);
+    }
     if (body.quantity !== undefined) {
       if (
         !body.id ||

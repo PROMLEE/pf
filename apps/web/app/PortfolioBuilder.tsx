@@ -30,6 +30,7 @@ import {
   type Portfolio,
   type Rule,
 } from "./portfolio-model";
+import { historyPerformance, kstTime, dailyObservations } from "./history-performance";
 import { needsAdjustment, rebalance, symbolKey } from "./rebalance";
 import styles from "./portfolio.module.css";
 
@@ -152,7 +153,7 @@ function Trend({
   points,
   color,
 }: {
-  points: { date: string; value: number }[];
+  points: { date: string; value: number; at?: number }[];
   color: string;
 }) {
   const [selected, setSelected] = useState<number | null>(null);
@@ -160,7 +161,7 @@ function Trend({
   if (!points.length)
     return (
       <p className={styles.help}>
-        아직 기록이 없습니다. 포트폴리오를 저장하거나 오늘 기록을 눌러
+        아직 기록이 없습니다. 포트폴리오를 저장하거나 지금 기록을 눌러
         시작하세요.
       </p>
     );
@@ -168,13 +169,17 @@ function Trend({
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
+  const timed = points.every((point) => point.at !== undefined && Number.isFinite(point.at));
+  const timeRange = timed ? (points.at(-1)?.at ?? 0) - (points[0].at ?? 0) : 0;
+  const sameDay = points[0].date.split(" ")[0] === points.at(-1)?.date.split(" ")[0];
+  const axisLabel = (date: string) => sameDay && date.includes(" ") ? date.split(" ")[1] === "·" ? "시각 미기록" : date.split(" ")[1] : date.split(" ")[0];
   const coords = points.map((point, index) => ({
-    x: points.length === 1 ? 365 : 150 + (index / (points.length - 1)) * 428,
+    x: points.length === 1 ? 365 : 150 + (timed && timeRange > 0 ? ((point.at ?? 0) - (points[0].at ?? 0)) / timeRange : index / (points.length - 1)) * 428,
     y: points.length === 1 ? 82 : 138 - ((point.value - min) / range) * 112,
   }));
   return (
     <div className={styles.trend}>
-      <svg viewBox="0 0 600 160" role="group" aria-label="날짜별 평가금액 추이">
+      <svg viewBox="0 0 600 160" role="group" aria-label="기록 시점별 평가금액 추이">
         {[26, 82, 138].map((y, i) => <g key={y}><path d={`M150 ${y} H578`} stroke="var(--line)" /><text x="4" y={y + 5} fill="var(--muted)" fontSize="20">{won.format(max - i * (max - min) / 2)}원</text></g>)}
         {points.length > 1 && (
           <polyline
@@ -187,7 +192,7 @@ function Trend({
         )}
         {coords.map((point, index) => (
           <circle
-            key={points[index].date}
+            key={`${points[index].date}:${index}`}
             cx={point.x}
             cy={point.y}
             r={selected === index ? "7" : "5"}
@@ -202,15 +207,15 @@ function Trend({
           />
         ))}
       </svg>
-      <p className={styles.chartReadout} aria-live="polite">{active ? `${active.date} · ${fmt(active.value)}` : "그래프의 점을 누르면 날짜별 평가액을 확인할 수 있습니다."}</p>
+      <p className={styles.chartReadout} aria-live="polite">{active ? `${active.date} · ${fmt(active.value)}` : "그래프의 점을 누르면 기록 시점과 평가액을 확인할 수 있습니다."}</p>
       <div>
-        <span>{points[0].date}</span>
+        <span>{axisLabel(points[0].date)}</span>
         <strong>{fmt(points.at(-1)?.value ?? 0)}</strong>
-        <span>{points.at(-1)?.date}</span>
+        <span>{axisLabel(points.at(-1)?.date ?? "")}</span>
       </div>
       {points.length === 1 && (
         <p className={styles.trendHint}>
-          기록이 하루치입니다. 다음 기록부터 추이가 선으로 표시됩니다.
+          기록이 한 건입니다. 다음 기록부터 추이가 선으로 표시됩니다.
         </p>
       )}
     </div>
@@ -373,6 +378,7 @@ function AssetDetail({
   onBack,
   onSaveStock,
   onSavePortfolio,
+  onAssignStock,
   onEditingChange,
 }: {
   selection: AssetSelection;
@@ -382,6 +388,7 @@ function AssetDetail({
   onBack: () => void;
   onSaveStock: (id: string, quantity: number, averageCost: number | null) => Promise<void>;
   onSavePortfolio: (next: Portfolio) => Promise<void>;
+  onAssignStock: (id: string, bucketId: string | null, source: "auto" | "manual") => Promise<void>;
   onEditingChange: (editing: boolean) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
@@ -390,6 +397,7 @@ function AssetDetail({
   const [editName, setEditName] = useState("");
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState("");
   const editForm = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -435,7 +443,7 @@ function AssetDetail({
     ? "—"
     : unit === "USD" ? `$${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}` : fmt(value);
   const bucketId = manual?.bucketId ?? crypto?.bucketId ??
-    (first ? portfolio.assignments.find((item) => item.holdingId === first.id)?.bucketId : null);
+    (first ? holdingBucketId(portfolio, first) : null);
   const bucketName = portfolio.buckets.find((bucket) => bucket.id === bucketId)?.name ?? "미분류";
   function beginEdit(row?: Holding) {
     setEditing(row?.id ?? selection.id);
@@ -501,13 +509,35 @@ function AssetDetail({
       </div>
       {stockRows.length > 0 && <div className={styles.detailAccounts}>
         <h3>계좌별 보유</h3>
-        {stockRows.map((row) => <div key={row.id}><span>{row.broker} · {row.account}<small>{quantityFormat.format(row.quantity)}주 · 매입단가 {row.averageCost === null ? "—" : unitPrice(row.averageCost)}</small></span><button type="button" disabled={editing !== null} onClick={() => beginEdit(row)}>수정</button></div>)}
+        {stockRows.map((row) => <div key={row.id}><span>{row.broker} · {row.account}<small>{quantityFormat.format(row.quantity)}주 · 매입단가 {row.averageCost === null ? "—" : unitPrice(row.averageCost)}</small></span><button type="button" disabled={editing !== null || assigning} onClick={() => beginEdit(row)}>수정</button></div>)}
       </div>}
+      <details className={styles.detailAllocation}>
+        <summary>{bucketName === "미분류" ? "미분류 자산 · 지금 포트에 배정" : "포트 배정 수정"}</summary>
+        <p className={styles.help}>선택하면 이 자산의 배정만 즉시 저장됩니다. 주식은 계좌별로 직접 배정하거나 종목코드 규칙을 따를 수 있습니다.</p>
+        {stockRows.map((row) => {
+          const assignment = portfolio.assignments.find((item) => item.holdingId === row.id);
+          const current = assignment?.source === "manual" ? assignment.bucketId ?? "unassigned" : "auto";
+          return <label key={row.id}>{row.broker} · {row.account}<select aria-label={`${row.name} ${row.account} 포트 배정`} value={current} disabled={saving || assigning || editing !== null} onChange={async (event) => {
+            const value = event.target.value; setAssigning(true); setError("");
+            try { await onAssignStock(row.id, value === "auto" || value === "unassigned" ? null : value, value === "auto" ? "auto" : "manual"); }
+            catch (error) { setError(error instanceof Error ? error.message : "배정하지 못했습니다."); }
+            finally { setAssigning(false); }
+          }}><option value="auto">종목코드 규칙에 따라 자동 배정</option><option value="unassigned">직접 · 미분류</option>{portfolio.buckets.map((bucket) => <option key={bucket.id} value={bucket.id}>{bucket.name}</option>)}</select></label>;
+        })}
+        {(manual || crypto) && <label>포트<select value={bucketId ?? ""} aria-label={`${name} 포트 배정`} disabled={saving || assigning || editing !== null} onChange={async (event) => {
+          const nextBucket = event.target.value || null; setAssigning(true); setError("");
+          try { await onSavePortfolio({...portfolio, manualAssets:portfolio.manualAssets.map((asset) => asset.id === manual?.id ? {...asset,bucketId:nextBucket} : asset), cryptoAssets:portfolio.cryptoAssets.map((asset) => asset.id === crypto?.id ? {...asset,bucketId:nextBucket} : asset)}); }
+          catch (error) { setError(error instanceof Error ? error.message : "배정하지 못했습니다."); }
+          finally { setAssigning(false); }
+        }}><option value="">미분류</option>{portfolio.buckets.map((bucket) => <option key={bucket.id} value={bucket.id}>{bucket.name}</option>)}</select></label>}
+        {assigning && <p role="status">포트 배정을 저장하고 있습니다…</p>}
+        {error && !editing && <p role="alert">{error}</p>}
+      </details>
       {manual && <p className={styles.detailHint}>직접 입력 자산은 평가 금액만 관리하며 매입단가와 손익은 계산하지 않습니다.</p>}
       {!first && !editing && <button type="button" className={styles.detailEdit} onClick={() => beginEdit()}>자산 수정 <Pencil size={16} /></button>}
       {editing && <form ref={editForm} className={styles.detailForm} onSubmit={submitEdit} aria-label="이 자산 수정">
         <h3>{first ? `${stockRows.find((row) => row.id === editing)?.account} 보유 정보 수정` : "자산 정보 수정"}</h3>
-        <fieldset disabled={saving}>
+        <fieldset disabled={saving || assigning}>
           {manual ? <>
             <label>자산 이름<input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={100} required /></label>
             <label>{manual.valueUsd === null ? "금액 (원)" : "금액 (USD)"}<input type="number" min="0" step="any" value={editValue} onChange={(event) => setEditValue(event.target.value)} required /></label>
@@ -519,7 +549,7 @@ function AssetDetail({
         {error && <p role="alert">{error}</p>}
         <div className={styles.detailFormActions}>
           <span className={styles.saved} role="status">미저장 · 저장하면 이 자산에 반영됩니다</span>
-          <button type="submit" className={styles.detailEdit} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+          <button type="submit" className={styles.detailEdit} disabled={saving || assigning}>{saving ? "저장 중…" : "저장"}</button>
           <button type="button" className={styles.ghost} disabled={saving} onClick={() => { setEditing(null); setError(""); }}>취소</button>
         </div>
       </form>}
@@ -556,6 +586,7 @@ export default function PortfolioBuilder({
   );
   const [loading, setLoading] = useState(() => !portfolioCache.has(userId));
   const [saving, setSaving] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [detailDirty, setDetailDirty] = useState(false);
@@ -589,6 +620,7 @@ export default function PortfolioBuilder({
     if (quotesRefreshing) lastCryptoFetchAt.current = Date.now();
   }, [quotesRefreshing]);
   const [historyPeriod, setHistoryPeriod] = useState("all");
+  const [historyDay, setHistoryDay] = useState(kstDate);
   const [trendKey, setTrendKey] = useState("__TOTAL__");
   const [show3d, setShow3d] = useState(false);
   const [rebalanceMode, setRebalanceMode] = useState<"trade" | "add-only">(
@@ -615,29 +647,31 @@ export default function PortfolioBuilder({
   );
   const [excludedHoldingIds, setExcludedHoldingIds] = useState<string[]>([]);
   const [flowDate, setFlowDate] = useState(kstDate);
+  const [flowTime, setFlowTime] = useState("");
+  const flowTimeInput = useRef<HTMLInputElement>(null);
   const [flowAmount, setFlowAmount] = useState("");
   const [flowKind, setFlowKind] = useState<"deposit" | "withdrawal">("deposit");
   const [flowNote, setFlowNote] = useState("");
   const [flowSaving, setFlowSaving] = useState(false);
   const [editingFlowId, setEditingFlowId] = useState<string | null>(null);
-  const [deletedFlow, setDeletedFlow] = useState<CashFlow | null>(null);
+
   useEffect(() => {
-    if (screen !== "history") { setFlowAmount(""); setFlowNote(""); setEditingFlowId(null); setDeletedFlow(null); }
+    if (screen !== "history") { setFlowAmount(""); setFlowNote(""); setFlowTime(""); setEditingFlowId(null); }
   }, [screen]);
-  const flowDirty = Boolean(flowAmount || flowNote || editingFlowId);
+  const flowDirty = Boolean(flowAmount || flowNote || flowTime || editingFlowId);
   useEffect(() => onDirtyChange(dirty || detailDirty || flowDirty), [dirty, detailDirty, flowDirty, onDirtyChange]);
   function editFlow(flow: CashFlow) {
     setEditingFlowId(flow.id); setFlowDate(flow.date); setFlowAmount(String(Math.abs(flow.amountKrw)));
-    setFlowKind(flow.amountKrw > 0 ? "deposit" : "withdrawal"); setFlowNote(flow.note);
+    setFlowKind(flow.amountKrw > 0 ? "deposit" : "withdrawal"); setFlowNote(flow.note); setFlowTime(flow.occurredAt ? kstTime(flow.occurredAt, true) : "");
   }
-  async function restoreFlow() {
-    if (!deletedFlow || flowSaving || dirty) return;
+  async function restoreFlow(id: string) {
+    if (flowSaving || dirty) return;
     setFlowSaving(true);
     try {
-      const response = await fetch("/api/portfolio/cash-flows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(deletedFlow) });
+      const response = await fetch(`/api/portfolio/cash-flows?id=${encodeURIComponent(id)}`, { method: "PATCH" });
       const payload = await response.json();
       if (!response.ok || !payload.portfolio) throw new Error(payload.message || "복원하지 못했습니다.");
-      setDraft(payload.portfolio); portfolioCache.set(userId, payload.portfolio); setDeletedFlow(null);
+      setDraft(payload.portfolio); portfolioCache.set(userId, payload.portfolio);
       onNotice("삭제한 입출금 내역을 복원했습니다. 현금 잔고는 그대로입니다.");
     } catch (error) { onNotice(error instanceof Error ? error.message : "복원하지 못했습니다."); }
     finally { setFlowSaving(false); }
@@ -1200,7 +1234,9 @@ export default function PortfolioBuilder({
     }
   }
   async function record() {
-    if (dirty) return onNotice("변경 내용을 먼저 저장해 주세요.");
+    if (recording) return;
+    if (dirty || flowDirty) return onNotice("변경 내용을 먼저 저장해 주세요.");
+    setRecording(true);
     try {
       const response = await fetch("/api/portfolio", { method: "POST" });
       const payload = (await response.json()) as {
@@ -1211,16 +1247,16 @@ export default function PortfolioBuilder({
         throw new Error(payload.message || "기록하지 못했습니다.");
       setDraft(payload.portfolio);
       portfolioCache.set(userId, payload.portfolio);
-      portfolioCache.set(userId, payload.portfolio);
-      onNotice("오늘의 자산 평가액을 기록했습니다.");
+      onNotice("현재 시각의 자산 평가액을 기록했습니다. 이전 기록도 보존됩니다.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "기록하지 못했습니다.");
-    }
+    } finally { setRecording(false); }
   }
   async function saveFlow() {
     if (flowSaving) return;
     if (dirty) return onNotice("포트폴리오를 먼저 저장해 주세요.");
     const amount = Number(flowAmount);
+    const actualTime = flowTimeInput.current?.value ?? flowTime;
     if (
       !flowDate ||
       !Number.isFinite(amount) ||
@@ -1236,6 +1272,7 @@ export default function PortfolioBuilder({
         body: JSON.stringify({
           id: editingFlowId,
           date: flowDate,
+          occurredAt: actualTime ? `${flowDate}T${actualTime.length === 5 ? `${actualTime}:00` : actualTime}+09:00` : null,
           amountKrw: flowKind === "deposit" ? amount : -amount,
           note: flowNote,
         }),
@@ -1249,6 +1286,7 @@ export default function PortfolioBuilder({
       setDraft(payload.portfolio);
       setFlowAmount("");
       setFlowNote("");
+      setFlowTime("");
       portfolioCache.set(userId, payload.portfolio);
       setEditingFlowId(null);
       onNotice(`${flowDate} ${flowKind === "deposit" ? "입금" : "출금"} ${fmt(amount)}을 저장했습니다. 현금 잔고는 변경되지 않습니다.`);
@@ -1264,7 +1302,7 @@ export default function PortfolioBuilder({
   }
   async function removeFlow(id: string) {
     if (flowSaving) return;
-    const removed = draft?.cashFlows.find((flow) => flow.id === id);
+
     if (dirty) return onNotice("변경 내용을 먼저 저장해 주세요.");
     setFlowSaving(true);
     try {
@@ -1280,9 +1318,9 @@ export default function PortfolioBuilder({
         throw new Error(payload.message || "삭제하지 못했습니다.");
       setDraft(payload.portfolio);
       portfolioCache.set(userId, payload.portfolio);
-      setDeletedFlow(removed ?? null);
-      if (editingFlowId === id) { setEditingFlowId(null); setFlowAmount(""); setFlowNote(""); }
-      onNotice("입출금 내역을 삭제했습니다. 아래에서 삭제 취소할 수 있습니다.");
+
+      if (editingFlowId === id) { setEditingFlowId(null); setFlowAmount(""); setFlowNote(""); setFlowTime(""); }
+      onNotice("입출금 내역을 삭제했습니다. 삭제한 내역에서 언제든 복원할 수 있습니다.");
     } catch (error) {
       onNotice(
         error instanceof Error
@@ -1365,11 +1403,17 @@ export default function PortfolioBuilder({
     : 0;
   const targetTotal =
     draft?.buckets.reduce((sum, bucket) => sum + bucket.targetPercent, 0) ?? 0;
-  const historyCutoff = historyPeriod === "all" ? "" : new Date(Date.now() - Number(historyPeriod) * 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  const history =
-    draft?.snapshots
-      .filter((point) => point.bucketKey === trendKey && (!historyCutoff || point.date >= historyCutoff))
-      .map((point) => ({ date: point.date, value: point.valueKrw })).sort((a, b) => a.date.localeCompare(b.date)) ?? [];
+  const intraday = historyPeriod === "today" || historyPeriod === "day";
+  const historyCutoff = historyPeriod === "all" ? "" : historyPeriod === "today" ? kstDate() : historyPeriod === "day" ? historyDay : new Date(Date.now() - Number(historyPeriod) * 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  function periodPoints(bucketKey: string) {
+    const points = draft?.snapshots.filter((point) => point.bucketKey === bucketKey && (!historyCutoff || point.date >= historyCutoff) && (!intraday || point.date === historyCutoff)) ?? [];
+    return intraday ? [...points].sort((a,b) => (a.recordedAt ?? "").localeCompare(b.recordedAt ?? "")) : dailyObservations(points);
+  }
+  const history = periodPoints(trendKey).map((point) => ({
+    date: intraday ? `${point.date}${point.recordedAt ? ` ${kstTime(point.recordedAt, true)}` : " · 시각 미기록"}` : point.date,
+    at: intraday ? point.recordedAt ? Date.parse(point.recordedAt) : undefined : Date.parse(`${point.date}T00:00:00+09:00`),
+    value:point.valueKrw,
+  }));
   const trendColor =
     draft?.buckets.find((bucket) => bucket.id === trendKey)?.color ?? "#4B72E8";
   const driftItems = advice.items
@@ -1404,24 +1448,9 @@ export default function PortfolioBuilder({
       )
       .map((holding) => holding.capturedAt)
       .sort()[0] ?? null;
-  const totalHistory =
-    draft?.snapshots.filter((point) => point.bucketKey === "__TOTAL__" && (!historyCutoff || point.date >= historyCutoff)).sort((a,b) => a.date.localeCompare(b.date)) ?? [];
-  const firstPoint = totalHistory[0];
-  const lastPoint = totalHistory.at(-1);
-  const periodFlow =
-    draft?.cashFlows
-      .filter(
-        (flow) =>
-          firstPoint &&
-          lastPoint &&
-          flow.date > firstPoint.date &&
-          flow.date <= lastPoint.date,
-      )
-      .reduce((sum, flow) => sum + flow.amountKrw, 0) ?? 0;
-  const adjustedChange =
-    firstPoint && lastPoint && firstPoint.date !== lastPoint.date
-      ? lastPoint.valueKrw - firstPoint.valueKrw - periodFlow
-      : null;
+  const totalHistory = periodPoints("__TOTAL__");
+  const performance = historyPerformance(totalHistory, draft?.cashFlows ?? []);
+  const {first: firstPoint, last: lastPoint, netFlow: periodFlow, adjusted: adjustedChange} = performance;
 
   const knownGains = holdings.reduce(
     (summary, holding) => {
@@ -1758,6 +1787,15 @@ export default function PortfolioBuilder({
             }));
             onNotice(`${holdings.find((row) => row.id === id)?.name ?? "자산"} 저장 완료 · ${quantityFormat.format(quantity)}주 · 주당 평균 매입단가 ${averageCost === null ? "미입력" : quantityFormat.format(averageCost)}`);
           }}
+          onAssignStock={async (id, bucketId, source) => {
+            const response = await fetch("/api/holdings", {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,bucketId,assignmentSource:source})});
+            const result = await response.json() as {holdings?:Holding[];snapshots?:Portfolio["snapshots"];message?:string};
+            if (!response.ok || !result.holdings) throw new Error(result.message || "배정하지 못했습니다.");
+            onHoldings(result.holdings.map((row) => { const previous = holdings.find((item) => item.id === row.id); return previous ? {...row,currentPrice:previous.currentPrice,quoteLabel:previous.quoteLabel,quoteCheckedAt:previous.quoteCheckedAt} : row; }));
+            const next = {...draft, snapshots:[...draft.snapshots,...(result.snapshots ?? [])], assignments:result.holdings.map((row) => ({holdingId:row.id,bucketId:row.bucketId ?? null,source:row.assignmentSource ?? "auto" as const}))};
+            setDraft(next); portfolioCache.set(userId,next);
+            onNotice(`포트 배정 저장 완료 · ${result.holdings.find((row) => row.id === id)?.name ?? "종목"}`);
+          }}
           onSavePortfolio={async (next) => {
             const response = await fetch("/api/portfolio", {
               method: "PATCH",
@@ -1768,7 +1806,7 @@ export default function PortfolioBuilder({
             if (!response.ok || !result.portfolio) throw new Error(result.message || "자산을 저장하지 못했습니다.");
             setDraft(result.portfolio);
             portfolioCache.set(userId, result.portfolio);
-            onNotice("자산 정보를 저장했습니다.");
+            onNotice("자산 정보·포트 배정을 저장했습니다.");
           }}
         />
       )}
@@ -3399,9 +3437,9 @@ export default function PortfolioBuilder({
               <button
                 className={styles.ghost}
                 onClick={record}
-                disabled={dirty}
+                disabled={dirty || flowDirty || recording}
               >
-                <Check size={15} /> 오늘 기록
+                <Check size={15} /> {recording ? "기록 중" : "지금 기록"}
               </button>
             </div>
             <div className={styles.trendControls}>
@@ -3418,17 +3456,18 @@ export default function PortfolioBuilder({
                   </option>
                 ))}
               </select>
-              <select value={historyPeriod} onChange={(event) => setHistoryPeriod(event.target.value)} aria-label="기록 조회 기간"><option value="all">전체 기간</option><option value="30">최근 30일</option><option value="90">최근 90일</option><option value="365">최근 1년</option></select>
-              <small>하루 한 기록 · 같은 날에는 최신 값으로 갱신</small>
+              <select value={historyPeriod} onChange={(event) => setHistoryPeriod(event.target.value)} aria-label="기록 조회 기간"><option value="all">전체 기간</option><option value="today">오늘 · 시점별</option><option value="day">날짜 선택 · 시점별</option><option value="30">최근 30일</option><option value="90">최근 90일</option><option value="365">최근 1년</option></select>
+              {historyPeriod === "day" && <input type="date" aria-label="시점별 기록 날짜" value={historyDay} onChange={(event) => setHistoryDay(event.target.value)} />}
+              <small>{intraday ? "시각별 평가액 · 직접 저장한 시점 보존" : "일별 마지막 평가액 · 오늘이나 날짜 선택에서 시점별 확인"}</small>
             </div>
-            <Trend key={`${trendKey}:${historyPeriod}`} points={history} color={trendColor} />
+            <Trend key={`${trendKey}:${historyPeriod}:${historyDay}`} points={history} color={trendColor} />
             {trendKey === "__TOTAL__" && (
               <div className={styles.performanceSummary}>
                 <div>
                   <small>기록 기간의 평가액 변화</small>
                   <strong>
                     {adjustedChange === null
-                      ? "기록 2일 이상 필요"
+                      ? performance.change === null ? "기록 2건 이상 필요" : fmt(performance.change)
                       : fmt(
                           (lastPoint?.valueKrw ?? 0) -
                             (firstPoint?.valueKrw ?? 0),
@@ -3438,19 +3477,20 @@ export default function PortfolioBuilder({
                 <div>
                   <small>같은 기간 순입금</small>
                   <strong>
-                    {adjustedChange === null ? "—" : fmt(periodFlow)}
+                    {performance.change === null ? "—" : performance.ambiguous.length ? "시각 확인 필요" : fmt(periodFlow)}
                   </strong>
                 </div>
                 <div>
                   <small>순입금 제외 증감</small>
                   <strong>
-                    {adjustedChange === null ? "—" : fmt(adjustedChange)}
+                    {adjustedChange === null ? performance.ambiguous.length ? "입출금 시각 확인 필요" : "—" : fmt(adjustedChange)}
                   </strong>
                 </div>
                 <p>
-                  {firstPoint?.date ?? "—"} 기록 이후 ~ {lastPoint?.date ?? "—"} 기록까지 · 시작일 입출금 제외 / 종료일 포함. 순입금 제외 증감은 투자 수익률이 아닙니다.
+                  {firstPoint?.date ?? "—"} {firstPoint?.recordedAt ? kstTime(firstPoint.recordedAt, true) : "시각 미기록"} 이후 ~ {lastPoint?.date ?? "—"} {lastPoint?.recordedAt ? kstTime(lastPoint.recordedAt, true) : "시각 미기록"}까지 · 시작 시각 제외 / 종료 시각 포함. 순입금 제외 증감은 투자 수익률이 아닙니다.
                 </p>
-                <details className={styles.metricBasis}><summary>기록 계산 기준과 같은 날 입출금</summary><p>시간별 기록이 없어 같은 날 입출금과 평가액 저장 순서는 구분하지 못합니다. 종료일 거래·현금 수정 후 오늘 기록을 갱신해 주세요. 순입금 제외 증감은 평가액 변화에서 입출금을 뺀 참고값으로 신규 자산 등록·수량 수정, 배당·수수료·환율 변동도 포함합니다.</p></details>
+                {performance.ambiguous.length > 0 && <p className={styles.help} role="status">시각 확인이 필요한 경계일 입출금 {performance.ambiguous.length}건: {performance.ambiguous.map((flow) => `${flow.date} ${flow.note || (flow.amountKrw > 0 ? "입금" : "출금")}`).join(", ")}. 아래 입출금 내역의 연필 버튼에서 실제 발생 시각을 입력하세요.</p>}
+                <details className={styles.metricBasis}><summary>기록 시각과 입출금 집계 기준</summary><p>입출금 발생 시각이 시작 평가액 이후이면서 종료 평가액 시각 이하인 내역을 집계합니다. 과거 입출금에 시각이 없고 기간 경계일에 해당하면 증감 계산을 보류합니다. 아래 내역에서 실제 시각을 확인해 수정해 주세요. 순입금 제외 증감은 평가액 변화에서 입출금을 뺀 참고값으로 신규 자산 등록·수량 수정, 배당·수수료·환율 변동도 포함합니다.</p></details>
                 <p className={styles.help}>
                 </p>
               </div>
@@ -3460,13 +3500,14 @@ export default function PortfolioBuilder({
                 입출금 기록 {draft.cashFlows.length}건 <ChevronDown size={15} />
               </summary>
               <p className={styles.help}>
-                입출금 기록은 분석용이며 현금 잔고를 자동 변경하지 않습니다. 잔고 변경은 자산 수정에서 별도로 해 주세요. 계좌 밖에서 들어오거나 나간 자금만 기록하세요. 계좌 간 이동은
+                입출금 기록 → 현금 잔고 수정 → 지금 기록 순서로 반영하세요. 입출금 기록은 분석용이며 현금 잔고를 자동 변경하지 않습니다. 계좌 밖에서 들어오거나 나간 자금만 기록하세요. 계좌 간 이동은
                 합산 범위에 따라 중복되지 않게 입력해야 합니다.
               </p>
               <button type="button" className={styles.ghost} onClick={onEditHoldings}>현금 잔고 수정 →</button>
-              {deletedFlow && <div className={styles.undoNotice} role="status">{deletedFlow.date} · {fmt(deletedFlow.amountKrw)} 삭제됨 <button type="button" className={styles.ghost} onClick={restoreFlow} disabled={flowSaving || dirty}>삭제 취소</button></div>}
-              {flowDirty && <p className={styles.help} role="status">미저장 · {editingFlowId ? "선택한 입출금 내역을 수정 중입니다." : "입력한 입출금은 기록 버튼을 눌러 저장하세요."} <button type="button" className={styles.ghost} disabled={flowSaving} onClick={() => { setEditingFlowId(null); setFlowAmount(""); setFlowNote(""); }}>수정 취소</button></p>}
+
+              {flowDirty && <p className={styles.help} role="status">미저장 · {editingFlowId ? "선택한 입출금 내역을 수정 중입니다." : "입력한 입출금은 기록 버튼을 눌러 저장하세요."} <button type="button" className={styles.ghost} disabled={flowSaving} onClick={() => { setEditingFlowId(null); setFlowAmount(""); setFlowNote(""); setFlowTime(""); }}>{editingFlowId ? "수정 취소" : "입력 취소"}</button></p>}
               <fieldset className={styles.flowForm} disabled={flowSaving}>
+                <label>실제 입출금 시각 · 한국 시간<input ref={flowTimeInput} type="time" step="1" value={flowTime} onInput={(event) => setFlowTime(event.currentTarget.value)} onChange={(event) => setFlowTime(event.target.value)} aria-label="입출금 발생 시각" /><small>모르면 비워두세요. 등록 시각을 발생 시각으로 가정하지 않습니다.</small><button type="button" className={styles.ghost} onClick={() => { setFlowDate(kstDate()); setFlowTime(kstTime(new Date().toISOString(), true)); }}>현재 시각 사용</button></label>
                 <input
                   type="date"
                   value={flowDate}
@@ -3511,7 +3552,7 @@ export default function PortfolioBuilder({
                 {draft.cashFlows.map((flow) => (
                   <div key={flow.id}>
                     <span>
-                      {flow.date} ·{" "}
+                      {flow.date} {flow.occurredAt ? kstTime(flow.occurredAt, true) : "시각 미기록"} ·{" "}
                       {flow.note || (flow.amountKrw > 0 ? "입금" : "출금")}
                     </span>
                     <strong>
@@ -3534,6 +3575,7 @@ export default function PortfolioBuilder({
                   <small>기록된 입출금이 없습니다.</small>
                 )}
               </div>
+              <details className={styles.flowTrash}><summary>삭제한 내역 {(draft.deletedCashFlows ?? []).length}건 · 복원</summary><p className={styles.help}>새로고침 후에도 복원할 수 있습니다. 삭제된 내역은 순입금 계산에서 제외합니다.</p><div className={styles.flowList}>{(draft.deletedCashFlows ?? []).map((flow) => <div key={flow.id}><span>{flow.date} · {flow.note || "입출금"}</span><strong>{fmt(flow.amountKrw)}</strong><button type="button" className={styles.ghost} onClick={() => restoreFlow(flow.id)} disabled={flowSaving || dirty}>복원</button></div>)}</div></details>
             </details>
           </section>
         </>

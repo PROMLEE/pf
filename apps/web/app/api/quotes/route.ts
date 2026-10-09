@@ -134,7 +134,7 @@ export async function POST(request: Request) {
         : [];
     const cryptoQuotes = await cryptoPromise;
     const quotes = [...stockQuotes, ...cryptoQuotes];
-    await recordSnapshot(userId);
+    await recordSnapshot(userId, undefined, false);
     return NextResponse.json({ quotes, holdings: await listHoldings(userId) });
   } catch (error) {
     return NextResponse.json(

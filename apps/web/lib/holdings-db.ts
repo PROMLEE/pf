@@ -231,3 +231,21 @@ export async function setQuote(
     [userId, market, symbol, exchange, price, label, checkedAt],
   );
 }
+
+export async function updateHoldingAssignment(userId: string, id: string, bucketId: string | null, source: "auto" | "manual") {
+  const client = await db().connect();
+  try {
+    await client.query("begin");
+    const result = await client.query(`update portfolio.holdings h set
+      assignment_source = $4,
+      bucket_id = case when $4 = 'auto' then (select r.bucket_id from portfolio.rules r where r.user_id = $1 and r.market = h.market and r.symbol = h.symbol limit 1) else $3 end,
+      updated_at = now()
+      where h.user_id = $1 and h.id = $2 and ($3::uuid is null or exists(select 1 from portfolio.buckets b where b.user_id = $1 and b.id = $3))`, [userId,id,bucketId,source]);
+    if (result.rowCount !== 1) { await client.query("rollback"); return null; }
+    const snapshots = await recordSnapshot(userId,client);
+    const holdings = await select(client,userId);
+    await client.query("commit");
+    return {holdings, snapshots};
+  } catch (error) { await client.query("rollback"); throw error; }
+  finally { client.release(); }
+}

@@ -40,6 +40,8 @@ type PlanRow = {
 };
 type CashFlowRow = {
   id: string;
+  occurred_at: Date | null;
+  deleted_at: Date | null;
   flow_date: string;
   amount_krw: string;
   note: string;
@@ -86,12 +88,32 @@ type AssignmentRow = {
 };
 type SnapshotRow = {
   snapshot_date: string;
+  captured_at: Date;
   bucket_key: string;
   bucket_name: string;
   value_krw: string;
   target_percent: string | null;
   position_signature: string | null;
 };
+
+const snapshotHistorySql = `select snapshot_date::text, bucket_key, bucket_name, value_krw, target_percent, position_signature, captured_at
+  from portfolio.snapshot_events where user_id = $1
+  union all
+  select s.snapshot_date::text, s.bucket_key, s.bucket_name, s.value_krw, s.target_percent, s.position_signature, s.captured_at
+  from portfolio.snapshots s where s.user_id = $1 and not exists
+    (select 1 from portfolio.snapshot_events e where e.user_id = s.user_id and e.bucket_key = s.bucket_key and e.captured_at = s.captured_at)
+  order by snapshot_date, captured_at, bucket_key`;
+
+function snapshotTime(row: SnapshotRow) {
+  const date = new Intl.DateTimeFormat("en-CA", {timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"}).format(row.captured_at);
+  return date === row.snapshot_date ? row.captured_at.toISOString() : null;
+}
+function mapSnapshot(row: SnapshotRow): Snapshot {
+  return {date:row.snapshot_date,recordedAt:snapshotTime(row),bucketKey:row.bucket_key,bucketName:row.bucket_name,valueKrw:Number(row.value_krw),targetPercent:row.target_percent === null ? null : Number(row.target_percent),positionSignature:row.position_signature};
+}
+function mapCashFlow(row: CashFlowRow): CashFlow {
+  return {id:row.id,date:row.flow_date,amountKrw:Number(row.amount_krw),note:row.note,occurredAt:row.occurred_at?.toISOString() ?? null,deletedAt:row.deleted_at?.toISOString() ?? null};
+}
 
 export async function listPortfolio(
   userId: string,
@@ -134,12 +156,11 @@ export async function listPortfolio(
       [userId],
     ),
     client.query<SnapshotRow>(
-      `select snapshot_date::text, bucket_key, bucket_name, value_krw, target_percent, position_signature
-       from portfolio.snapshots where user_id = $1 order by snapshot_date, bucket_key`,
+      snapshotHistorySql,
       [userId],
     ),
     client.query<CashFlowRow>(
-      `select id, flow_date::text, amount_krw, note from portfolio.cash_flows where user_id = $1 order by flow_date desc, created_at desc`,
+      `select id, flow_date::text, amount_krw, note, occurred_at, deleted_at from portfolio.cash_flows where user_id = $1 order by flow_date desc, created_at desc`,
       [userId],
     ),
   ]);
@@ -207,6 +228,7 @@ export async function listPortfolio(
     snapshots: snapshots.rows.map(
       (row): Snapshot => ({
         date: row.snapshot_date,
+        recordedAt: snapshotTime(row),
         bucketKey: row.bucket_key,
         bucketName: row.bucket_name,
         valueKrw: Number(row.value_krw),
@@ -215,10 +237,13 @@ export async function listPortfolio(
         positionSignature: row.position_signature,
       }),
     ),
-    cashFlows: cashFlows.rows.map(
+    deletedCashFlows: cashFlows.rows.filter((row) => row.deleted_at).map(mapCashFlow),
+    cashFlows: cashFlows.rows.filter((row) => !row.deleted_at).map(
       (row): CashFlow => ({
         id: row.id,
         date: row.flow_date,
+        occurredAt: row.occurred_at?.toISOString() ?? null,
+        deletedAt: row.deleted_at?.toISOString() ?? null,
         amountKrw: Number(row.amount_krw),
         note: row.note,
       }),
@@ -523,7 +548,7 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
         ];
       }),
     );
-    const today = await recordSnapshot(userId, client);
+    await recordSnapshot(userId, client);
     await client.query("commit");
     return {
       ...input,
@@ -545,10 +570,7 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
           lastTradeAt: previous?.last_trade_at?.toISOString() ?? null,
         };
       }),
-      snapshots: [
-        ...input.snapshots.filter((item) => item.date !== today[0]?.date),
-        ...today,
-      ],
+      snapshots: (await client.query<SnapshotRow>(snapshotHistorySql, [userId])).rows.map(mapSnapshot),
     } satisfies Portfolio;
   } catch (error) {
     await client.query("rollback");
@@ -575,7 +597,7 @@ export async function updateAutomaticFx(
          and (usd_krw is distinct from $2::numeric or usd_krw_rate_date is distinct from $3::date)`,
       [userId, rate, rateDate],
     );
-    if (updated.rowCount) await recordSnapshot(userId, client);
+    if (updated.rowCount) await recordSnapshot(userId, client, false);
     await client.query("commit");
     return Boolean(updated.rowCount);
   } catch (error) {
@@ -591,8 +613,8 @@ export async function addCashFlow(userId: string, flow: CashFlow) {
   try {
     await client.query("begin");
     await client.query(
-      `insert into portfolio.cash_flows (id, user_id, flow_date, amount_krw, note) values ($1,$2,$3,$4,$5)`,
-      [flow.id, userId, flow.date, flow.amountKrw, flow.note],
+      `insert into portfolio.cash_flows (id, user_id, flow_date, amount_krw, note, occurred_at) values ($1,$2,$3,$4,$5,$6)`,
+      [flow.id, userId, flow.date, flow.amountKrw, flow.note, flow.occurredAt ?? null],
     );
     const result = await listPortfolio(userId, client);
     await client.query("commit");
@@ -610,8 +632,8 @@ export async function updateCashFlow(userId: string, flow: CashFlow) {
   try {
     await client.query("begin");
     const result = await client.query(
-      `update portfolio.cash_flows set flow_date = $3, amount_krw = $4, note = $5 where user_id = $1 and id = $2`,
-      [userId, flow.id, flow.date, flow.amountKrw, flow.note],
+      `update portfolio.cash_flows set flow_date = $3, amount_krw = $4, note = $5, occurred_at = $6 where user_id = $1 and id = $2 and deleted_at is null`,
+      [userId, flow.id, flow.date, flow.amountKrw, flow.note, flow.occurredAt ?? null],
     );
     const portfolio = result.rowCount === 1 ? await listPortfolio(userId, client) : null;
     await client.query("commit");
@@ -620,9 +642,14 @@ export async function updateCashFlow(userId: string, flow: CashFlow) {
   finally { client.release(); }
 }
 
+export async function restoreCashFlow(userId: string, id: string) {
+  const result = await db().query(`update portfolio.cash_flows set deleted_at = null where user_id = $1 and id = $2 and deleted_at is not null`, [userId, id]);
+  return result.rowCount === 1;
+}
+
 export async function deleteCashFlow(userId: string, flowId: string) {
   const result = await db().query(
-    `delete from portfolio.cash_flows where user_id = $1 and id = $2`,
+    `update portfolio.cash_flows set deleted_at = clock_timestamp() where user_id = $1 and id = $2 and deleted_at is null`,
     [userId, flowId],
   );
   return result.rowCount === 1;
@@ -681,6 +708,7 @@ export async function setRuleQuote(
 export async function recordSnapshot(
   userId: string,
   client: Client = db(),
+  archive = true,
 ): Promise<Snapshot[]> {
   const result = await client.query<{
     usd_krw: string | null;
@@ -796,7 +824,7 @@ export async function recordSnapshot(
   const placeholders = entries
     .map((_, index) => {
       const start = index * 5 + 2;
-      return `($1,(now() at time zone 'Asia/Seoul')::date,$${start},$${start + 1},$${start + 2},$${start + 3},$${start + 4})`;
+      return `($1,(now() at time zone 'Asia/Seoul')::date,$${start},$${start + 1},$${start + 2},$${start + 3},$${start + 4},${archive ? "true" : "false"})`;
     })
     .join(",");
   const parameters = [
@@ -815,18 +843,19 @@ export async function recordSnapshot(
   ];
   const saved = await client.query<SnapshotRow>(
     `insert into portfolio.snapshots
-     (user_id, snapshot_date, bucket_key, bucket_name, value_krw, target_percent, position_signature)
+     (user_id, snapshot_date, bucket_key, bucket_name, value_krw, target_percent, position_signature, archive_capture)
      values ${placeholders}
      on conflict (user_id, snapshot_date, bucket_key) do update set
        bucket_name = excluded.bucket_name, value_krw = excluded.value_krw,
        target_percent = excluded.target_percent,
-       position_signature = excluded.position_signature, captured_at = now()
+       position_signature = excluded.position_signature, archive_capture = excluded.archive_capture, captured_at = now()
      returning snapshot_date::text, bucket_key, bucket_name, value_krw,
-       target_percent, position_signature`,
+       target_percent, position_signature, captured_at`,
     parameters,
   );
   return saved.rows.map((row) => ({
     date: row.snapshot_date,
+    recordedAt: snapshotTime(row),
     bucketKey: row.bucket_key,
     bucketName: row.bucket_name,
     valueKrw: Number(row.value_krw),

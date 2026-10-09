@@ -4,6 +4,7 @@ import {
   addCashFlow,
   deleteCashFlow,
   updateCashFlow,
+  restoreCashFlow,
   listPortfolio,
 } from "../../../../lib/portfolio-db";
 
@@ -45,12 +46,19 @@ async function saveFlow(request: Request, editing: boolean) {
   try {
     const body = (await request.json()) as {
       id?: unknown;
+      occurredAt?: unknown;
       date?: unknown;
       amountKrw?: unknown;
       note?: unknown;
     };
     if (
       (editing && (typeof body.id !== "string" || !uuid.test(body.id))) ||
+      (body.occurredAt != null && (
+        typeof body.occurredAt !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(body.occurredAt) ||
+        !Number.isFinite(Date.parse(body.occurredAt)) ||
+        new Intl.DateTimeFormat("en-CA", {timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(body.occurredAt)) !== body.date
+      )) ||
       !validDate(body.date) ||
       typeof body.amountKrw !== "number" ||
       !Number.isFinite(body.amountKrw) ||
@@ -75,6 +83,7 @@ async function saveFlow(request: Request, editing: boolean) {
       date: body.date,
       amountKrw: body.amountKrw,
       note: body.note.trim(),
+      occurredAt: typeof body.occurredAt === "string" ? new Date(body.occurredAt).toISOString() : null,
     });
     if (!portfolio) return NextResponse.json({ message: "내역을 찾지 못했습니다" }, { status: 404 });
     return NextResponse.json({ portfolio });
@@ -120,4 +129,16 @@ export async function DELETE(request: Request) {
       { status: 500 },
     );
   }
+}
+
+export async function PATCH(request: Request) {
+  const userId = await currentUserId();
+  if (!userId) return NextResponse.json({message:"로그인이 필요합니다"},{status:401});
+  if (!sameOrigin(request)) return NextResponse.json({message:"허용되지 않은 요청입니다"},{status:403});
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id || !uuid.test(id)) return NextResponse.json({message:"내역 ID를 확인해 주세요"},{status:400});
+  try {
+    if (!(await restoreCashFlow(userId,id))) return NextResponse.json({message:"삭제한 내역을 찾지 못했습니다"},{status:404});
+    return NextResponse.json({portfolio:await listPortfolio(userId)});
+  } catch { return NextResponse.json({message:"입출금 내역을 복원하지 못했습니다"},{status:500}); }
 }

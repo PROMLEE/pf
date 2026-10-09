@@ -51,6 +51,7 @@ export type Assignment = {
 
 export type Snapshot = {
   date: string;
+  recordedAt?: string | null;
   bucketKey: string;
   bucketName: string;
   valueKrw: number;
@@ -103,6 +104,8 @@ export function positionSignature(
 
 export type CashFlow = {
   id: string;
+  occurredAt?: string | null;
+  deletedAt?: string | null;
   date: string;
   amountKrw: number;
   note: string;
@@ -122,6 +125,7 @@ export type Portfolio = {
   assignments: Assignment[];
   snapshots: Snapshot[];
   cashFlows: CashFlow[];
+  deletedCashFlows?: CashFlow[];
 };
 
 export function holdingValueKrw(holding: Holding, usdKrw: number) {

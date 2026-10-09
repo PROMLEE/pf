@@ -1,6 +1,6 @@
 # 개발·배포 안내
 
-기준일: **2026-10-08**. 이 문서는 저장소의 현재 구성에 맞춘 운영 안내입니다. 사용자 화면 사용법은 [사용자 설명서](USER_GUIDE.md)를 참고하세요.
+기준일: **2026-10-09**. 이 문서는 저장소의 현재 구성에 맞춘 운영 안내입니다. 사용자 화면 사용법은 [사용자 설명서](USER_GUIDE.md)를 참고하세요.
 
 ## 1. 현재 구조
 
@@ -69,6 +69,13 @@ pnpm dev:web
 현재 DB 연결은 SSL 인증서를 검증합니다. 연결 문제를 해결하려고 인증서 검증을 끄는 대신 연결 URL·호스트·인증서·접속 권한을 확인합니다.
 
 ## 4. DB 구성 확인
+
+2026-10-09 시점별 기록·삭제 복원 기능에는 다음 두 마이그레이션이 필요합니다. 기존 운영 프로젝트에는 이미 적용했습니다. 새 DB는 아래 기본 자산 스키마를 구성한 뒤 이 두 파일을 순서대로 적용합니다.
+
+1. [timed_history_and_flow_trash.sql](../supabase/migrations/20261009041736_timed_history_and_flow_trash.sql): 입출금 발생/삭제 시각, 시점 기록, 소유자 전용 서버 접근.
+2. [bounded_automatic_snapshot_history.sql](../supabase/migrations/20261009042943_bounded_automatic_snapshot_history.sql): 직접 저장은 보존하고 자동 갱신 기록 증가를 제한.
+
+`portfolio.snapshot_events`의 RLS와 클라이언트 권한 차단은 의도된 설정입니다. 브라우저 직접 조회 정책을 추가하지 않습니다. 서버 API가 세션 사용자 ID로 데이터를 제한합니다.
 
 주요 자산 테이블은 [portfolio_schema.sql](../sql/portfolio_schema.sql)에 있습니다. 기존 사용자 테이블이 준비된 새 개발 DB에서는 이 파일을 기준으로 자산 스키마를 구성할 수 있습니다. 기존 운영 DB에서는 적용된 상태와 변경 SQL을 비교해 필요한 변경만 검토합니다.
 

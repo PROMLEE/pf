@@ -1638,3 +1638,14 @@
 @media (max-width: 640px) { .trend svg text { font-size: 21px; } }
 
 .mobileMetricNote p, .detailAccounts small { font-size: 13px; color: var(--muted); line-height: 1.65; }
+
+.flowForm > label { display: grid; gap: 6px; color: var(--ink); font-size: 13px; }
+.flowForm > label small { color: var(--muted); font-size: 12px; }
+.flowTrash { padding: 12px; }
+.flowTrash summary { font-size: 13px; font-weight: 600; cursor: pointer; }
+.flowTrash .flowList { padding: 10px 0 0; }
+
+.detailAllocation { padding: 16px 0; color: var(--ink); font-size: 14px; }
+.detailAllocation summary { cursor: pointer; font-weight: 650; }
+.detailAllocation label { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; }
+.detailAllocation select { min-height: 44px; width: 100%; }

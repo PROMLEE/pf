@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   try {
     const quotes = await refreshStoredCryptoQuotes(userId);
     if (quotes.some((quote) => quote.price !== null))
-      await recordSnapshot(userId);
+      await recordSnapshot(userId, undefined, false);
     return NextResponse.json({ quotes });
   } catch {
     return NextResponse.json(
