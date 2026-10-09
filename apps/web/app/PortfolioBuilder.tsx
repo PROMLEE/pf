@@ -1,5 +1,7 @@
 "use client";
 
+import NumberInput from "./NumberInput";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -539,10 +541,10 @@ function AssetDetail({
         <fieldset disabled={saving || assigning}>
           {manual ? <>
             <label>자산 이름<input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={100} required /></label>
-            <label>{manual.valueUsd === null ? "금액 (원)" : "금액 (USD)"}<input type="number" min="0" step="any" value={editValue} onChange={(event) => setEditValue(event.target.value)} required /></label>
+            <label>{manual.valueUsd === null ? "금액 (원)" : "금액 (USD)"}<NumberInput min="0" step="any" value={editValue} onValueChange={(value) => setEditValue(value)} required /></label>
           </> : <>
-            <label>보유 수량<input type="number" min={first ? "0.000001" : "0"} step={first ? "0.000001" : "any"} value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} required /></label>
-            <label>{first ? "주당 평균 매입단가" : "개당 평균 매입단가"} · {unit}<input type="number" min="0" step="any" value={editCost} onChange={(event) => setEditCost(event.target.value)} placeholder="모르면 비워두세요" /></label>
+            <label>보유 수량<NumberInput min={first ? "0.000001" : "0"} step={first ? "0.000001" : "any"} value={editQuantity} onValueChange={(value) => setEditQuantity(value)} required /></label>
+            <label>{first ? "주당 평균 매입단가" : "개당 평균 매입단가"} · {unit}<NumberInput min="0" step="any" value={editCost} onValueChange={(value) => setEditCost(value)} placeholder="모르면 비워두세요" /></label>
           </>}
         </fieldset>
         {error && <p role="alert">{error}</p>}
@@ -2080,17 +2082,16 @@ export default function PortfolioBuilder({
               </span>
               <span className={styles.toleranceInput}>
                 ±
-                <input
-                  type="number"
+                <NumberInput
                   min="0"
                   max="30"
                   step="0.1"
                   value={draft.tolerancePercent}
                   aria-label="리밸런싱 허용 오차 퍼센트포인트"
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     change({
                       ...draft,
-                      tolerancePercent: Number(event.target.value),
+                      tolerancePercent: Number(value),
                     })
                   }
                 />
@@ -2130,14 +2131,13 @@ export default function PortfolioBuilder({
                 </label>
                 <label>
                   USD → KRW 환율 (1달러당 원)
-                  <input
-                    type="number"
+                  <NumberInput
                     min="100"
                     step="0.01"
                     value={draft.usdKrw}
                     disabled={draft.usdKrwMode === "auto"}
-                    onChange={(event) =>
-                      change({ ...draft, usdKrw: Number(event.target.value) })
+                    onValueChange={(value) =>
+                      change({ ...draft, usdKrw: Number(value) })
                     }
                   />
                 </label>
@@ -2186,17 +2186,16 @@ export default function PortfolioBuilder({
                     </div>
                     <label>
                       목표{" "}
-                      <input
-                        type="number"
+                      <NumberInput
                         min="0"
                         max="100"
                         step="0.1"
                         value={bucket.targetPercent}
-                        onChange={(event) =>
+                        onValueChange={(value) =>
                           editBucket(
                             bucket.id,
                             "targetPercent",
-                            event.target.value,
+                            value,
                           )
                         }
                       />{" "}
@@ -2474,23 +2473,21 @@ export default function PortfolioBuilder({
                       ? `${cryptoSelected.name} · ${cryptoSelected.marketCode}`
                       : "마켓을 검색해 선택"}
                   </span>
-                  <input
-                    type="number"
+                  <NumberInput
                     min="0"
                     max="999999999999"
                     step="0.000000000001"
                     value={cryptoQuantity}
-                    onChange={(event) => setCryptoQuantity(event.target.value)}
+                    onValueChange={(value) => setCryptoQuantity(value)}
                     placeholder="보유 수량"
                     aria-label="가상자산 보유 수량"
                   />
-                  <input
-                    type="number"
+                  <NumberInput
                     min="0"
                     max="999999999999"
                     step="any"
                     value={cryptoCost}
-                    onChange={(event) => setCryptoCost(event.target.value)}
+                    onValueChange={(value) => setCryptoCost(value)}
                     placeholder="코인당 매입가 (원)"
                     aria-label="가상자산 코인당 매입단가 원화"
                   />
@@ -2539,21 +2536,20 @@ export default function PortfolioBuilder({
                     </div>
                     <label className={styles.cryptoField}>
                       <span>보유 수량</span>
-                      <input
-                        type="number"
+                      <NumberInput
                         min="0"
                         max="999999999999"
                         step="0.000000000001"
                         value={asset.quantity}
                         aria-label={`${asset.name} 보유 수량`}
-                        onChange={(event) =>
+                        onValueChange={(value) =>
                           change({
                             ...draft,
                             cryptoAssets: draft.cryptoAssets.map((item) =>
                               item.id === asset.id
                                 ? {
                                     ...item,
-                                    quantity: Number(event.target.value),
+                                    quantity: Number(value),
                                   }
                                 : item,
                             ),
@@ -2563,14 +2559,13 @@ export default function PortfolioBuilder({
                     </label>
                     <label className={styles.cryptoField}>
                       <span>코인당 매입가 (원)</span>
-                      <input
-                        type="number"
+                      <NumberInput
                         min="0"
                         max="999999999999"
                         step="any"
                         value={asset.averageCostKrw ?? ""}
                         aria-label={`${asset.name} 코인당 매입단가 원화`}
-                        onChange={(event) =>
+                        onValueChange={(value) =>
                           change({
                             ...draft,
                             cryptoAssets: draft.cryptoAssets.map((item) =>
@@ -2578,9 +2573,9 @@ export default function PortfolioBuilder({
                                 ? {
                                     ...item,
                                     averageCostKrw:
-                                      event.target.value === ""
+                                      value === ""
                                         ? null
-                                        : Number(event.target.value),
+                                        : Number(value),
                                   }
                                 : item,
                             ),
@@ -2653,11 +2648,10 @@ export default function PortfolioBuilder({
                     placeholder="자산 이름"
                     aria-label="직접 입력 자산 이름"
                   />
-                  <input
-                    type="number"
+                  <NumberInput
                     min="0"
                     value={manualValue}
-                    onChange={(event) => setManualValue(event.target.value)}
+                    onValueChange={(value) => setManualValue(value)}
                     placeholder={
                       manualCurrency === "USD" ? "달러 금액" : "평가액 (원)"
                     }
@@ -2709,13 +2703,12 @@ export default function PortfolioBuilder({
                         })}
                       />
                     </label>
-                    <input
-                      type="number"
+                    <NumberInput
                       min="0"
                       max="1000000000000000"
                       value={asset.valueUsd ?? asset.valueKrw}
                       aria-label={`${asset.name} ${asset.valueUsd === null ? "원화 평가액" : "달러 금액"}`}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         change({
                           ...draft,
                           manualAssets: draft.manualAssets.map((item) =>
@@ -2723,13 +2716,13 @@ export default function PortfolioBuilder({
                               ? item.valueUsd === null
                                 ? {
                                     ...item,
-                                    valueKrw: Number(event.target.value),
+                                    valueKrw: Number(value),
                                   }
                                 : {
                                     ...item,
-                                    valueUsd: Number(event.target.value),
+                                    valueUsd: Number(value),
                                     valueKrw:
-                                      Number(event.target.value) * draft.usdKrw,
+                                      Number(value) * draft.usdKrw,
                                   }
                               : item,
                           ),
@@ -2858,13 +2851,12 @@ export default function PortfolioBuilder({
                 {budgetMode === "input" && (
                   <label className={styles.cashBudget}>
                     이번에 투입할 금액 (원)
-                    <input
-                      type="number"
+                    <NumberInput
                       min="0"
                       max="1000000000000000"
                       step="1"
                       value={cashInput}
-                      onChange={(event) => setCashInput(event.target.value)}
+                      onValueChange={(value) => setCashInput(value)}
                       placeholder="금액 입력 · 빈칸은 0원"
                     />
                   </label>
@@ -3057,11 +3049,11 @@ export default function PortfolioBuilder({
                                   key={`${trade.holdingId || trade.ruleId}:${trade.side}:${index}`}
                                 >
                                   <strong>
-                                    {trade.symbol} · {trade.shares}주{" "}
+                                    {trade.market === "KR" ? trade.name : trade.symbol} · {trade.shares}주{" "}
                                     {trade.side === "buy" ? "매수" : "매도"}
                                   </strong>
                                   <span>
-                                    주당{" "}
+                                    {trade.market === "KR" && <>종목코드 {trade.symbol} · </>}주당{" "}
                                     {trade.currency === "USD"
                                       ? `$${trade.unitPrice.toFixed(4)}`
                                       : fmt(trade.unitPrice)}{" "}
@@ -3311,14 +3303,13 @@ export default function PortfolioBuilder({
                         <label>
                           새 종목의 조회 시세가 없을 때 사용 ·{" "}
                           {rule.market === "KR" ? "원" : "달러"}
-                          <input
-                            type="number"
+                          <NumberInput
                             min="0"
                             step="any"
                             value={rule.manualPrice ?? ""}
                             placeholder="비워두면 자동 시세 사용"
                             aria-label={`${rule.name || rule.symbol} 임시 가격`}
-                            onChange={(event) =>
+                            onValueChange={(value) =>
                               change({
                                 ...draft,
                                 rules: draft.rules.map(
@@ -3326,8 +3317,8 @@ export default function PortfolioBuilder({
                                     item.id === rule.id
                                       ? {
                                           ...item,
-                                          manualPrice: event.target.value
-                                            ? Number(event.target.value)
+                                          manualPrice: value
+                                            ? Number(value)
                                             : null,
                                         }
                                       : item,
@@ -3520,12 +3511,11 @@ export default function PortfolioBuilder({
                   <option value="deposit">입금</option>
                   <option value="withdrawal">출금</option>
                 </select>
-                <input
-                  type="number"
+                <NumberInput
                   min="1"
                   step="1"
                   value={flowAmount}
-                  onChange={(event) => setFlowAmount(event.target.value)}
+                  onValueChange={(value) => setFlowAmount(value)}
                   placeholder="금액 (원)"
                   aria-label="입출금 금액"
                 />

@@ -1,5 +1,7 @@
 "use client";
 
+import NumberInput from "./NumberInput";
+
 import {
   ChangeEvent,
   FormEvent,
@@ -1488,28 +1490,26 @@ export default function PortfolioPage() {
                             </div>
                             <label>
                               보유 수량
-                              <input
-                                type="number"
+                              <NumberInput
                                 min="0"
                                 step="0.000001"
                                 value={holdingQuantity}
                                 disabled={holdingSaving}
-                                onChange={(event) =>
-                                  setHoldingQuantity(event.target.value)
+                                onValueChange={(value) =>
+                                  setHoldingQuantity(value)
                                 }
                               />
                             </label>
                             <label>
                               주당 평균 매입단가 (
                               {row.market === "US" ? "USD" : "KRW"})
-                              <input
-                                type="number"
+                              <NumberInput
                                 min="0"
                                 step="0.000001"
                                 value={holdingCost}
                                 disabled={holdingSaving}
-                                onChange={(event) =>
-                                  setHoldingCost(event.target.value)
+                                onValueChange={(value) =>
+                                  setHoldingCost(value)
                                 }
                                 placeholder="모르면 비워두기"
                               />
@@ -1805,44 +1805,41 @@ export default function PortfolioPage() {
                           </label>
                           <label>
                             수량
-                            <input
-                              type="number"
+                            <NumberInput
                               min="0"
                               step="any"
                               value={row.quantity}
-                              onChange={(event) =>
-                                editDraft(index, "quantity", event.target.value)
+                              onValueChange={(value) =>
+                                editDraft(index, "quantity", value)
                               }
                             />
                           </label>
                           <label>
                             캡처 가격
-                            <input
-                              type="number"
+                            <NumberInput
                               min="0"
                               step="any"
                               value={row.capturedPrice ?? ""}
-                              onChange={(event) =>
+                              onValueChange={(value) =>
                                 editDraft(
                                   index,
                                   "capturedPrice",
-                                  event.target.value,
+                                  value,
                                 )
                               }
                             />
                           </label>
                           <label>
                             매입 단가
-                            <input
-                              type="number"
+                            <NumberInput
                               min="0"
                               step="any"
                               value={row.averageCost ?? ""}
-                              onChange={(event) =>
+                              onValueChange={(value) =>
                                 editDraft(
                                   index,
                                   "averageCost",
-                                  event.target.value,
+                                  value,
                                 )
                               }
                             />

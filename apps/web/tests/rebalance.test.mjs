@@ -285,3 +285,17 @@ test("selected account must still match the portfolio after rule changes", () =>
   assert.equal(result.trades.length, 0);
   assert.match(result.items[1].advice, /계좌를 다시 선택/);
 });
+
+test('Korean buy recommendations use the held security name even if the rule is unnamed',()=>{
+  const rows=[holding('a','A',8),{...holding('b','005930',2),name:'삼성전자'}];
+  const p=plan([['a','A'],['b','B']],[{...rule('005930','B'),name:''}]);
+  const result=rebalance(p,rows,'add-only',600,new Set());
+  assert.equal(result.trades[0].name,'삼성전자');
+  assert.match(result.items[1].advice,/삼성전자 .*주 매수/);
+});
+test('Korean sell recommendations show the name rather than only the code',()=>{
+  const rows=[{...holding('a','005930',8),name:'삼성전자'},holding('b','B',2)];
+  const p=plan([['a','A'],['b','B']],[rule('B','B')]);
+  const result=rebalance(p,rows,'trade',0,new Set());
+  assert.match(result.items[0].advice,/삼성전자 .*주 매도/);
+});

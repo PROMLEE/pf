@@ -22,6 +22,7 @@ export type AppliedPrice = {
   checkedAt: string | null;
 };
 export type Trade = AppliedPrice & {
+  name: string;
   bucketId: string;
   holdingId: string | null;
   ruleId: string | null;
@@ -271,6 +272,7 @@ export function rebalance(
             ruleId: null,
             market: holding.market,
             symbol: holding.symbol || holding.name,
+            name: holding.name,
             side: "sell",
             shares,
             amountKrw,
@@ -322,7 +324,7 @@ export function rebalance(
       for (const rule of rules) {
         const candidate = candidates.find((item) => item.ruleId === rule.id)!;
         if (candidate.status === "blocked") {
-          addReason(bucket.id, `${rule.symbol}: ${candidate.reason}`);
+          addReason(bucket.id, `${rule.name || rule.symbol}: ${candidate.reason}`);
           if (options.candidatePolicy !== "fallback") {
             addReason(
               bucket.id,
@@ -341,7 +343,7 @@ export function rebalance(
           available <= 0
             ? "이번 계산에서 사용할 매수 자금이 없습니다."
             : `1주 가격 ${fmt(candidate.unitKrw)}이 부족분·가용 예산 ${fmt(Math.min(gap, available))}을 초과합니다.`;
-        addReason(bucket.id, `${rule.symbol}: ${candidate.reason}`);
+        addReason(bucket.id, `${rule.name || rule.symbol}: ${candidate.reason}`);
         if (options.candidatePolicy !== "fallback") {
           addReason(
             bucket.id,
@@ -365,6 +367,7 @@ export function rebalance(
         ruleId: rule.id,
         market: rule.market,
         symbol: rule.symbol,
+        name: owned?.name || rule.name || rule.symbol,
         side: "buy",
         shares,
         amountKrw,
@@ -448,7 +451,7 @@ export function rebalance(
     let advice = bucketTrades
       .map(
         (trade) =>
-          `${trade.symbol} ${trade.shares}주 ${trade.side === "buy" ? "매수" : "매도"} · 약 ${fmt(trade.amountKrw)}`,
+          `${trade.market === "KR" ? trade.name : trade.symbol} ${trade.shares}주 ${trade.side === "buy" ? "매수" : "매도"} · 약 ${fmt(trade.amountKrw)}`,
       )
       .join(" / ");
     if (!ready)

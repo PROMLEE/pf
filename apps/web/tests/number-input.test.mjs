@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import test from 'node:test';
+import ts from 'typescript';
+const source=ts.transpileModule(await readFile(new URL('../app/number-input.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext}}).outputText;
+const {groupNumberInput,rawNumberInput}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+test('amounts are grouped and parsed without changing their saved value',()=>{assert.equal(groupNumberInput('100000000'),'100,000,000');assert.equal(rawNumberInput('100,000,000'),'100000000');});
+test('fractional prices and trailing digits are preserved without rounding',()=>{assert.equal(groupNumberInput('12345.067800'),'12,345.067800');assert.equal(rawNumberInput('12,345.067800'),'12345.067800');});
+test('small cryptocurrency quantities do not use exponent notation',()=>assert.equal(groupNumberInput(0.000000001),'0.000000001'));
+test('clearing and entering the decimal separator remain editable',()=>{assert.equal(groupNumberInput(''),'');assert.equal(rawNumberInput('.'),'0.');assert.equal(groupNumberInput('1000.'),'1,000.');});
+test('invalid numeric text is rejected instead of converted into a different amount',()=>{assert.equal(rawNumberInput('12abc'),null);assert.equal(rawNumberInput('1.2.3'),null);assert.equal(rawNumberInput('-50'),null);});
