@@ -1594,3 +1594,47 @@
     padding: 0;
   }
 }
+
+/* Keep calculation criteria and transaction status readable in both themes. */
+.metricBasis { color: var(--ink); font-size: 13px; line-height: 1.7; margin: 0 0 12px; }
+.metricBasis summary { cursor: pointer; font-weight: 600; }
+.metricBasis p { margin: 6px 0; }
+.chartReadout { min-height: 22px; font-size: 13px; color: var(--ink); margin: 4px 0; }
+.trend circle { cursor: pointer; }
+.trend circle:focus-visible { outline: 2px solid var(--accent, #4b72e8); outline-offset: 4px; }
+.undoNotice { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px; font-size: 13px; }
+.flowList > div, .flowList strong, .trendControls small, .detailHint, .help { font-size: 13px; }
+.flowList > div { color: var(--ink); }
+.flowList { max-height: 320px; }
+.flowList > div > span { flex: 1; }
+.flowList strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 640px) {
+  .flowList > div { flex-wrap: wrap; gap: 8px; padding: 10px 0; }
+  .flowList > div > span { flex-basis: 100%; }
+  .heading:has(.save) { position: sticky; top: 0; z-index: 5; background: var(--surface, #fff); padding: 10px 0; }
+}
+
+.metricSummary { margin: 8px 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.help, .detailHint { color: var(--muted); }
+.detailFacts strong, .keyMetric strong, .performanceSummary strong { font-variant-numeric: tabular-nums; }
+.detailFormActions { flex-wrap: wrap; }
+.detailFormActions > span { flex-basis: 100%; }
+
+.flowForm { border: 0; margin: 0; min-width: 0; }
+.flowForm:disabled { opacity: .7; }
+
+.trendControls small, .trend > div, .trendHint, .performanceSummary small, .performanceSummary p { color: var(--muted); font-size: 12px; }
+.performanceSummary > details { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .trendControls { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; }
+  .trendControls small { flex-basis: 100%; }
+  .performanceSummary { gap: 6px; }
+  .performanceSummary > div { display: flex; align-items: center; justify-content: space-between; background: transparent; padding: 8px 0; }
+  .performanceSummary strong { font-size: 15px; }
+}
+
+.trend svg { height: auto; display: block; }
+.trend svg text { font-size: 15px; }
+@media (max-width: 640px) { .trend svg text { font-size: 21px; } }
+
+.mobileMetricNote p, .detailAccounts small { font-size: 13px; color: var(--muted); line-height: 1.65; }

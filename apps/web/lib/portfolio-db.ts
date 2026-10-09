@@ -605,6 +605,21 @@ export async function addCashFlow(userId: string, flow: CashFlow) {
   }
 }
 
+export async function updateCashFlow(userId: string, flow: CashFlow) {
+  const client = await db().connect();
+  try {
+    await client.query("begin");
+    const result = await client.query(
+      `update portfolio.cash_flows set flow_date = $3, amount_krw = $4, note = $5 where user_id = $1 and id = $2`,
+      [userId, flow.id, flow.date, flow.amountKrw, flow.note],
+    );
+    const portfolio = result.rowCount === 1 ? await listPortfolio(userId, client) : null;
+    await client.query("commit");
+    return portfolio;
+  } catch (error) { await client.query("rollback"); throw error; }
+  finally { client.release(); }
+}
+
 export async function deleteCashFlow(userId: string, flowId: string) {
   const result = await db().query(
     `delete from portfolio.cash_flows where user_id = $1 and id = $2`,

@@ -15,6 +15,7 @@ import styles from "./AccountSettings.module.css";
 
 type Props = {
   name?: string | null;
+  loginProvider?: string;
   email?: string | null;
   theme: "light" | "dark";
   onThemeChange: (theme: "light" | "dark") => void;
@@ -24,6 +25,7 @@ type Props = {
 
 export default function AccountSettings({
   name,
+  loginProvider,
   email,
   theme,
   onThemeChange,
@@ -44,6 +46,8 @@ export default function AccountSettings({
           <small>로그인한 계정</small>
           <h2>{name || "내 계정"}</h2>
           {email && <p>{email}</p>}
+          <p>로그인 방식 · {loginProvider === "naver" ? "네이버" : loginProvider === "kakao" ? "카카오" : loginProvider === "local-admin" ? "로컬 QA" : "확인되지 않음"}</p>
+          <p>자산이 보이지 않으면 이전에 사용한 로그인 방식을 확인해 주세요. 네이버와 카카오는 각각 별도 계정입니다.</p>
         </div>
       </section>
       <section className={styles.group} aria-labelledby="account-display">

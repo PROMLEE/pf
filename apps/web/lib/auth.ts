@@ -73,6 +73,17 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, account, user }) {
+      if (account?.provider) token.loginProvider = account.provider;
+      if (!token.loginProvider && typeof token.appUserId === "string") {
+        try {
+          const result = await db().query<{ oauthProvider: string }>(`select "oauthProvider" from public."User" where "userId" = $1 limit 1`, [token.appUserId]);
+          const provider = result.rows[0]?.oauthProvider;
+          token.loginProvider = provider === "NAVER" ? "naver" : provider === "KAKAO" ? "kakao" : provider === "GUEST" ? "local-admin" : "unknown";
+        } catch {
+          // Display metadata must not invalidate an otherwise valid session.
+          token.loginProvider = "unknown";
+        }
+      }
       if (account?.provider === "local-admin" && user?.id) {
         token.appUserId = user.id;
         token.name = user.name;
@@ -118,6 +129,7 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user && typeof token.appUserId === "string") {
         session.user.appUserId = token.appUserId;
+        session.user.loginProvider = token.loginProvider;
       }
       return session;
     },

@@ -178,7 +178,7 @@ export default function PortfolioPage() {
       navigationState.current.url = window.location.href;
     }
     function onHistoryChange() {
-      if (navigationState.current.dirty && !window.confirm("저장하지 않은 포트폴리오 변경 사항을 버리고 이동할까요?")) {
+      if (navigationState.current.dirty && !window.confirm("저장하지 않은 변경 사항을 버리고 이동할까요?")) {
         window.history.pushState(null, "", navigationState.current.url);
         return;
       }
@@ -382,7 +382,7 @@ export default function PortfolioPage() {
     if (
       portfolioDirty &&
       next !== view &&
-      !window.confirm("저장하지 않은 포트폴리오 변경 사항을 버리고 이동할까요?")
+      !window.confirm("저장하지 않은 변경 사항을 버리고 이동할까요?")
     )
       return;
     if (next !== view) setPortfolioDirty(false);
@@ -1885,6 +1885,7 @@ export default function PortfolioPage() {
           {view === "settings" && (
             <AccountSettings
               name={session.user?.name}
+              loginProvider={session.user?.loginProvider}
               email={session.user?.email}
               theme={theme}
               onThemeChange={(next) => { if (next !== theme) toggleTheme(); }}

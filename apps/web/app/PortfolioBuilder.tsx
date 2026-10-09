@@ -25,6 +25,7 @@ import {
   holdingBucketId,
   manualAssetValueKrw,
   portfolioValues,
+  type CashFlow,
   type Bucket,
   type Portfolio,
   type Rule,
@@ -89,7 +90,7 @@ type Props = {
   onSelectAsset?: (asset: AssetSelection) => void;
   onBack?: () => void;
   onNavigate: (
-    screen: "strategy" | "allocation" | "rebalance" | "history",
+    screen: "strategy" | "allocation" | "rebalance" | "history" | "settings",
   ) => void;
   onDirtyChange: (dirty: boolean) => void;
 };
@@ -154,6 +155,8 @@ function Trend({
   points: { date: string; value: number }[];
   color: string;
 }) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const active = selected === null ? null : points[selected];
   if (!points.length)
     return (
       <p className={styles.help}>
@@ -166,13 +169,13 @@ function Trend({
   const max = Math.max(...values);
   const range = max - min || 1;
   const coords = points.map((point, index) => ({
-    x: points.length === 1 ? 300 : 22 + (index / (points.length - 1)) * 556,
+    x: points.length === 1 ? 365 : 150 + (index / (points.length - 1)) * 428,
     y: points.length === 1 ? 82 : 138 - ((point.value - min) / range) * 112,
   }));
   return (
     <div className={styles.trend}>
-      <svg viewBox="0 0 600 160" role="img" aria-label="날짜별 평가금액 추이">
-        <path d="M22 138 H578" stroke="#E5EAF2" strokeWidth="1" />
+      <svg viewBox="0 0 600 160" role="group" aria-label="날짜별 평가금액 추이">
+        {[26, 82, 138].map((y, i) => <g key={y}><path d={`M150 ${y} H578`} stroke="var(--line)" /><text x="4" y={y + 5} fill="var(--muted)" fontSize="20">{won.format(max - i * (max - min) / 2)}원</text></g>)}
         {points.length > 1 && (
           <polyline
             points={coords.map((point) => `${point.x},${point.y}`).join(" ")}
@@ -187,11 +190,19 @@ function Trend({
             key={points[index].date}
             cx={point.x}
             cy={point.y}
-            r="4"
+            r={selected === index ? "7" : "5"}
             fill={color}
+            tabIndex={0}
+            role="button"
+            aria-label={`${points[index].date} 평가액 ${fmt(points[index].value)}`}
+            onMouseEnter={() => setSelected(index)}
+            onFocus={() => setSelected(index)}
+            onClick={() => setSelected(index)}
+            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(index); } }}
           />
         ))}
       </svg>
+      <p className={styles.chartReadout} aria-live="polite">{active ? `${active.date} · ${fmt(active.value)}` : "그래프의 점을 누르면 날짜별 평가액을 확인할 수 있습니다."}</p>
       <div>
         <span>{points[0].date}</span>
         <strong>{fmt(points.at(-1)?.value ?? 0)}</strong>
@@ -502,11 +513,12 @@ function AssetDetail({
             <label>{manual.valueUsd === null ? "금액 (원)" : "금액 (USD)"}<input type="number" min="0" step="any" value={editValue} onChange={(event) => setEditValue(event.target.value)} required /></label>
           </> : <>
             <label>보유 수량<input type="number" min={first ? "0.000001" : "0"} step={first ? "0.000001" : "any"} value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} required /></label>
-            <label>평균 매입단가 ({unit})<input type="number" min="0" step="any" value={editCost} onChange={(event) => setEditCost(event.target.value)} placeholder="모르면 비워두세요" /></label>
+            <label>{first ? "주당 평균 매입단가" : "개당 평균 매입단가"} · {unit}<input type="number" min="0" step="any" value={editCost} onChange={(event) => setEditCost(event.target.value)} placeholder="모르면 비워두세요" /></label>
           </>}
         </fieldset>
         {error && <p role="alert">{error}</p>}
         <div className={styles.detailFormActions}>
+          <span className={styles.saved} role="status">미저장 · 저장하면 이 자산에 반영됩니다</span>
           <button type="submit" className={styles.detailEdit} disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
           <button type="button" className={styles.ghost} disabled={saving} onClick={() => { setEditing(null); setError(""); }}>취소</button>
         </div>
@@ -547,7 +559,7 @@ export default function PortfolioBuilder({
   const [refreshing, setRefreshing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [detailDirty, setDetailDirty] = useState(false);
-  useEffect(() => onDirtyChange(dirty || detailDirty), [dirty, detailDirty, onDirtyChange]);
+
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
   const [ruleMarket, setRuleMarket] = useState<Market>("KR");
@@ -576,6 +588,7 @@ export default function PortfolioBuilder({
   useEffect(() => {
     if (quotesRefreshing) lastCryptoFetchAt.current = Date.now();
   }, [quotesRefreshing]);
+  const [historyPeriod, setHistoryPeriod] = useState("all");
   const [trendKey, setTrendKey] = useState("__TOTAL__");
   const [show3d, setShow3d] = useState(false);
   const [rebalanceMode, setRebalanceMode] = useState<"trade" | "add-only">(
@@ -606,6 +619,29 @@ export default function PortfolioBuilder({
   const [flowKind, setFlowKind] = useState<"deposit" | "withdrawal">("deposit");
   const [flowNote, setFlowNote] = useState("");
   const [flowSaving, setFlowSaving] = useState(false);
+  const [editingFlowId, setEditingFlowId] = useState<string | null>(null);
+  const [deletedFlow, setDeletedFlow] = useState<CashFlow | null>(null);
+  useEffect(() => {
+    if (screen !== "history") { setFlowAmount(""); setFlowNote(""); setEditingFlowId(null); setDeletedFlow(null); }
+  }, [screen]);
+  const flowDirty = Boolean(flowAmount || flowNote || editingFlowId);
+  useEffect(() => onDirtyChange(dirty || detailDirty || flowDirty), [dirty, detailDirty, flowDirty, onDirtyChange]);
+  function editFlow(flow: CashFlow) {
+    setEditingFlowId(flow.id); setFlowDate(flow.date); setFlowAmount(String(Math.abs(flow.amountKrw)));
+    setFlowKind(flow.amountKrw > 0 ? "deposit" : "withdrawal"); setFlowNote(flow.note);
+  }
+  async function restoreFlow() {
+    if (!deletedFlow || flowSaving || dirty) return;
+    setFlowSaving(true);
+    try {
+      const response = await fetch("/api/portfolio/cash-flows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(deletedFlow) });
+      const payload = await response.json();
+      if (!response.ok || !payload.portfolio) throw new Error(payload.message || "복원하지 못했습니다.");
+      setDraft(payload.portfolio); portfolioCache.set(userId, payload.portfolio); setDeletedFlow(null);
+      onNotice("삭제한 입출금 내역을 복원했습니다. 현금 잔고는 그대로입니다.");
+    } catch (error) { onNotice(error instanceof Error ? error.message : "복원하지 못했습니다."); }
+    finally { setFlowSaving(false); }
+  }
 
   useEffect(() => {
     if (screen !== "edit" || !focusAsset || loading) return;
@@ -1090,6 +1126,11 @@ export default function PortfolioBuilder({
         `목표 비중 합계가 ${pct(total)}입니다. 100%로 맞춰 주세요.`,
       );
     const saved = portfolioCache.get(userId);
+    const changedSections = ([
+      ["title", "포트 이름"], ["buckets", "목표 비중"], ["tolerancePercent", "허용 오차"],
+      ["rules", "매수 후보"], ["assignments", "자산 배정"], ["cryptoAssets", "가상자산"],
+      ["manualAssets", "현금·직접 입력 자산"], ["usdKrw", "환율"], ["usdKrwMode", "환율 모드"],
+    ] as const).filter(([key]) => JSON.stringify(saved?.[key]) !== JSON.stringify(draft[key])).map(([, label]) => label);
     const assetsOnly =
       screen === "edit" &&
       Boolean(saved) &&
@@ -1138,7 +1179,7 @@ export default function PortfolioBuilder({
       setDraft(payload.portfolio);
       portfolioCache.set(userId, payload.portfolio);
       setDirty(false);
-      onNotice("포트폴리오와 오늘의 평가액을 저장했습니다.");
+      onNotice(`저장 완료 · ${changedSections.join(" / ") || "변경 내용"} · 오늘 평가액 갱신`);
       if (!assetsOnly)
         void fetch("/api/holdings", { cache: "no-store" })
           .then(async (response) => {
@@ -1170,12 +1211,14 @@ export default function PortfolioBuilder({
         throw new Error(payload.message || "기록하지 못했습니다.");
       setDraft(payload.portfolio);
       portfolioCache.set(userId, payload.portfolio);
+      portfolioCache.set(userId, payload.portfolio);
       onNotice("오늘의 자산 평가액을 기록했습니다.");
     } catch (error) {
       onNotice(error instanceof Error ? error.message : "기록하지 못했습니다.");
     }
   }
   async function saveFlow() {
+    if (flowSaving) return;
     if (dirty) return onNotice("포트폴리오를 먼저 저장해 주세요.");
     const amount = Number(flowAmount);
     if (
@@ -1188,9 +1231,10 @@ export default function PortfolioBuilder({
     setFlowSaving(true);
     try {
       const response = await fetch("/api/portfolio/cash-flows", {
-        method: "POST",
+        method: editingFlowId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: editingFlowId,
           date: flowDate,
           amountKrw: flowKind === "deposit" ? amount : -amount,
           note: flowNote,
@@ -1205,7 +1249,9 @@ export default function PortfolioBuilder({
       setDraft(payload.portfolio);
       setFlowAmount("");
       setFlowNote("");
-      onNotice("입출금 내역을 저장했습니다.");
+      portfolioCache.set(userId, payload.portfolio);
+      setEditingFlowId(null);
+      onNotice(`${flowDate} ${flowKind === "deposit" ? "입금" : "출금"} ${fmt(amount)}을 저장했습니다. 현금 잔고는 변경되지 않습니다.`);
     } catch (error) {
       onNotice(
         error instanceof Error
@@ -1217,7 +1263,10 @@ export default function PortfolioBuilder({
     }
   }
   async function removeFlow(id: string) {
+    if (flowSaving) return;
+    const removed = draft?.cashFlows.find((flow) => flow.id === id);
     if (dirty) return onNotice("변경 내용을 먼저 저장해 주세요.");
+    setFlowSaving(true);
     try {
       const response = await fetch(
         `/api/portfolio/cash-flows?id=${encodeURIComponent(id)}`,
@@ -1230,14 +1279,17 @@ export default function PortfolioBuilder({
       if (!response.ok || !payload.portfolio)
         throw new Error(payload.message || "삭제하지 못했습니다.");
       setDraft(payload.portfolio);
-      onNotice("입출금 내역을 삭제했습니다.");
+      portfolioCache.set(userId, payload.portfolio);
+      setDeletedFlow(removed ?? null);
+      if (editingFlowId === id) { setEditingFlowId(null); setFlowAmount(""); setFlowNote(""); }
+      onNotice("입출금 내역을 삭제했습니다. 아래에서 삭제 취소할 수 있습니다.");
     } catch (error) {
       onNotice(
         error instanceof Error
           ? error.message
           : "입출금 내역을 삭제하지 못했습니다.",
       );
-    }
+    } finally { setFlowSaving(false); }
   }
 
   const values = useMemo(
@@ -1313,10 +1365,11 @@ export default function PortfolioBuilder({
     : 0;
   const targetTotal =
     draft?.buckets.reduce((sum, bucket) => sum + bucket.targetPercent, 0) ?? 0;
+  const historyCutoff = historyPeriod === "all" ? "" : new Date(Date.now() - Number(historyPeriod) * 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
   const history =
     draft?.snapshots
-      .filter((point) => point.bucketKey === trendKey)
-      .map((point) => ({ date: point.date, value: point.valueKrw })) ?? [];
+      .filter((point) => point.bucketKey === trendKey && (!historyCutoff || point.date >= historyCutoff))
+      .map((point) => ({ date: point.date, value: point.valueKrw })).sort((a, b) => a.date.localeCompare(b.date)) ?? [];
   const trendColor =
     draft?.buckets.find((bucket) => bucket.id === trendKey)?.color ?? "#4B72E8";
   const driftItems = advice.items
@@ -1352,7 +1405,7 @@ export default function PortfolioBuilder({
       .map((holding) => holding.capturedAt)
       .sort()[0] ?? null;
   const totalHistory =
-    draft?.snapshots.filter((point) => point.bucketKey === "__TOTAL__") ?? [];
+    draft?.snapshots.filter((point) => point.bucketKey === "__TOTAL__" && (!historyCutoff || point.date >= historyCutoff)).sort((a,b) => a.date.localeCompare(b.date)) ?? [];
   const firstPoint = totalHistory[0];
   const lastPoint = totalHistory.at(-1);
   const periodFlow =
@@ -1616,6 +1669,7 @@ export default function PortfolioBuilder({
   if (!draft)
     return (
       <div className={styles.start}>
+        <p>이전에 등록한 자산이 보이지 않나요? <button type="button" onClick={() => onNavigate("settings")}>로그인 계정 확인</button></p>
         <span>PORTFOLIO DESIGNER</span>
         <h1>내 투자 원칙부터 정해보세요.</h1>
         <p>
@@ -1664,7 +1718,7 @@ export default function PortfolioBuilder({
             </button>
             {dirty ? (
               <button className={styles.save} onClick={save} disabled={saving}>
-                {saving ? "저장 중" : "변경 내용 저장"}
+                {saving ? "저장 중" : "미저장 · 변경 내용 저장"}
               </button>
             ) : screen !== "dashboard" && screen !== "detail" ? (
               <span className={styles.saved}>
@@ -1675,6 +1729,13 @@ export default function PortfolioBuilder({
         </div>
       )}
 
+      {(screen === "dashboard" || screen === "composition") && (
+        <details className={styles.metricBasis}><summary>숫자 기준 · 총 평가액 / {gainView === "daily" ? "일간 손익" : "전체 손익"}</summary>
+          <p><strong>총 평가액</strong>은 주식·가상자산·현금·직접 입력 자산을 포함한 현재 평가액입니다. 외화 자산은 적용 환율 {quantityFormat.format(draft.usdKrw)}원/USD로 환산합니다.</p>
+          <p>{gainView === "daily" ? "일간 손익은 각 시장 전일 종가 대비 가격 변화입니다. 국내·미국·가상자산의 기준 시간이 다르며, 현금과 환율 자체의 변동 손익은 제외합니다." : "전체 손익은 매입단가와 가격이 확인된 주식·가상자산의 미실현 손익입니다. 현금·직접 입력 자산·실현 손익은 제외하며, 매입 시점 환율 대신 현재 적용 환율을 사용합니다."}</p>
+          <p>기록 증감은 저장한 평가액끼리의 차이로 입출금과 수량 수정도 포함합니다. 전체 손익·일간 손익과 계산 기준이 다릅니다.</p>
+        </details>
+      )}
       {screen === "detail" && selectedAsset && (
         <AssetDetail
           selection={selectedAsset}
@@ -1695,7 +1756,7 @@ export default function PortfolioBuilder({
               const previous = holdings.find((item) => item.id === row.id);
               return previous ? { ...row, currentPrice: previous.currentPrice, quoteLabel: previous.quoteLabel, quoteCheckedAt: previous.quoteCheckedAt } : row;
             }));
-            onNotice("보유 수량과 매입단가를 저장했습니다.");
+            onNotice(`${holdings.find((row) => row.id === id)?.name ?? "자산"} 저장 완료 · ${quantityFormat.format(quantity)}주 · 주당 평균 매입단가 ${averageCost === null ? "미입력" : quantityFormat.format(averageCost)}`);
           }}
           onSavePortfolio={async (next) => {
             const response = await fetch("/api/portfolio", {
@@ -1735,6 +1796,7 @@ export default function PortfolioBuilder({
               {won.format(values?.total ?? 0)}
               <span>원</span>
             </div>
+            <p className={styles.metricSummary}>주식·가상자산·현금 포함 · 원화 환산<br />{gainView === "daily" ? "전일 종가 대비 · 시세 확인분" : "매입단가 대비 · 주식·코인 확인분"}</p>
             {dashboardControls}
             <div className={styles.mobileMetricList}>
               <div className={styles.gainMetric}>
@@ -1789,11 +1851,7 @@ export default function PortfolioBuilder({
               <details className={styles.mobileMetricNote}>
                 <summary>손익 집계 기준</summary>
                 <p>
-                  전체 손익은 매입단가와 현재가가 확인된 주식·가상자산{" "}
-                  {knownGains.count}/{gainEligibleCount}개 기준입니다. 현금은 손익
-                  계산에 포함되지 않습니다. 일간 손익은 각 시장의 전일 종가와
-                  현재가 차이에 현재 보유 수량을 곱해 계산합니다. 환율 변동과
-                  현금은 제외합니다.
+                  총 평가액은 주식·가상자산·현금·직접 입력 자산을 합산합니다. 외화는 {quantityFormat.format(draft.usdKrw)}원/USD로 환산합니다. 전체 손익은 매입단가와 가격을 확인한 주식·가상자산 {knownGains.count}/{gainEligibleCount}개의 미실현 손익으로 현금·직접 입력 자산·실현 손익은 제외합니다. 매입 시점 환율 대신 현재 적용 환율을 사용합니다. 일간 손익은 각 시장의 전일 종가 대비 가격 변화로, 시장별 기준 시간이 다르며 현금과 환율 자체의 변화는 제외합니다. 기록 증감은 입출금·수량 수정도 포함한 저장 평가액끼리의 차이입니다.
                 </p>
               </details>
               <div className={styles.mobileQuoteTime}>
@@ -1818,7 +1876,7 @@ export default function PortfolioBuilder({
                 <section className={styles.desktopTotal}>
                   <span>총 평가액</span>
                   <strong>{fmt(values?.total ?? 0)}</strong>
-                  <small>{draft.title}</small>
+                  <small>주식·가상자산·현금 포함 · 원화 환산</small>
                 </section>
                 <section className={styles.desktopGain}>
                   <div>
@@ -1948,11 +2006,6 @@ export default function PortfolioBuilder({
                 )}
               </div>
             </details>
-            <p className={styles.desktopMetricNote}>
-              평가손익은 매입단가가 확인된 주식·가상자산 기준이며 환차손익은
-              포함하지 않습니다. 일간 손익은 각 시장 전일 종가와 현재가의
-              차이를 현재 보유 수량에 적용하며 환율 변동과 현금은 제외합니다.
-            </p>
           </div>
         </>
       )}
@@ -2718,7 +2771,7 @@ export default function PortfolioBuilder({
       {(screen === "allocation" || screen === "edit") && dirty && (
         <div className={styles.mobileSaveBar}>
           <button type="button" onClick={save} disabled={saving}>
-            {saving ? "저장 중" : "변경 내용 저장"}
+            {saving ? "저장 중" : "미저장 · 변경 내용 저장"}
           </button>
         </div>
       )}
@@ -3365,9 +3418,10 @@ export default function PortfolioBuilder({
                   </option>
                 ))}
               </select>
+              <select value={historyPeriod} onChange={(event) => setHistoryPeriod(event.target.value)} aria-label="기록 조회 기간"><option value="all">전체 기간</option><option value="30">최근 30일</option><option value="90">최근 90일</option><option value="365">최근 1년</option></select>
               <small>하루 한 기록 · 같은 날에는 최신 값으로 갱신</small>
             </div>
-            <Trend points={history} color={trendColor} />
+            <Trend key={`${trendKey}:${historyPeriod}`} points={history} color={trendColor} />
             {trendKey === "__TOTAL__" && (
               <div className={styles.performanceSummary}>
                 <div>
@@ -3394,9 +3448,10 @@ export default function PortfolioBuilder({
                   </strong>
                 </div>
                 <p>
-                  순입금 제외 증감은 평가액 변화에서 기록한 입출금을 뺀
-                  참고값입니다. 신규 자산 등록·수량 수정, 배당·수수료·환율
-                  변동도 영향을 줍니다. 투자 수익률은 아닙니다.
+                  {firstPoint?.date ?? "—"} 기록 이후 ~ {lastPoint?.date ?? "—"} 기록까지 · 시작일 입출금 제외 / 종료일 포함. 순입금 제외 증감은 투자 수익률이 아닙니다.
+                </p>
+                <details className={styles.metricBasis}><summary>기록 계산 기준과 같은 날 입출금</summary><p>시간별 기록이 없어 같은 날 입출금과 평가액 저장 순서는 구분하지 못합니다. 종료일 거래·현금 수정 후 오늘 기록을 갱신해 주세요. 순입금 제외 증감은 평가액 변화에서 입출금을 뺀 참고값으로 신규 자산 등록·수량 수정, 배당·수수료·환율 변동도 포함합니다.</p></details>
+                <p className={styles.help}>
                 </p>
               </div>
             )}
@@ -3405,10 +3460,13 @@ export default function PortfolioBuilder({
                 입출금 기록 {draft.cashFlows.length}건 <ChevronDown size={15} />
               </summary>
               <p className={styles.help}>
-                계좌 밖에서 들어오거나 나간 자금만 기록하세요. 계좌 간 이동은
+                입출금 기록은 분석용이며 현금 잔고를 자동 변경하지 않습니다. 잔고 변경은 자산 수정에서 별도로 해 주세요. 계좌 밖에서 들어오거나 나간 자금만 기록하세요. 계좌 간 이동은
                 합산 범위에 따라 중복되지 않게 입력해야 합니다.
               </p>
-              <div className={styles.flowForm}>
+              <button type="button" className={styles.ghost} onClick={onEditHoldings}>현금 잔고 수정 →</button>
+              {deletedFlow && <div className={styles.undoNotice} role="status">{deletedFlow.date} · {fmt(deletedFlow.amountKrw)} 삭제됨 <button type="button" className={styles.ghost} onClick={restoreFlow} disabled={flowSaving || dirty}>삭제 취소</button></div>}
+              {flowDirty && <p className={styles.help} role="status">미저장 · {editingFlowId ? "선택한 입출금 내역을 수정 중입니다." : "입력한 입출금은 기록 버튼을 눌러 저장하세요."} <button type="button" className={styles.ghost} disabled={flowSaving} onClick={() => { setEditingFlowId(null); setFlowAmount(""); setFlowNote(""); }}>수정 취소</button></p>}
+              <fieldset className={styles.flowForm} disabled={flowSaving}>
                 <input
                   type="date"
                   value={flowDate}
@@ -3446,9 +3504,9 @@ export default function PortfolioBuilder({
                   onClick={saveFlow}
                   disabled={flowSaving || dirty}
                 >
-                  {flowSaving ? "저장 중" : "기록"}
+                  {flowSaving ? "저장 중" : editingFlowId ? "수정 저장" : "기록"}
                 </button>
-              </div>
+              </fieldset>
               <div className={styles.flowList}>
                 {draft.cashFlows.map((flow) => (
                   <div key={flow.id}>
@@ -3460,11 +3518,12 @@ export default function PortfolioBuilder({
                       {flow.amountKrw > 0 ? "+" : ""}
                       {fmt(flow.amountKrw)}
                     </strong>
+                    <button type="button" className={styles.iconButton} onClick={() => editFlow(flow)} disabled={dirty || flowSaving} aria-label={`${flow.date} 입출금 수정`}><Pencil size={16} /></button>
                     <button
                       type="button"
                       className={styles.iconButton}
                       onClick={() => removeFlow(flow.id)}
-                      disabled={dirty}
+                      disabled={dirty || flowSaving}
                       aria-label={`${flow.date} 입출금 삭제`}
                     >
                       <Trash2 size={14} />

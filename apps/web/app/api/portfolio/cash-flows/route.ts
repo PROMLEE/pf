@@ -3,6 +3,7 @@ import { currentUserId } from "../../../../lib/auth";
 import {
   addCashFlow,
   deleteCashFlow,
+  updateCashFlow,
   listPortfolio,
 } from "../../../../lib/portfolio-db";
 
@@ -29,7 +30,7 @@ function validDate(value: unknown): value is string {
   );
 }
 
-export async function POST(request: Request) {
+async function saveFlow(request: Request, editing: boolean) {
   const userId = await currentUserId();
   if (!userId)
     return NextResponse.json(
@@ -43,11 +44,13 @@ export async function POST(request: Request) {
     );
   try {
     const body = (await request.json()) as {
+      id?: unknown;
       date?: unknown;
       amountKrw?: unknown;
       note?: unknown;
     };
     if (
+      (editing && (typeof body.id !== "string" || !uuid.test(body.id))) ||
       !validDate(body.date) ||
       typeof body.amountKrw !== "number" ||
       !Number.isFinite(body.amountKrw) ||
@@ -67,12 +70,13 @@ export async function POST(request: Request) {
         { message: "포트폴리오를 먼저 저장해 주세요" },
         { status: 400 },
       );
-    const portfolio = await addCashFlow(userId, {
-      id: crypto.randomUUID(),
+    const portfolio = await (editing ? updateCashFlow : addCashFlow)(userId, {
+      id: editing ? body.id as string : crypto.randomUUID(),
       date: body.date,
       amountKrw: body.amountKrw,
       note: body.note.trim(),
     });
+    if (!portfolio) return NextResponse.json({ message: "내역을 찾지 못했습니다" }, { status: 404 });
     return NextResponse.json({ portfolio });
   } catch {
     return NextResponse.json(
@@ -81,6 +85,9 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function POST(request: Request) { return saveFlow(request, false); }
+export async function PUT(request: Request) { return saveFlow(request, true); }
 
 export async function DELETE(request: Request) {
   const userId = await currentUserId();
