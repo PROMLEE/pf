@@ -17,5 +17,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     appUserId?: string;
     loginProvider?: string;
+    profileImageChecked?: boolean;
   }
 }

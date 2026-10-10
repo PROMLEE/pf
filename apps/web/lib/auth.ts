@@ -5,6 +5,7 @@ import Kakao from "next-auth/providers/kakao";
 import Naver from "next-auth/providers/naver";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "./db";
+import { profileImageUrl } from "./profile-image";
 
 const localAdminEnabled =
   process.env.NODE_ENV === "development" &&
@@ -74,19 +75,26 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, account, user }) {
       if (account?.provider) token.loginProvider = account.provider;
-      if (!token.loginProvider && typeof token.appUserId === "string") {
+      // Upgrade existing cookies once; normal session reads do not query the DB.
+      if (!account && typeof token.appUserId === "string" && !token.profileImageChecked) {
         try {
-          const result = await db().query<{ oauthProvider: string }>(`select "oauthProvider" from public."User" where "userId" = $1 limit 1`, [token.appUserId]);
-          const provider = result.rows[0]?.oauthProvider;
-          token.loginProvider = provider === "NAVER" ? "naver" : provider === "KAKAO" ? "kakao" : provider === "GUEST" ? "local-admin" : "unknown";
+          const result = await db().query<{ oauthProvider: string; profileImageUrl: string | null }>(
+            `select "oauthProvider", "profileImageUrl" from public."User" where "userId" = $1 limit 1`,
+            [token.appUserId],
+          );
+          const saved = result.rows[0];
+          const provider = saved?.oauthProvider;
+          token.loginProvider ??= provider === "NAVER" ? "naver" : provider === "KAKAO" ? "kakao" : provider === "GUEST" ? "local-admin" : "unknown";
+          token.picture = profileImageUrl(saved?.profileImageUrl) ?? profileImageUrl(token.picture);
         } catch {
-          // Display metadata must not invalidate an otherwise valid session.
-          token.loginProvider = "unknown";
+          // A display metadata lookup must not invalidate the authenticated session.
         }
+        token.profileImageChecked = true;
       }
       if (account?.provider === "local-admin" && user?.id) {
         token.appUserId = user.id;
         token.name = user.name;
+        token.profileImageChecked = true;
         return token;
       }
       if (!account?.providerAccountId) return token;
@@ -106,6 +114,7 @@ export const authOptions: NextAuthOptions = {
         `select "userId", nickname, "profileImageUrl" from public."User" where "oauthProvider" = $1 and "oauthId" = $2 limit 1`,
         [oauthProvider, oauthId],
       );
+      const incomingImage = profileImageUrl(user.image);
       let appUser = existing.rows[0];
       if (!appUser) {
         const id = `c${crypto.randomUUID().replaceAll("-", "").slice(0, 24)}`;
@@ -114,22 +123,35 @@ export const authOptions: NextAuthOptions = {
           [
             id,
             user.name ?? `user-${oauthId.slice(0, 6)}`,
-            user.image ?? null,
+            incomingImage,
             oauthProvider,
             oauthId,
           ],
         );
         appUser = created.rows[0];
       }
+      // Refresh an existing account's photo on successful OAuth login.
+      if (incomingImage && incomingImage !== appUser.profileImageUrl) {
+        try {
+          await db().query(
+            `update public."User" set "profileImageUrl" = $1 where "userId" = $2 and "oauthProvider" = $3 and "oauthId" = $4`,
+            [incomingImage, appUser.userId, oauthProvider, oauthId],
+          );
+        } catch {
+          // Photo persistence failure must not prevent login.
+        }
+      }
       token.appUserId = appUser.userId;
       token.name = appUser.nickname;
-      token.picture = appUser.profileImageUrl;
+      token.picture = incomingImage ?? profileImageUrl(appUser.profileImageUrl);
+      token.profileImageChecked = true;
       return token;
     },
     async session({ session, token }) {
       if (session.user && typeof token.appUserId === "string") {
         session.user.appUserId = token.appUserId;
         session.user.loginProvider = token.loginProvider;
+        session.user.image = profileImageUrl(token.picture);
       }
       return session;
     },

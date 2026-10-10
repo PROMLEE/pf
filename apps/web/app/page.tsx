@@ -46,6 +46,7 @@ import UserGuide from "./UserGuide";
 import AccountsManager from "./AccountsManager";
 import { protectUnsavedChanges } from "./unsaved-changes";
 import AccountSettings from "./AccountSettings";
+import ProfileAvatar from "./ProfileAvatar";
 import AssetSortSelect, { compareAssets, isAssetSort, type AssetSort } from "./asset-sort";
 import styles from "./page.module.css";
 
@@ -1130,7 +1131,7 @@ export default function PortfolioPage() {
           </a>
           <button className={styles.sideUser} onClick={() => go("settings")}>
             <span className={styles.avatar}>
-              {session.user?.name?.slice(0, 1) || "P"}
+              <ProfileAvatar image={session.user?.image} name={session.user?.name} />
             </span>
             <span>
               {session.user?.name || "내 계정"}
@@ -1169,8 +1170,8 @@ export default function PortfolioPage() {
           >
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <button className={styles.topAvatar} onClick={() => go("settings")}>
-            {session.user?.name?.slice(0, 1) || "P"}
+          <button className={styles.topAvatar} aria-label="내 계정 열기" onClick={() => go("settings")}>
+            <ProfileAvatar image={session.user?.image} name={session.user?.name} />
           </button>
         </header>
         <main className={styles.content}>
@@ -1895,6 +1896,7 @@ export default function PortfolioPage() {
           {view === "settings" && (
             <AccountSettings
               name={session.user?.name}
+              image={session.user?.image}
               loginProvider={session.user?.loginProvider}
               email={session.user?.email}
               theme={theme}

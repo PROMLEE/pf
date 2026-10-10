@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ProfileAvatar from "./ProfileAvatar";
 import { useState } from "react";
 import { downloadFile } from "./download-file";
 import {
@@ -17,6 +18,7 @@ import styles from "./AccountSettings.module.css";
 
 type Props = {
   name?: string | null;
+  image?: string | null;
   loginProvider?: string;
   email?: string | null;
   theme: "light" | "dark";
@@ -27,6 +29,7 @@ type Props = {
 
 export default function AccountSettings({
   name,
+  image,
   loginProvider,
   email,
   theme,
@@ -81,7 +84,7 @@ export default function AccountSettings({
       </header>
       <section className={styles.identity} aria-label="로그인 계정">
         <span className={styles.avatar} aria-hidden="true">
-          {name?.slice(0, 1) || "P"}
+          <ProfileAvatar image={image} name={name} />
         </span>
         <div>
           <small>로그인한 계정</small>
