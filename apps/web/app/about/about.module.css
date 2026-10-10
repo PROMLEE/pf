@@ -163,3 +163,12 @@
   .primary { transition: none; }
   .primary:hover { transform: none; }
 }
+
+/* Shared PR artwork: vector outlines stay consistent across fonts and screens. */
+.brand > span {
+  background: url("/brand/portrhythm-logo.svg") center / contain no-repeat;
+  color: transparent;
+  font-size: 0;
+  padding: 0;
+  box-shadow: none;
+}
