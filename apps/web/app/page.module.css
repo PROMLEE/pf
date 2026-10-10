@@ -204,6 +204,8 @@
 }
 .topAvatar {
   border: 0;
+  padding: 0;
+  overflow: hidden;
   margin-left: 12px;
 }
 .themeToggle {
