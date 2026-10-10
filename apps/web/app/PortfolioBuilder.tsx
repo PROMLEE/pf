@@ -2628,14 +2628,15 @@ export default function PortfolioBuilder({
                     <button
                       className={styles.iconButton}
                       aria-label={`${asset.name} 삭제`}
-                      onClick={() =>
+                      onClick={() => {
+                        if (!window.confirm(`${asset.name}을 등록 자산에서 삭제할까요?\n저장을 눌러야 삭제가 반영됩니다. 실제 잔고는 바뀌지 않습니다.`)) return;
                         change({
                           ...draft,
                           cryptoAssets: draft.cryptoAssets.filter(
                             (item) => item.id !== asset.id,
                           ),
-                        })
-                      }
+                        });
+                      }}
                     >
                       <Trash2 size={15} />
                     </button>
@@ -2774,14 +2775,15 @@ export default function PortfolioBuilder({
                     <button
                       className={styles.iconButton}
                       aria-label={`${asset.name} 삭제`}
-                      onClick={() =>
+                      onClick={() => {
+                        if (!window.confirm(`${asset.name}을 등록 자산에서 삭제할까요?\n저장을 눌러야 삭제가 반영됩니다. 실제 잔고는 바뀌지 않습니다.`)) return;
                         change({
                           ...draft,
                           manualAssets: draft.manualAssets.filter(
                             (item) => item.id !== asset.id,
                           ),
-                        })
-                      }
+                        });
+                      }}
                     >
                       <Trash2 size={15} />
                     </button>

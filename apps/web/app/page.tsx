@@ -228,6 +228,9 @@ export default function PortfolioPage() {
   const [holdingQuantity, setHoldingQuantity] = useState("");
   const [holdingCost, setHoldingCost] = useState("");
   const [holdingSaving, setHoldingSaving] = useState(false);
+  const [assetAddOpen, setAssetAddOpen] = useState(false);
+  const [deletingHoldingId, setDeletingHoldingId] = useState<string | null>(null);
+  const [pendingHoldingRemoval, setPendingHoldingRemoval] = useState<string | null>(null);
   const editedHolding = holdings.find(row => row.id === editingHoldingId);
   const holdingDirty = Boolean(view === "edit" && editedHolding && (holdingQuantity !== String(editedHolding.quantity) || holdingCost !== (editedHolding.averageCost === null ? "" : String(editedHolding.averageCost))));
   const unsavedChanges = portfolioDirty || holdingDirty || (view === "import" && draft.length > 0);
@@ -723,6 +726,10 @@ export default function PortfolioPage() {
   }
 
   async function removeHolding(id: string) {
+    const holding = holdings.find(row => row.id === id);
+    if (!holding || deletingHoldingId || holdingSaving) return;
+    if (pendingHoldingRemoval !== id) return;
+    setDeletingHoldingId(id);
     try {
       const result = await data<{ holdings: Holding[] }>(
         await fetch("/api/holdings", {
@@ -732,11 +739,15 @@ export default function PortfolioPage() {
         }),
       );
       setHoldings(result.holdings);
-      setNotice("종목을 삭제했습니다.");
+      if (editingHoldingId === id) setEditingHoldingId(null);
+      setPendingHoldingRemoval(null);
+      setNotice(`${holding.name} 등록 정보를 삭제했습니다.`);
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "삭제하지 못했습니다.",
       );
+    } finally {
+      setDeletingHoldingId(null);
     }
   }
 
@@ -1363,9 +1374,26 @@ export default function PortfolioPage() {
                   <span>
                     주식 수량과 매입단가를 수정하고, 아래에서 가상자산·직접 입력 자산의 이름과 금액을 관리하세요.
                   </span>
-                  <button onClick={() => go("import")}>
+                  <button
+                    type="button"
+                    aria-expanded={assetAddOpen}
+                    aria-controls="asset-add-options"
+                    onClick={() => setAssetAddOpen(open => !open)}
+                  >
                     새 자산 추가 <Plus size={15} />
                   </button>
+                  {assetAddOpen && (
+                    <div id="asset-add-options" className={styles.assetAddOptions} role="group" aria-label="새 자산 등록 방법">
+                      <button type="button" onClick={() => go("accounts")}>
+                        <strong>수기 입력으로 추가</strong>
+                        <small>계좌 관리에서 계좌를 선택하고 종목·수량을 입력하세요.</small>
+                      </button>
+                      <button type="button" onClick={() => go("import")}>
+                        <strong>캡처로 추가</strong>
+                        <small>증권사 잔고 캡처를 읽고, 인식 결과를 확인해 등록하세요.</small>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               <section className={styles.panel}>
@@ -1481,7 +1509,8 @@ export default function PortfolioPage() {
                             <button
                               className={styles.deleteButton}
                               aria-label={`${row.name} 삭제`}
-                              onClick={() => removeHolding(row.id)}
+                              disabled={deletingHoldingId !== null || holdingSaving}
+                              onClick={() => setPendingHoldingRemoval(row.id)}
                             >
                               <X size={18} />
                             </button>
@@ -1489,6 +1518,17 @@ export default function PortfolioPage() {
                             <span />
                           )}
                         </div>
+                        {view === "edit" && pendingHoldingRemoval === row.id && (
+                          <div className={styles.holdingDeleteConfirm} role="group" aria-label={`${row.name} 삭제 확인`}>
+                            <strong>{row.name}을 등록 자산에서 삭제할까요?</strong>
+                            <p>{row.broker} · {row.account} · {row.quantity}주</p>
+                            <p>앱의 보유 정보만 삭제됩니다. 실제 증권사 잔고는 바뀌지 않으며, 다시 보려면 자산을 재등록해야 합니다.</p>
+                            <div>
+                              <button type="button" onClick={() => setPendingHoldingRemoval(null)} disabled={deletingHoldingId !== null}>취소</button>
+                              <button type="button" className={styles.confirmDelete} onClick={() => void removeHolding(row.id)} disabled={deletingHoldingId !== null || holdingSaving}>{deletingHoldingId === row.id ? "삭제 중…" : "삭제 확인"}</button>
+                            </div>
+                          </div>
+                        )}
                         {view === "edit" && editingHoldingId === row.id && (
                           <div className={styles.holdingEdit}>
                             <p className={styles.editStatus} role="status">미저장 · 이 종목만 수정 후 저장하세요.</p>
