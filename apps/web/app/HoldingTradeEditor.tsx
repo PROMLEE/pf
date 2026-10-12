@@ -23,11 +23,17 @@ export default function HoldingTradeEditor({
   const [base, setBase] = useState(holding);
   const [side, setSide] = useState<TradeSide>("buy");
   const [quantity, setQuantity] = useState("");
-  const [price, setPrice] = useState("");
+  const currentPrice = holding.currentPrice;
+  const defaultPrice =
+    currentPrice !== null && Number.isFinite(currentPrice) && currentPrice > 0
+      ? String(currentPrice)
+      : "";
+  const [priceOverride, setPriceOverride] = useState<string | null>(null);
+  const price = priceOverride ?? defaultPrice;
   const [fee, setFee] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const dirty = Boolean(quantity || price || fee);
+  const dirty = Boolean(quantity || priceOverride !== null || fee);
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
@@ -143,7 +149,7 @@ export default function HoldingTradeEditor({
             {side === "buy" ? "주당 매수 단가" : "주당 매도 단가"} · {currency}
             <NumberInput
               value={price}
-              onValueChange={setPrice}
+              onValueChange={setPriceOverride}
               min="0.000001"
               step="any"
               required
