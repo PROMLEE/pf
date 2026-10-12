@@ -134,7 +134,7 @@ test("priority reports an unaffordable candidate; explicit fallback buys next", 
   const p = plan([["a", "A"]], [rule("X", "B", 2000), rule("Y", "B")]);
   const first = rebalance(p, rows, "add-only", 1000, new Set());
   assert.equal(first.trades.length, 0);
-  assert.match(first.items[1].advice, /다음 후보는 검토하지/);
+  assert.match(first.items[1].advice, /첫 번째 후보만/);
   const fallback = rebalance(p, rows, "add-only", 1000, new Set(), {
     candidatePolicy: "fallback",
   });
@@ -298,4 +298,27 @@ test('Korean sell recommendations show the name rather than only the code',()=>{
   const p=plan([['a','A'],['b','B']],[rule('B','B')]);
   const result=rebalance(p,rows,'trade',0,new Set());
   assert.match(result.items[0].advice,/삼성전자 .*주 매도/);
+});
+
+
+test("unaffordable purchase exposes portfolio limit separately from total new money", () => {
+  const p = plan([["a", "A"]], [rule("X", "B", 2000)]);
+  const result = rebalance(p, [holding("a", "A", 10)], "add-only", 1000);
+  const blocked = result.items.find(item => item.bucket.id === "B").unaffordableBuys[0];
+  assert.equal(result.buyBudget, 1000);
+  assert.equal(blocked.unitKrw, 2000);
+  assert.equal(blocked.limitKrw, 1000);
+  assert.equal(blocked.limitedBy, "target");
+  assert.equal(result.trades.length, 0);
+});
+
+test("target gap can cap a portfolio purchase even with a larger total budget", () => {
+  const p = plan([["a", "A"], ["b", "B"]], [rule("X", "B", 2000)]);
+  const result = rebalance(p, [holding("a", "A", 15), holding("b", "B", 5)], "add-only", 1500);
+  const blocked = result.items.find(item => item.bucket.id === "B").unaffordableBuys[0];
+  assert.equal(result.buyBudget, 1500);
+  assert.equal(blocked.limitKrw, 1250);
+  assert.equal(blocked.limitedBy, "target");
+  assert.ok(blocked.limitKrw < result.buyBudget);
+  assert.equal(result.trades.length, 0);
 });

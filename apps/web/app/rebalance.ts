@@ -42,6 +42,14 @@ export type CandidateEvaluation = AppliedPrice & {
   status: "selected" | "not-selected" | "blocked";
   reason: string;
 };
+export type UnaffordableBuy = {
+  ruleId: string;
+  name: string;
+  symbol: string;
+  unitKrw: number;
+  limitKrw: number;
+  limitedBy: "target" | "cash";
+};
 export type RebalanceItem = {
   bucket: Bucket;
   current: number;
@@ -52,6 +60,7 @@ export type RebalanceItem = {
   remainingGapKrw: number;
   advice: string;
   separateReview: string | null;
+  unaffordableBuys: UnaffordableBuy[];
 };
 const fmt = (value: number) =>
   `${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(value)}원`;
@@ -180,6 +189,7 @@ export function rebalance(
   const projectedAssignments = [...plan.assignments];
   const trades: Trade[] = [];
   const reasons = new Map<string, string[]>();
+  const unaffordableBuys = new Map<string, UnaffordableBuy[]>();
   const addReason = (id: string, reason: string) =>
     reasons.set(id, [...(reasons.get(id) ?? []), reason]);
   let available = mode === "add-only" ? cash : 0;
@@ -326,7 +336,7 @@ export function rebalance(
         if (candidate.status === "blocked") {
           addReason(bucket.id, `${rule.name || rule.symbol}: ${candidate.reason}`);
           if (options.candidatePolicy !== "fallback") {
-            addReason(
+            if (rules.length > 1) addReason(
               bucket.id,
               "우선 후보만 사용하므로 다음 후보는 검토하지 않았습니다.",
             );
@@ -339,15 +349,24 @@ export function rebalance(
           selected = { rule, candidate, shares };
           break;
         }
+        const limitKrw = Math.min(gap, available);
+        unaffordableBuys.set(bucket.id, [...(unaffordableBuys.get(bucket.id) ?? []), {
+          ruleId: rule.id,
+          name: rule.name || rule.symbol,
+          symbol: rule.symbol,
+          unitKrw: candidate.unitKrw,
+          limitKrw,
+          limitedBy: gap <= available ? "target" : "cash",
+        }]);
         candidate.reason =
           available <= 0
             ? "이번 계산에서 사용할 매수 자금이 없습니다."
-            : `1주 가격 ${fmt(candidate.unitKrw)}이 부족분·가용 예산 ${fmt(Math.min(gap, available))}을 초과합니다.`;
+            : `이번 매수는 보류합니다. 1주 가격 ${fmt(candidate.unitKrw)}이 이 포트의 매수 한도 ${fmt(limitKrw)}보다 높습니다.`;
         addReason(bucket.id, `${rule.name || rule.symbol}: ${candidate.reason}`);
         if (options.candidatePolicy !== "fallback") {
-          addReason(
+          if (rules.length > 1) addReason(
             bucket.id,
-            "우선 후보만 사용하므로 다음 후보는 검토하지 않았습니다. 후보 순서 또는 자동 대체 설정을 확인하세요.",
+            "첫 번째 후보만 사용하도록 설정되어 있습니다. 다른 후보가 있다면 ‘다른 후보도 검토’로 바꿔 계산할 수 있습니다.",
           );
           break;
         }
@@ -487,6 +506,7 @@ export function rebalance(
         projected.total > 0 ? (projectedValue / projected.total) * 100 : 0,
       remainingGapKrw,
       advice,
+      unaffordableBuys: unaffordableBuys.get(bucket.id) ?? [],
       separateReview: separate.length
         ? `${separate.join(" · ")}은 이번 주식 제안에 포함하지 않습니다.`
         : null,

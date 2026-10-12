@@ -2847,22 +2847,6 @@ export default function PortfolioBuilder({
             </p>
             {rebalanceMode === "add-only" && (
               <>
-                <label className={styles.cashBudget}>
-                  예산 기준
-                  <select
-                    value={budgetMode}
-                    onChange={(event) =>
-                      setBudgetMode(
-                        event.target.value as "input" | "theoretical",
-                      )
-                    }
-                  >
-                    <option value="input">내 금액 입력</option>
-                    <option value="theoretical">
-                      이론상 필요 금액으로 계산
-                    </option>
-                  </select>
-                </label>
                 {budgetMode === "input" && (
                   <label className={styles.cashBudget}>
                     이번에 투입할 금액 (원)
@@ -2879,19 +2863,30 @@ export default function PortfolioBuilder({
                 <p className={styles.help}>
                   {budgetMode === "theoretical"
                     ? "현재 비중에서 매도 없이 목표 비중에 도달하기 위한 계산 예산입니다. 적정 투자금 추천이 아닙니다."
-                    : "입력한 신규 자금만 사용합니다. 금액을 입력하지 않으면 매수 제안을 계산하지 않습니다."}{" "}
-                  기존 현금 잔고는 매수 예산에 자동으로 포함하지 않습니다.
+                    : "입력한 추가 자금으로만 계산합니다. 기존 현금은 자동 포함하지 않습니다."}
                 </p>
               </>
             )}
-            <div className={styles.previewSummary} aria-label="이번 계산 기준">
-              <span>현재 자산 {fmt(advice.currentTotal)}</span>
-              <span>
-                {rebalanceMode === "add-only" ? "추가 예산" : "예상 매도 대금"}{" "}
-                {fmt(advice.buyBudget)}
-              </span>
-              <span>계산 기준 총액 {fmt(advice.targetTotal)}</span>
-            </div>
+            <details className={styles.rebalanceOptions}>
+              <summary>계산 옵션 · 후보 선택과 거래 제외 <ChevronDown size={14} /></summary>
+              {rebalanceMode === "add-only" && (
+                <label className={styles.cashBudget}>
+                  예산 기준
+                  <select
+                    value={budgetMode}
+                    onChange={(event) =>
+                      setBudgetMode(
+                        event.target.value as "input" | "theoretical",
+                      )
+                    }
+                  >
+                    <option value="input">내 금액 입력</option>
+                    <option value="theoretical">
+                      이론상 필요 금액으로 계산
+                    </option>
+                  </select>
+                </label>
+              )}
             <label className={styles.cashBudget}>
               후보 선택
               <select
@@ -2902,15 +2897,14 @@ export default function PortfolioBuilder({
                   )
                 }
               >
-                <option value="priority">포트별 첫 후보만 사용</option>
+                <option value="priority">첫 번째 후보만 검토</option>
                 <option value="fallback">
-                  매수할 수 없으면 다음 후보 검토
+                  다른 후보도 검토
                 </option>
               </select>
             </label>
             <p className={styles.help}>
-              후보 순서는 아래에서 변경할 수 있습니다. 자동 대체를 선택하면 다른
-              종목을 매수할 수 있으므로 투자 의도를 확인하세요.
+              첫 번째 후보를 살 수 없을 때 다른 후보를 검토할지 선택하세요. 후보 목록과 순서는 화면 아래에서 관리합니다.
             </p>
             <details className={styles.exclusions}>
               <summary>
@@ -2970,11 +2964,7 @@ export default function PortfolioBuilder({
                 )}
               </div>
             </details>
-            <p className={styles.help}>
-              예상 수량은 1주 단위이며 수수료·세금·환전 비용은 포함하지
-              않습니다. {rebalanceMode === "trade" && "매도 대금을 계좌 간 이동할 수 있다고 가정하므로 계좌별 주문 가능 금액·결제일을 별도로 확인하세요. "}
-              {rebalanceMode === "trade" ? "매도 제외는 해당 보유 항목에만 적용하며 추가 매수에는 영향을 주지 않습니다." : "입력한 추가 자금으로만 매수 수량을 계산합니다. 기존 현금 잔고는 자동 포함하지 않습니다."}
-            </p>
+            </details>
             {!rebalanceReady ? (
               <div className={styles.rebalanceStatus}>
                 <span>
@@ -3001,6 +2991,28 @@ export default function PortfolioBuilder({
                     : ""}
                   {!actionItems.length ? " 현재 조정할 포트가 없습니다." : ""}
                 </p>
+                <div className={styles.previewSummary}>
+                  <strong>이번 주식 조정</strong>
+                  <span>
+                    제안{" "}
+                    {
+                      advice.trades.filter((trade) => trade.side === "buy")
+                        .length
+                    }
+                    건 매수 ·{" "}
+                    {
+                      advice.trades.filter((trade) => trade.side === "sell")
+                        .length
+                    }
+                    건 매도
+                  </span>
+                  <span>
+                    매수 후 남는 금액 {fmt(advice.residualCash)}
+                    {advice.projectedUnassignedPercent > 0
+                      ? ` · 전체의 ${pct(advice.projectedUnassignedPercent)}`
+                      : ""}
+                  </span>
+                </div>
                 <div className={styles.adviceList}>
                   {actionItems.map((item) => {
                     const itemTrades = advice.trades.filter(
@@ -3029,22 +3041,38 @@ export default function PortfolioBuilder({
                                 ? "매수 제안"
                                 : action === "sell"
                                   ? "매도 제안"
-                                  : "제안 없음"}
+                                  : item.unaffordableBuys.length > 0 ? "매수 보류" : "제안 없음"}
                             </span>
                             {item.bucket.name}
                           </strong>
                           <small>
-                            {rebalanceMode === "add-only" ? "투입 전" : "현재"}{" "}
-                            목표와 차이 {item.gapPercent > 0 ? "+" : ""}
-                            {item.gapPercent.toFixed(1)}%p
-                            {rebalanceMode === "add-only"
-                              ? ` · 투입 후 차이 ${item.fundedGapPercent > 0 ? "+" : ""}${item.fundedGapPercent.toFixed(1)}%p`
-                              : ""}{" "}
-                            · 주식 제안 후 예상 {pct(item.projectedPercent)}
+                            현재 {pct(item.currentPercent)} → 조정 후 {pct(item.projectedPercent)} · 목표 {pct(item.bucket.targetPercent)}
                           </small>
                         </div>
-                        <p>{item.advice}</p>
+                        {!itemTrades.length && item.unaffordableBuys.length > 0 ? (
+                          <div className={styles.buyHoldReason}>
+                            <strong>{item.unaffordableBuys[0].name}{item.unaffordableBuys[0].name !== item.unaffordableBuys[0].symbol ? ` (${item.unaffordableBuys[0].symbol})` : ""}</strong>
+                            <p>이 포트의 매수 한도로는 1주를 살 수 없습니다.</p>
+                            <dl>
+                              <div><dt>1주 가격</dt><dd>{fmt(item.unaffordableBuys[0].unitKrw)}</dd></div>
+                              <div><dt>이 포트 매수 한도</dt><dd>{fmt(item.unaffordableBuys[0].limitKrw)}</dd></div>
+                            </dl>
+                            <small>
+                              {item.unaffordableBuys[0].limitedBy === "target"
+                                ? "목표 비중에 맞춰 계산한 한도입니다. 입력한 전체 투자금과 다릅니다."
+                                : "현재 남아 있는 매수 예산을 기준으로 계산한 한도입니다."}
+                            </small>
+                            {candidatePolicy === "priority" && draft.rules.filter(rule => rule.bucketId === item.bucket.id).length > 1 && (
+                              <div>
+                                <button type="button" onClick={() => setCandidatePolicy("fallback")}>다른 후보도 검토하기</button>
+                                <small>모든 포트의 후보 검토 방식이 함께 바뀝니다.</small>
+                              </div>
+                            )}
+                          </div>
+                        ) : <p>{item.advice}</p>}
                         <div className={styles.tradeDetail}>
+                          {(Math.abs(item.remainingGapKrw) >= 1 || item.separateReview) && <details>
+                            <summary>포트별 계산 상세</summary>
                           {Math.abs(item.remainingGapKrw) >= 1 && (
                             <small>
                               주식 제안 후 목표 금액 대비{" "}
@@ -3055,6 +3083,7 @@ export default function PortfolioBuilder({
                           {item.separateReview && (
                             <small>{item.separateReview}</small>
                           )}
+                          </details>}
                           {itemTrades.length > 0 && (
                             <details>
                               <summary>적용 가격·계좌 확인</summary>
@@ -3104,34 +3133,28 @@ export default function PortfolioBuilder({
                     );
                   })}
                 </div>
-                <div className={styles.previewSummary}>
-                  <strong>주식 제안만 반영한 미리보기</strong>
-                  <span>
-                    제안{" "}
-                    {
-                      advice.trades.filter((trade) => trade.side === "buy")
-                        .length
-                    }
-                    건 매수 ·{" "}
-                    {
-                      advice.trades.filter((trade) => trade.side === "sell")
-                        .length
-                    }
-                    건 매도
-                  </span>
-                  <span>
-                    미배정 잔여 자금 약 {fmt(advice.residualCash)}
-                    {advice.projectedUnassignedPercent > 0
-                      ? ` · 전체의 ${pct(advice.projectedUnassignedPercent)}`
-                      : ""}
-                  </span>
-                </div>
+                <details className={styles.calculationNotes}>
+                  <summary>계산 기준과 포함되지 않은 자산</summary>
+            <div className={styles.previewSummary} aria-label="이번 계산 기준">
+              <span>현재 자산 {fmt(advice.currentTotal)}</span>
+              <span>
+                {rebalanceMode === "add-only" ? "추가 예산" : "예상 매도 대금"}{" "}
+                {fmt(advice.buyBudget)}
+              </span>
+              <span>계산 기준 총액 {fmt(advice.targetTotal)}</span>
+            </div>
+            <p className={styles.help}>
+              예상 수량은 1주 단위이며 수수료·세금·환전 비용은 포함하지
+              않습니다. {rebalanceMode === "trade" && "매도 대금을 계좌 간 이동할 수 있다고 가정하므로 계좌별 주문 가능 금액·결제일을 별도로 확인하세요. "}
+              {rebalanceMode === "trade" ? "매도 제외는 해당 보유 항목에만 적용하며 추가 매수에는 영향을 주지 않습니다." : "입력한 추가 자금으로만 매수 수량을 계산합니다. 기존 현금 잔고는 자동 포함하지 않습니다."}
+            </p>
                 <p className={styles.help}>
                   가상자산·직접 입력 자산의 거래는 별도 검토합니다. 잔여 자금은
                   포트에 배정하지 않으며 총액에는 포함합니다. 제안 확인 →
                   증권사·거래소에서 직접 거래 → 실제 잔고 수정 순서로
                   반영하세요.
                 </p>
+                </details>
                 <div className={styles.rebalanceLinks}>
                   <button type="button" onClick={onEditHoldings}>
                     거래 후 자산 수정 <ArrowRight size={14} />
@@ -3140,7 +3163,7 @@ export default function PortfolioBuilder({
                     type="button"
                     onClick={() => onNavigate("allocation")}
                   >
-                    배정 충돌 확인·수정 <ArrowRight size={14} />
+                    자산 배정 확인 <ArrowRight size={14} />
                   </button>
                 </div>
               </>

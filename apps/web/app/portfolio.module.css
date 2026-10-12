@@ -1673,3 +1673,29 @@
 .historyTable th, .historyTable td { padding:12px 6px; border-bottom:1px solid var(--line); text-align:left; font-variant-numeric:tabular-nums; }
 .historyTable th:nth-child(2), .historyTable td:nth-child(2) { text-align:right; }
 .historyTable td:last-child { color:var(--muted); font-size:12px; }
+
+/* Rebalancing: show the decision first, keep optional controls behind disclosures. */
+.rebalanceOptions, .calculationNotes { margin: 16px 0; font-size: 13px; }
+.rebalanceOptions > summary, .calculationNotes > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--blue); line-height: 1.5; }
+.rebalanceOptions .exclusions { margin-top: 10px; }
+.buyHoldReason { min-width: 0; font-size: 13px; }
+.buyHoldReason > strong { color: var(--ink); font-size: 14px; }
+.buyHoldReason p { margin: 6px 0 12px; color: var(--ink); line-height: 1.6; }
+.buyHoldReason dl { display: grid; gap: 7px; margin: 0 0 10px; }
+.buyHoldReason dl > div { display: flex; justify-content: space-between; gap: 14px; }
+.buyHoldReason dt { color: var(--muted); }
+.buyHoldReason dd { margin: 0; color: var(--ink); font-weight: 700; white-space: nowrap; }
+.buyHoldReason > small { display: block; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.buyHoldReason button { margin-top: 10px; padding: 8px 0; border: 0; background: transparent; color: var(--blue); font-size: 13px; font-weight: 650; }
+.advice > div > small { font-size: 12px; line-height: 1.6; }
+.calculationNotes .previewSummary { padding: 12px; }
+@media (max-width: 700px) {
+  .advice > .buyHoldReason { grid-column: 2; }
+  .advice { row-gap: 10px; padding-top: 18px; padding-bottom: 18px; }
+  .cashBudget { margin-top: 10px; }
+}
+.advice > .buyHoldReason { display: block; min-width: 0; }
+.advice .buyHoldReason > strong { display: block; font-size: 14px; }
+.advice .buyHoldReason p { grid-column: auto; width: auto; text-align: left; margin: 6px 0 12px; font-weight: 400; }
+.advice .buyHoldReason small { font-size: 13px; line-height: 1.6; color: var(--muted); }
+.buyHoldReason > div { display: grid; gap: 4px; }
