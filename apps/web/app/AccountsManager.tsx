@@ -491,20 +491,7 @@ export default function AccountsManager({
                     : ""}
                   {rows.length === 0 ? "—" : ""}
                 </strong>
-                <small>
-                  원화·달러 각각 합산 · 현금·코인 제외 · 환율 환산 전
-                </small>
-                <small>
-                  {valuation.unpriced > 0
-                    ? `가격 미확인 ${valuation.unpriced}종목 제외 · `
-                    : ""}
-                  {valuation.captured > 0
-                    ? `캡처 가격 ${valuation.captured}종목 포함 · `
-                    : ""}
-                  {valuation.oldestCheckedAt
-                    ? `가장 오래된 시세 확인 · ${new Date(valuation.oldestCheckedAt).toLocaleString("ko-KR")}`
-                    : "조회 시세 없음"}
-                </small>
+                {valuation.unpriced > 0 && <small>가격 미확인 {valuation.unpriced}종목 제외</small>}
               </div>
               <details className={styles.metadata}>
                 <summary>계좌 정보 수정</summary>

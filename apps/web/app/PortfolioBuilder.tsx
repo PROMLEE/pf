@@ -111,18 +111,6 @@ const kstDate = () =>
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
-const timeLabel = (value: string | null) =>
-  value
-    ? new Intl.DateTimeFormat("ko-KR", {
-        timeZone: "Asia/Seoul",
-        year: "numeric",
-        month: "numeric",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-      }).format(new Date(value))
-    : "확인 안 됨";
 const colors = [
   "#177C88",
   "#42A994",
@@ -507,11 +495,9 @@ function AssetDetail({
           {gain === null ? "매입단가 정보 없음" : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${gainPct(gainPercent)}`})`}
         </small>}
       </div>
-      {!manual && <p className={styles.detailHint}>전일 종가 대비 일간 손익과 기준이 다릅니다. 실현 손익은 제외하며 외화 자산은 현재 적용 환율로 환산합니다.</p>}
       <div className={styles.detailFacts}>
         {manual ? <>
           <div><span>입력 금액</span><strong>{manual.valueUsd === null ? fmt(manual.valueKrw) : `$${manual.valueUsd.toLocaleString("en-US")}`}</strong></div>
-          <div><span>평가 기준</span><strong>{manual.valueUsd === null ? "원화 직접 입력" : `적용 환율 ${won.format(portfolio.usdKrw)}원`}</strong></div>
         </> : <>
           <div><span>보유 수량</span><strong>{quantityFormat.format(quantity ?? 0)}{first ? "주" : "개"}</strong></div>
           <div><span>현재가</span><strong>{unitPrice(price)}</strong></div>
@@ -1144,7 +1130,7 @@ export default function PortfolioBuilder({
     setCryptoQuantity("");
     setCryptoCost("");
     setCryptoCandidates([]);
-    onNotice("가상자산을 추가했습니다. 저장하면 빗썸 원화 시세를 조회합니다.");
+    onNotice("가상자산을 추가했습니다. 변경 내용을 저장해 주세요.");
   }
   function assign(holdingId: string, value: string) {
     if (!draft) return;
@@ -1440,28 +1426,6 @@ export default function PortfolioBuilder({
       ),
     )
     .sort((a, b) => Math.abs(b.gapPercent) - Math.abs(a.gapPercent));
-  const priceFromQuote = holdings.filter(
-    (holding) =>
-      holding.currentPrice !== null && holding.quoteCheckedAt !== null,
-  ).length;
-  const priceFromCapture = holdings.filter(
-    (holding) =>
-      holding.currentPrice === null && holding.capturedPrice !== null,
-  ).length;
-  const latestQuote =
-    holdings
-      .map((holding) => holding.quoteCheckedAt)
-      .filter((value): value is string => Boolean(value))
-      .sort()
-      .at(-1) ?? null;
-  const oldestCapture =
-    holdings
-      .filter(
-        (holding) =>
-          holding.currentPrice === null && holding.capturedPrice !== null,
-      )
-      .map((holding) => holding.capturedAt)
-      .sort()[0] ?? null;
   const totalHistory = periodPoints("__TOTAL__");
   const performance = historyPerformance(totalHistory, draft?.cashFlows ?? []);
   const {first: firstPoint, last: lastPoint, netFlow: periodFlow, adjusted: adjustedChange} = performance;
@@ -1567,7 +1531,7 @@ export default function PortfolioBuilder({
           market: group.market,
           exchange: group.exchange,
           name: group.name,
-          detail: `${group.symbol || group.market} · ${quantityFormat.format(group.quantity)}주${group.capturedOnly ? " · 캡처 기준" : ""}`,
+          detail: `${group.symbol || group.market} · ${quantityFormat.format(group.quantity)}주`,
           value: group.missingPrice ? null : group.value,
           gain: group.missingPrice || group.missingCost ? null : group.gain,
           gainPercent:
@@ -1645,8 +1609,8 @@ export default function PortfolioBuilder({
         : null;
   const displayedGainNote =
     gainView === "total"
-      ? `매입단가 확인 ${knownGains.count}/${gainEligibleCount}개`
-      : `전일 종가 확인 ${dailyKnown.count}/${mobileInvestments.length}개 · 현재 보유 수량 기준`;
+      ? knownGains.count < gainEligibleCount ? `손익 미확인 ${gainEligibleCount - knownGains.count}개` : ""
+      : dailyKnown.count < mobileInvestments.length ? `일간 손익 미확인 ${mobileInvestments.length - dailyKnown.count}개` : "";
   const dashboardControls = (
     <div className={styles.dashboardControls}>
       <div className={styles.gainToggle} role="group" aria-label="수익 표시 기간">
@@ -1656,16 +1620,6 @@ export default function PortfolioBuilder({
       <AssetSortSelect value={assetSort} onChange={onAssetSort} />
     </div>
   );
-  const latestCryptoQuote = draft?.cryptoAssets
-    .map((asset) => asset.quoteCheckedAt)
-    .filter((date): date is string => Boolean(date))
-    .sort()
-    .at(-1);
-  const latestPriceTime =
-    [latestQuote, latestCryptoQuote]
-      .filter((date): date is string => Boolean(date))
-      .sort()
-      .at(-1) ?? null;
   const titles = {
     dashboard: [
       "MY PORTFOLIO",
@@ -1772,13 +1726,6 @@ export default function PortfolioBuilder({
         </div>
       )}
 
-      {(screen === "dashboard" || screen === "composition") && (
-        <details className={styles.metricBasis}><summary>숫자 기준 · 총 평가액 / {gainView === "daily" ? "일간 손익" : "전체 손익"}</summary>
-          <p><strong>총 평가액</strong>은 주식·가상자산·현금·직접 입력 자산을 포함한 현재 평가액입니다. 외화 자산은 적용 환율 {quantityFormat.format(draft.usdKrw)}원/USD로 환산합니다.</p>
-          <p>{gainView === "daily" ? "일간 손익은 각 시장 전일 종가 대비 가격 변화입니다. 국내·미국·가상자산의 기준 시간이 다르며, 현금과 환율 자체의 변동 손익은 제외합니다." : "전체 손익은 매입단가와 가격이 확인된 주식·가상자산의 미실현 손익입니다. 현금·직접 입력 자산·실현 손익은 제외하며, 매입 시점 환율 대신 현재 적용 환율을 사용합니다."}</p>
-          <p>기록 증감은 저장한 평가액끼리의 차이로 입출금과 수량 수정도 포함합니다. 전체 손익·일간 손익과 계산 기준이 다릅니다.</p>
-        </details>
-      )}
       {screen === "detail" && selectedAsset && (
         <AssetDetail
           selection={selectedAsset}
@@ -1848,7 +1795,6 @@ export default function PortfolioBuilder({
               {won.format(values?.total ?? 0)}
               <span>원</span>
             </div>
-            <p className={styles.metricSummary}>주식·가상자산·현금 포함 · 원화 환산<br />{gainView === "daily" ? "전일 종가 대비 · 시세 확인분" : "매입단가 대비 · 주식·코인 확인분"}</p>
             {dashboardControls}
             <div className={styles.mobileMetricList}>
               <div className={styles.gainMetric}>
@@ -1900,20 +1846,7 @@ export default function PortfolioBuilder({
               assetSort={assetSort}
             />
             <div className={styles.dashboardMetadata}>
-              <details className={styles.mobileMetricNote}>
-                <summary>손익 집계 기준</summary>
-                <p>
-                  총 평가액은 주식·가상자산·현금·직접 입력 자산을 합산합니다. 외화는 {quantityFormat.format(draft.usdKrw)}원/USD로 환산합니다. 전체 손익은 매입단가와 가격을 확인한 주식·가상자산 {knownGains.count}/{gainEligibleCount}개의 미실현 손익으로 현금·직접 입력 자산·실현 손익은 제외합니다. 매입 시점 환율 대신 현재 적용 환율을 사용합니다. 일간 손익은 각 시장의 전일 종가 대비 가격 변화로, 시장별 기준 시간이 다르며 현금과 환율 자체의 변화는 제외합니다. 기록 증감은 입출금·수량 수정도 포함한 저장 평가액끼리의 차이입니다.
-                </p>
-              </details>
-              <div className={styles.mobileQuoteTime}>
-                <span
-                  className={quotesRefreshing ? styles.livePulse : styles.liveDot}
-                />
-                {quotesRefreshing
-                  ? "시세 갱신 중"
-                  : `최근 시세 ${timeLabel(latestPriceTime)}`}
-              </div>
+              {quotesRefreshing && <div className={styles.mobileQuoteTime}><span className={styles.livePulse} />시세 갱신 중</div>}
               {(quoteError || fxRefreshError) && (
                 <div className={styles.mobileDataError}>
                   {quoteError || fxRefreshError}
@@ -1928,7 +1861,6 @@ export default function PortfolioBuilder({
                 <section className={styles.desktopTotal}>
                   <span>총 평가액</span>
                   <strong>{fmt(values?.total ?? 0)}</strong>
-                  <small>주식·가상자산·현금 포함 · 원화 환산</small>
                 </section>
                 <section className={styles.desktopGain}>
                   <div>
@@ -1999,66 +1931,13 @@ export default function PortfolioBuilder({
               </section>
             </aside>
           </div>
-          <div className={styles.dashboardMetadata}>
+          {(quotesRefreshing || quoteError || fxRefreshError || Boolean(values?.missingPrices)) && <div className={styles.dashboardMetadata}>
             <div className={styles.desktopLiveStatus} role="status">
-              <span
-                className={quotesRefreshing ? styles.livePulse : styles.liveDot}
-              />
-              <span>
-                {quotesRefreshing
-                  ? "시세 갱신 중"
-                  : `최근 시세 ${timeLabel(latestPriceTime)}`}
-              </span>
-              <span>주식 약 5분 · 빗썸 약 1분 간격</span>
-              {(quoteError || fxRefreshError) && (
-                <em>{quoteError || fxRefreshError}</em>
-              )}
+              {quotesRefreshing && <span>시세 갱신 중</span>}
+              {(quoteError || fxRefreshError) && <em>{quoteError || fxRefreshError}</em>}
+              {Boolean(values?.missingPrices) && <em>가격 미확인 자산 {values?.missingPrices}개</em>}
             </div>
-            <details className={styles.dataDetails}>
-              <summary>
-                가격·환율 기준 보기 <ChevronDown size={15} />
-              </summary>
-              <div
-                className={styles.dataStatus}
-                aria-label="평가 데이터 기준 시각"
-              >
-                <strong>평가 기준</strong>
-                <span>
-                  KIS 가격 {priceFromQuote}개 · 최근 확인{" "}
-                  {timeLabel(latestQuote)}
-                </span>
-                <span>
-                  캡처 가격 {priceFromCapture}개
-                  {oldestCapture
-                    ? ` · 가장 오래된 ${timeLabel(oldestCapture)}`
-                    : ""}
-                </span>
-                <span>
-                  {draft.usdKrwMode === "auto"
-                    ? "자동 기준환율"
-                    : "직접 입력 환율"}{" "}
-                  USD {won.format(draft.usdKrw)}원
-                </span>
-                {draft.cryptoAssets.length > 0 && (
-                  <span>
-                    빗썸 원화 시세{" "}
-                    {
-                      draft.cryptoAssets.filter(
-                        (asset) => asset.quotedPriceKrw !== null,
-                      ).length
-                    }
-                    /{draft.cryptoAssets.length}개
-                  </span>
-                )}
-                {cryptoRefreshError && <em>{cryptoRefreshError}</em>}
-                {(values?.missingPrices ?? 0) > 0 && (
-                  <em>
-                    가격 없는 자산 {values?.missingPrices}개는 평가액에서 제외
-                  </em>
-                )}
-              </div>
-            </details>
-          </div>
+          </div>}
         </>
       )}
 
@@ -2140,7 +2019,7 @@ export default function PortfolioBuilder({
                       })
                     }
                   >
-                    <option value="auto">자동 · ECB 일일 기준환율</option>
+                    <option value="auto">자동</option>
                     <option value="manual">직접 입력</option>
                   </select>
                 </label>
@@ -2439,7 +2318,7 @@ export default function PortfolioBuilder({
             {screen === "edit" && (
               <>
                 <div className={styles.subHead}>
-                  <h3>가상자산 · 빗썸 원화 시세</h3>
+                  <h3>가상자산</h3>
                   <small>
                     원화마켓 코드와 보유 수량을 등록하면 가격 갱신 시 평가액을
                     계산합니다.
@@ -2537,16 +2416,10 @@ export default function PortfolioBuilder({
                     <div>
                       <strong>{asset.name}</strong>
                       <small>
-                        {asset.marketCode} · 빗썸{" "}
+                        {asset.marketCode} ·{" "}
                         {asset.quotedPriceKrw === null
                           ? "시세 미확인"
                           : `현재가 ${fmt(asset.quotedPriceKrw)}`}
-                      </small>
-                      <small>
-                        조회 {timeLabel(asset.quoteCheckedAt)}
-                        {asset.lastTradeAt
-                          ? ` · 마지막 체결 ${timeLabel(asset.lastTradeAt)}`
-                          : ""}
                       </small>
                     </div>
                     <label className={styles.cryptoField}>
@@ -3121,32 +2994,14 @@ export default function PortfolioBuilder({
                                   <span>
                                     {trade.market === "KR" && <>종목코드 {trade.symbol} · </>}주당{" "}
                                     {trade.currency === "USD"
-                                      ? `$${trade.unitPrice.toFixed(4)}`
-                                      : fmt(trade.unitPrice)}{" "}
-                                    · {trade.priceSource} · 조회{" "}
-                                    {timeLabel(trade.checkedAt)}
+                                      ? `$${trade.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 4 })}`
+                                      : fmt(trade.unitPrice)}
                                   </span>
-                                  {trade.usdKrw && (
-                                    <span>
-                                적용 환율 1 USD = {quantityFormat.format(trade.usdKrw)}원 ·{" "}
-                                      {draft.usdKrwMode === "auto"
-                                        ? `자동 기준환율 ${draft.usdKrwRateDate || ""}`
-                                        : "직접 입력 환율"}
-                                    </span>
-                                  )}
                                   <span>
                                     {trade.broker
                                       ? `${trade.broker} · ${trade.account || "계좌 미입력"}`
                                       : "신규 보유 항목 · 거래 계좌 선택 필요"}
                                   </span>
-                                  <span>{trade.selectionReason}</span>
-                                  {!trade.holdingId && (
-                                    <span>
-                                      직접 거래 후 자산 수정에서 새 보유 항목을
-                                      등록하고 이 포트에 배정해야 미리보기와
-                                      일치합니다.
-                                    </span>
-                                  )}
                                 </div>
                               ))}
                             </details>
@@ -3417,18 +3272,10 @@ export default function PortfolioBuilder({
                           <span>
                             적용 주당 가격{" "}
                             {applied.unitPrice > 0
-                              ? `${applied.currency === "USD" ? applied.unitPrice.toFixed(4) : won.format(applied.unitPrice)}${applied.currency === "USD" ? " USD" : "원"}`
+                              ? applied.currency === "USD" ? `$${applied.unitPrice.toLocaleString("en-US", { maximumFractionDigits: 4 })}` : fmt(applied.unitPrice)
                               : "미확인"}{" "}
-                            · {applied.priceSource} · 조회{" "}
-                            {timeLabel(applied.checkedAt)}
+
                           </span>
-                          {rule.manualPrice !== null &&
-                            applied.priceSource !== "후보 임시 가격" && (
-                              <span>
-                                임시 가격은 적용하지 않습니다. 보유 항목 평가
-                                가격 또는 조회 시세를 사용 중입니다.
-                              </span>
-                            )}
                         </>
                       )}
                       {eligible.length > 0 && (

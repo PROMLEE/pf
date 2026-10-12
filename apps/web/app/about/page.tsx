@@ -80,7 +80,7 @@ export default function AboutPage() {
             <div><span className={styles.eyebrow}>시작하기 전에</span><h2>무엇을 할 수 있나요?</h2></div>
             <div>
               <details><summary>계좌가 자동으로 동기화되나요?</summary><p>실제 계좌 잔고를 자동으로 가져오지는 않습니다. 주식은 지원하는 증권사 잔고 캡처를 검토하거나 직접 입력하고, 가상자산·현금도 직접 등록합니다. 거래 후 수량을 수정하면 시세 조회와 평가에 반영됩니다.</p></details>
-              <details><summary>가격은 어떻게 확인하나요?</summary><p>한국투자증권 API로 국내·미국 주식 가격을, 빗썸 공개 API로 원화 가상자산 가격을 확인합니다. 화면이 활성 상태일 때 주식은 약 5분, 가상자산은 약 1분 간격으로 갱신을 시도합니다. 미국 자산은 자동 일일 기준환율 또는 직접 입력 환율로 원화 환산합니다.</p></details>
+              <details><summary>가격은 어떻게 확인하나요?</summary><p>가격·환율·갱신 기준은 <Link href="/guide">사용 가이드</Link>에서 확인하세요.</p></details>
               <details><summary>앱이 자동으로 매매해주나요?</summary><p>예상 조정 수량과 비중을 검토하는 도구입니다. 주문은 직접 진행하며, 계좌별 거래 가능 여부·수수료·세금·환전 비용은 실제 거래 전에 확인합니다. 목표 비중은 사용자가 정하고, 앱이 최적 전략을 산출하지는 않습니다.</p></details>
               <details><summary>처음에는 무엇부터 하면 되나요?</summary><p>목표 포트와 비중을 만들고, 보유 자산을 등록해 각 포트에 배정하세요. 현재 비중과 목표의 차이를 확인한 뒤 필요한 조정을 검토합니다. <Link href="/guide">사용 가이드에서 시작 순서 보기 →</Link></p></details>
             </div>

@@ -1474,11 +1474,6 @@ export default function PortfolioPage() {
                           <div>
                             <label>가격</label>
                             {price === null ? "—" : money(price, row.market)}
-                            <small>
-                              {row.currentPrice === null
-                                ? "캡처 기준"
-                                : row.quoteLabel}
-                            </small>
                           </div>
                           <strong>
                             <label>평가</label>
@@ -1663,15 +1658,14 @@ export default function PortfolioPage() {
                   onDirtyChange={setPortfolioDirty}
                 />
               )}
-              <p className={styles.footnote}>
-                시세 조회 시각은 거래소 체결 시각과 다를 수 있습니다.
+              {(totals.costKnown.KR + totals.costKnown.US < holdings.length || totals.missing > 0) && <p className={styles.footnote}>
                 {totals.costKnown.KR + totals.costKnown.US < holdings.length
                   ? ` 매입단가가 없는 종목은 손익 계산에서 제외됩니다.`
                   : ""}
                 {totals.missing
                   ? ` 가격이 없는 ${totals.missing}개 종목은 평가금액에서 제외됩니다.`
                   : ""}
-              </p>
+              </p>}
             </>
           )}
           {view === "import" && (
