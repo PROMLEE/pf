@@ -14,7 +14,7 @@ const dataUrl = (source) =>
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const modelUrl = dataUrl(await compile("../app/portfolio-model.ts"));
 const { portfolioValues } = await import(modelUrl);
-const { rebalance } = await import(
+const { rebalance, allocatePortfolioBuys, withinTolerance } = await import(
   dataUrl(
     (await compile("../app/rebalance.ts")).replace(
       '"./portfolio-model"',
@@ -344,4 +344,53 @@ test("buying increases a portfolio value while its weight can fall after new fun
   assert.equal(item.fundedPercent, 18200 / 102000 * 100);
   assert.equal(item.projectedPercent, 18400 / 102000 * 100);
   assertMatchesActual(result, p, rows);
+});
+
+
+test("joint allocation brings all feasible portfolios inside tolerance instead of filling the biggest gap first", () => {
+  const rows = [holding("a", "A", 0), holding("b", "B", 10), holding("c", "C", 45), holding("d", "D", 45)];
+  const p = plan([["a", "A"], ["b", "B"], ["c", "C"], ["d", "D"]], [rule("A", "A"), rule("B", "B")], {
+    tolerancePercent: 15,
+    buckets: ["A", "B", "C", "D"].map(id => ({id, name:id, targetPercent:25, color:"#000"})),
+  });
+  const result = rebalance(p, rows, "add-only", 2000);
+  assert.equal(result.trades.find(trade => trade.bucketId === "A").shares, 15);
+  assert.equal(result.trades.find(trade => trade.bucketId === "B").shares, 5);
+  for (const item of result.items) assert.ok(Math.abs(item.projectedPercent - item.bucket.targetPercent) <= 15);
+  assert.equal(result.residualCash, 0);
+  assertMatchesActual(result, p, rows);
+});
+
+test("joint allocation is independent of portfolio order and cannot exceed budget or target gaps", () => {
+  const entries=[{id:"A",gap:3000,unitKrw:100,empty:false},{id:"B",gap:2000,unitKrw:100,empty:false}];
+  const result=allocatePortfolioBuys(entries,2000,0);
+  assert.equal(result.get("A"),12);assert.equal(result.get("B"),8);
+  assert.deepEqual([...result].sort(),[...allocatePortfolioBuys([...entries].reverse(),2000,0)].sort());
+  for(let i=1;i<=50;i++){
+    const items=[{id:"A",gap:i*111,unitKrw:17.3,empty:false},{id:"B",gap:i*77,unitKrw:29.9,empty:true},{id:"C",gap:i*143,unitKrw:105,empty:false}];
+    const budget=i*123.4;
+    const allocations=allocatePortfolioBuys(items,budget,i*10);
+    let spent=0;
+    for(const item of items){const shares=allocations.get(item.id);assert.ok(Number.isInteger(shares)&&shares>=0);assert.ok(shares*item.unitKrw<=item.gap+1e-7);spent+=shares*item.unitKrw;}
+    assert.ok(spent<=budget+1e-7);
+  }
+});
+
+test("final state discloses remaining overweight portfolios when new money cannot reach the range", () => {
+  const rows=[holding("a","A",90),holding("b","B",10)];
+  const p=plan([["a","A"],["b","B"]],[rule("B","B")],{tolerancePercent:2});
+  const result=rebalance(p,rows,"add-only",1000);
+  const overweight=result.items.find(item=>item.bucket.id==="A");
+  assert.ok(overweight.projectedPercent>overweight.bucket.targetPercent+2);
+  assert.equal(overweight.projectedValue,9000);
+  assert.equal(result.trades.some(trade=>trade.side==="sell"),false);
+  assertMatchesActual(result,p,rows);
+});
+
+
+test("final tolerance labels use the actual percentage including exact boundaries and empty small targets", () => {
+  assert.equal(withinTolerance(20,18,2),true);
+  assert.equal(withinTolerance(20,17.9,2),false);
+  assert.equal(withinTolerance(1,0,2),true);
+  assert.equal(withinTolerance(25,25+1e-12,0),true);
 });

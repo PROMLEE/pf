@@ -58,6 +58,7 @@ export type RebalanceItem = {
   fundedGapPercent: number;
   fundedPercent: number;
   projectedPercent: number;
+  projectedValue: number;
   remainingGapKrw: number;
   advice: string;
   separateReview: string | null;
@@ -109,6 +110,10 @@ export function candidatePrice(
   };
 }
 
+export function withinTolerance(targetPercent: number, finalPercent: number, tolerancePercent: number) {
+  return Math.abs(targetPercent - finalPercent) <= tolerancePercent + 1e-9;
+}
+
 export function needsAdjustment(
   target: number,
   current: number,
@@ -119,6 +124,52 @@ export function needsAdjustment(
     (target > 0 && current === 0) ||
     Math.abs(target - currentPercent) > tolerance
   );
+}
+
+/** Allocate whole shares jointly: tolerance floors first, target weights second. */
+export function allocatePortfolioBuys(
+  entries: { id: string; gap: number; unitKrw: number; empty: boolean }[],
+  budget: number,
+  toleranceKrw: number,
+) {
+  const epsilon = 1e-7;
+  const states = entries.map(entry => {
+    const max = Math.max(0, Math.floor((entry.gap + epsilon) / entry.unitKrw));
+    const minimum = Math.min(max, Math.max(entry.empty ? 1 : 0,
+      Math.ceil((Math.max(0, entry.gap - toleranceKrw) - epsilon) / entry.unitKrw)));
+    return { ...entry, max, minimum, shares: 0 };
+  });
+  let remaining = Math.max(0, budget);
+  function distribute(phase: "minimum" | "max") {
+    while (true) {
+      const active = states.filter(entry => entry.shares < entry[phase] && entry.unitKrw <= remaining);
+      if (!active.length) break;
+      const totalNeed = active.reduce((sum, entry) => sum + (entry[phase] - entry.shares) * entry.unitKrw, 0);
+      const available = remaining;
+      let added = 0;
+      for (const entry of active) {
+        const need = entry[phase] - entry.shares;
+        const quota = Math.min(need * entry.unitKrw, available * need * entry.unitKrw / totalNeed);
+        const count = Math.min(need, Math.floor((quota + epsilon) / entry.unitKrw), Math.floor(remaining / entry.unitKrw));
+        if (count < 1) continue;
+        entry.shares += count;
+        remaining = Math.max(0, remaining - count * entry.unitKrw);
+        added += count;
+      }
+      if (!added) {
+        // All proportional quotas are below one share. Favor the largest
+        // reduction in squared remaining deviation per won; stable ID breaks ties.
+        active.sort((a, b) =>
+          (2 * (b[phase] - b.shares) * b.unitKrw - b.unitKrw) -
+          (2 * (a[phase] - a.shares) * a.unitKrw - a.unitKrw) || a.id.localeCompare(b.id));
+        active[0].shares++;
+        remaining = Math.max(0, remaining - active[0].unitKrw);
+      }
+    }
+  }
+  distribute("minimum");
+  distribute("max");
+  return new Map(states.map(entry => [entry.id, entry.shares]));
 }
 
 export function rebalance(
@@ -314,13 +365,10 @@ export function rebalance(
           (targetTotal * bucket.targetPercent) / 100 -
           (values.get(bucket.id) ?? 0),
       }))
-      .filter(
-        ({ bucket, gap }) =>
-          gap > 0 &&
-          ((gap / targetTotal) * 100 > plan.tolerancePercent ||
-            (values.get(bucket.id) ?? 0) === 0),
-      )
+      .filter(({ gap }) => gap > 0)
       .sort((a, b) => b.gap - a.gap);
+    const selectedBuys: { bucket: Bucket; gap: number; rule: Rule; candidate: CandidateEvaluation }[] = [];
+    // Select eligible candidates before any portfolio consumes the shared budget.
     for (const { bucket, gap } of deficits) {
       const rules = plan.rules.filter((rule) => rule.bucketId === bucket.id);
       if (available <= 0) {
@@ -376,7 +424,23 @@ export function rebalance(
         if (!rules.length) addReason(bucket.id, "등록된 매수 후보가 없습니다.");
         continue;
       }
-      const { rule, candidate, shares } = selected;
+      selectedBuys.push({ bucket, gap, rule: selected.rule, candidate: selected.candidate });
+    }
+    const allocations = allocatePortfolioBuys(
+      selectedBuys.map(({ bucket, gap, candidate }) => ({
+        id: bucket.id, gap, unitKrw: candidate.unitKrw,
+        empty: (values.get(bucket.id) ?? 0) === 0,
+      })),
+      available,
+      targetTotal * plan.tolerancePercent / 100,
+    );
+    for (const { bucket, rule, candidate } of selectedBuys) {
+      const shares = allocations.get(bucket.id) ?? 0;
+      if (shares < 1) {
+        candidate.reason = "전체 포트의 최종 비중과 예산을 함께 계산한 결과, 이 후보에 배분할 1주 매수 금액이 남지 않았습니다.";
+        addReason(bucket.id, candidate.reason);
+        continue;
+      }
       candidate.status = "selected";
       const owned = holdings.find((row) => row.id === candidate.holdingId);
       const amountKrw = shares * candidate.unitKrw;
@@ -423,7 +487,7 @@ export function rebalance(
           source: "manual",
         });
       }
-      available -= amountKrw;
+      available = Math.max(0, available - amountKrw);
     }
   }
   for (const candidate of candidates) {
@@ -504,6 +568,7 @@ export function rebalance(
       gapPercent: bucket.targetPercent - currentPercent,
       fundedGapPercent,
       fundedPercent: targetTotal > 0 ? (current / targetTotal) * 100 : 0,
+      projectedValue,
       projectedPercent:
         projected.total > 0 ? (projectedValue / projected.total) * 100 : 0,
       remainingGapKrw,

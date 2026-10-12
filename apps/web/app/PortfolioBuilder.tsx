@@ -33,7 +33,7 @@ import {
   type Rule,
 } from "./portfolio-model";
 import { historyPerformance, kstTime, dailyObservations, dailyPositionChanges } from "./history-performance";
-import { needsAdjustment, rebalance, symbolKey } from "./rebalance";
+import { needsAdjustment, rebalance, symbolKey, withinTolerance } from "./rebalance";
 import styles from "./portfolio.module.css";
 
 type Candidate = {
@@ -1410,7 +1410,9 @@ export default function PortfolioBuilder({
       )
     : [];
   const inRangeCount = rebalanceReady
-    ? advice.items.length - actionItems.length
+    ? advice.items.filter(item => withinTolerance(
+        item.bucket.targetPercent, item.projectedPercent, draft?.tolerancePercent ?? 0,
+      )).length
     : 0;
   const targetTotal =
     draft?.buckets.reduce((sum, bucket) => sum + bucket.targetPercent, 0) ?? 0;
@@ -2985,11 +2987,9 @@ export default function PortfolioBuilder({
               </div>
             ) : (
               <>
-                <p className={styles.rebalanceStatus}>
-                  {inRangeCount > 0
-                    ? `${inRangeCount}개 포트는 ${rebalanceMode === "add-only" ? "추가 자금 반영 기준으로 " : "현재 기준으로 "}허용 오차 안에 있습니다.`
-                    : ""}
-                  {!actionItems.length ? " 현재 조정할 포트가 없습니다." : ""}
+                <p className={`${styles.rebalanceStatus} ${styles.finalResultStatus}`}>
+                  제안 모두 반영 후 {advice.items.length}개 중 {inRangeCount}개 포트가 허용 오차 안에 있습니다.
+                  {inRangeCount < advice.items.length && " 허용 범위 밖인 포트가 남아 있습니다. 아래에서 전체 포트의 최종 비중을 확인하세요."}
                 </p>
                 <div className={styles.previewSummary}>
                   <strong>이번 주식 조정</strong>
@@ -3013,6 +3013,19 @@ export default function PortfolioBuilder({
                       : ""}
                   </span>
                 </div>
+                <details className={styles.finalWeights}>
+                  <summary>전체 포트의 최종 비중 확인 <ChevronDown size={14} /></summary>
+                  <table>
+                    <caption>모든 주식 제안과 추가 자금을 반영한 예상 비중</caption>
+                    <thead><tr><th>포트</th><th>목표</th><th>최종</th><th>허용 범위</th></tr></thead>
+                    <tbody>{advice.items.map(item => <tr key={item.bucket.id}>
+                      <th scope="row">{item.bucket.name}</th>
+                      <td>{pct(item.bucket.targetPercent)}</td>
+                      <td>{pct(item.projectedPercent)}</td>
+                      <td>{withinTolerance(item.bucket.targetPercent, item.projectedPercent, draft.tolerancePercent) ? "이내" : "범위 밖"}</td>
+                    </tr>)}</tbody>
+                  </table>
+                </details>
                 <div className={styles.adviceList}>
                   {actionItems.map((item) => {
                     const itemTrades = advice.trades.filter(
@@ -3045,17 +3058,12 @@ export default function PortfolioBuilder({
                             </span>
                             {item.bucket.name}
                           </strong>
-                          {rebalanceMode === "add-only" ? (
-                            <>
-                              <small>현재 {pct(item.currentPercent)} · 목표 {pct(item.bucket.targetPercent)}</small>
-                              <small className={styles.fundedWeight}>
-                                자금 추가 후 {pct(item.fundedPercent)}
-                                {action === "add" ? ` → 매수 후 ${pct(item.projectedPercent)}` : " · 수량 유지"}
-                              </small>
-                            </>
-                          ) : (
-                            <small>현재 {pct(item.currentPercent)} → 조정 후 {pct(item.projectedPercent)} · 목표 {pct(item.bucket.targetPercent)}</small>
-                          )}
+                          <small className={styles.fundedWeight}>
+                            최종 {pct(item.projectedPercent)} · 목표 {pct(item.bucket.targetPercent)}
+                            {Math.abs(item.projectedPercent - item.bucket.targetPercent) >= 0.05
+                              ? ` · ${item.projectedPercent < item.bucket.targetPercent ? "부족" : "초과"} ${Math.abs(item.projectedPercent - item.bucket.targetPercent).toFixed(1)}%p`
+                              : " · 목표 도달"}
+                          </small>
                         </div>
                         {!itemTrades.length && item.unaffordableBuys.length > 0 ? (
                           <div className={styles.buyHoldReason}>
@@ -3079,13 +3087,15 @@ export default function PortfolioBuilder({
                           </div>
                         ) : <p>{item.advice}</p>}
                         <div className={styles.tradeDetail}>
+                          <details>
+                            <summary>포트별 계산 상세</summary>
+                            <small>현재 {pct(item.currentPercent)}{rebalanceMode === "add-only" ? ` · 자금 추가 후 ${pct(item.fundedPercent)}` : ""} · 제안 반영 후 {pct(item.projectedPercent)}</small>
                           {rebalanceMode === "add-only" && action === "add" && Math.round(item.projectedPercent * 10) < Math.round(item.currentPercent * 10) && (
                             <p className={styles.shareDilutionNote}>
                               이 포트의 금액은 {fmt(itemTrades.filter(trade => trade.side === "buy").reduce((sum, trade) => sum + trade.amountKrw, 0))} 늘지만, 전체 자산에는 {fmt(advice.newCash)}이 추가되어 현재보다 비중이 낮아집니다.
                             </p>
                           )}
-                          {(Math.abs(item.remainingGapKrw) >= 1 || item.separateReview) && <details>
-                            <summary>포트별 계산 상세</summary>
+
                           {Math.abs(item.remainingGapKrw) >= 1 && (
                             <small>
                               주식 제안 후 목표 금액 대비{" "}
@@ -3096,7 +3106,7 @@ export default function PortfolioBuilder({
                           {item.separateReview && (
                             <small>{item.separateReview}</small>
                           )}
-                          </details>}
+                          </details>
                           {itemTrades.length > 0 && (
                             <details>
                               <summary>적용 가격·계좌 확인</summary>

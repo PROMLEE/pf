@@ -1711,3 +1711,15 @@
   line-height: 1.6;
   text-align: left;
 }
+
+.finalWeights { margin: 14px 0; font-size: 13px; }
+.finalWeights summary { cursor: pointer; display: flex; align-items: center; gap: 8px; color: var(--blue); }
+.finalWeights table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.finalWeights caption { text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 8px; }
+.finalWeights th, .finalWeights td { padding: 9px 4px; text-align: right; font-variant-numeric: tabular-nums; }
+.finalWeights th:first-child { text-align: left; font-weight: 600; }
+.finalWeights tbody tr { border-top: 1px solid var(--line); }
+.finalWeights td { white-space: nowrap; }
+@media (max-width: 700px) { .finalWeights table { font-size: 13px; } }
+
+.finalResultStatus { color: var(--ink); font-size: 13px; line-height: 1.6; margin: 12px 0; }
