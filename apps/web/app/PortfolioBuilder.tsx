@@ -1,6 +1,9 @@
 "use client";
 
+import { withPreviousQuotes } from "./holdings";
+
 import NumberInput from "./NumberInput";
+import HoldingTradeEditor from "./HoldingTradeEditor";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -367,6 +370,7 @@ function AssetDetail({
   summary,
   onBack,
   onSaveStock,
+  onStockTradeSaved,
   onSavePortfolio,
   onAssignStock,
   onEditingChange,
@@ -377,11 +381,14 @@ function AssetDetail({
   summary?: AssetSummaryRow;
   onBack: () => void;
   onSaveStock: (id: string, quantity: number, averageCost: number | null) => Promise<void>;
+  onStockTradeSaved: (holdings: Holding[], message: string) => void;
   onSavePortfolio: (next: Portfolio) => Promise<void>;
   onAssignStock: (id: string, bucketId: string | null, source: "auto" | "manual") => Promise<void>;
   onEditingChange: (editing: boolean) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  const [tradeMode, setTradeMode] = useState(true);
+  const [tradeDirty, setTradeDirty] = useState(false);
   const [editQuantity, setEditQuantity] = useState("");
   const [editCost, setEditCost] = useState("");
   const [editName, setEditName] = useState("");
@@ -398,7 +405,7 @@ function AssetDetail({
   const editedStock = holdings.find(row => row.id === editing);
   const editedCrypto = portfolio.cryptoAssets.find(asset => `crypto:${asset.id}` === editing);
   const editedManual = portfolio.manualAssets.find(asset => asset.id === editing);
-  const editDirty = Boolean(editing && (editedManual
+  const editDirty = tradeDirty || Boolean(editing && !(editedStock && tradeMode) && (editedManual
     ? editName !== editedManual.name || editValue !== String(editedManual.valueUsd ?? editedManual.valueKrw)
     : editedStock || editedCrypto
       ? editQuantity !== String(editedStock?.quantity ?? editedCrypto?.quantity ?? "") || editCost !== String(editedStock?.averageCost ?? editedCrypto?.averageCostKrw ?? "")
@@ -435,7 +442,7 @@ function AssetDetail({
   const value = summary?.value ?? (first && stockValueKnown ? stockValue : null);
   const gain = summary?.gain ?? (first && costKnown && stockValueKnown ? stockValue - stockCost : null);
   const gainPercent = summary?.gainPercent ?? (gain !== null && stockCost > 0 ? gain / stockCost * 100 : null);
-  if (!name) return <p className={styles.help}>자산을 찾을 수 없습니다. 목록에서 다시 선택해 주세요.</p>;
+  if (!name) return <section className={styles.assetDetail}><p>보유 목록에 없는 자산입니다.</p><button type="button" className={styles.detailBack} onClick={onBack}>← 이전 화면</button></section>;
   const unit = first?.market === "US" ? "USD" : "KRW";
   const unitPrice = (value: number | null) => value === null
     ? "—"
@@ -444,6 +451,7 @@ function AssetDetail({
     (first ? holdingBucketId(portfolio, first) : null);
   const bucketName = portfolio.buckets.find((bucket) => bucket.id === bucketId)?.name ?? "미분류";
   function beginEdit(row?: Holding) {
+    setTradeMode(true);
     setEditing(row?.id ?? selection.id);
     setEditQuantity(String(row?.quantity ?? crypto?.quantity ?? ""));
     setEditCost(String(row?.averageCost ?? crypto?.averageCostKrw ?? ""));
@@ -533,7 +541,10 @@ function AssetDetail({
       </details>
       {manual && <p className={styles.detailHint}>직접 입력 자산은 평가 금액만 관리하며 매입단가와 손익은 계산하지 않습니다.</p>}
       {!first && !editing && <button type="button" className={styles.detailEdit} onClick={() => beginEdit()}>자산 수정 <Pencil size={16} /></button>}
-      {editing && <form ref={editForm} className={styles.detailForm} onSubmit={submitEdit} aria-label="이 자산 수정">
+      {editing && (editedStock && tradeMode ? <HoldingTradeEditor key={editedStock.id} holding={editedStock}
+        onDirty={setTradeDirty} onBusy={setSaving} onCancel={() => setEditing(null)} onDirect={() => setTradeMode(false)}
+        onSaved={(next, message) => {setEditing(null);onStockTradeSaved(next, message);}}
+      /> : <form ref={editForm} className={styles.detailForm} onSubmit={submitEdit} aria-label="이 자산 수정">
         <h3>{first ? `${stockRows.find((row) => row.id === editing)?.account} 보유 정보 수정` : "자산 정보 수정"}</h3>
         <fieldset disabled={saving || assigning}>
           {manual ? <>
@@ -550,7 +561,7 @@ function AssetDetail({
           <button type="submit" className={styles.detailEdit} disabled={saving || assigning || !editDirty}>{saving ? "저장 중…" : "저장"}</button>
           <button type="button" className={styles.ghost} disabled={saving} onClick={() => { setEditing(null); setError(""); }}>취소</button>
         </div>
-      </form>}
+      </form>)}
     </section>
   );
 }
@@ -1734,6 +1745,10 @@ export default function PortfolioBuilder({
           summary={mobileInvestments.find((asset) => asset.id === selectedAsset.id)}
           onBack={onBack}
           onEditingChange={setDetailDirty}
+          onStockTradeSaved={(next, message) => {
+            onHoldings(withPreviousQuotes(next, holdings));
+            onNotice(message);
+          }}
           onSaveStock={async (id, quantity, averageCost) => {
             const response = await fetch("/api/holdings", {
               method: "PATCH",

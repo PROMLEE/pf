@@ -6,6 +6,7 @@ import { recordSnapshot } from "./portfolio-db";
 
 type Row = {
   id: string;
+  revision: string;
   broker: string;
   account_label: string;
   account_id: string;
@@ -27,6 +28,7 @@ type Row = {
 function fromRow(row: Row): Holding {
   return {
     id: row.id,
+    revision: row.revision,
     broker: row.broker,
     account: row.account_label,
     accountId: row.account_id,
@@ -49,15 +51,15 @@ function fromRow(row: Row): Holding {
 
 async function select(client: Pick<PoolClient, "query">, userId: string) {
   const result = await client.query<Row>(
-    `select id, broker, account_label, account_id, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, captured_at, current_price, quote_label, quote_checked_at
+    `select id, xmin::text as revision, broker, account_label, account_id, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, captured_at, current_price, quote_label, quote_checked_at
      from portfolio.holdings where user_id = $1 order by created_at desc, name asc`,
     [userId],
   );
   return result.rows.map(fromRow);
 }
 
-export async function listHoldings(userId: string) {
-  return select(db(), userId);
+export async function listHoldings(userId: string, client?: Pick<PoolClient, "query">) {
+  return select(client ?? db(), userId);
 }
 
 export async function addHoldings(

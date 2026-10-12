@@ -3,6 +3,7 @@ export type Market = "KR" | "US";
 export type Holding = {
   id: string;
   accountId?: string;
+  revision?: string;
   broker: string;
   account: string;
   market: Market;
@@ -19,6 +20,17 @@ export type Holding = {
   quoteLabel: string | null;
   quoteCheckedAt: string | null;
 };
+
+/** Retain live client quotes after a holdings-only mutation. */
+export function withPreviousQuotes(rows: Holding[], previous: Holding[]): Holding[] {
+  const byId = new Map(previous.map(row => [row.id, row]));
+  return rows.map(row => {
+    const before = byId.get(row.id);
+    return before && before.market === row.market && before.symbol === row.symbol && before.exchange === row.exchange
+      ? { ...row, currentPrice: before.currentPrice, quoteLabel: before.quoteLabel, quoteCheckedAt: before.quoteCheckedAt }
+      : row;
+  });
+}
 
 export type RecognizedHolding = Pick<
   Holding,

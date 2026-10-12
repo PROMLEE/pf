@@ -1,5 +1,7 @@
 "use client";
 
+import { withPreviousQuotes } from "./holdings";
+
 import NumberInput from "./NumberInput";
 
 import {
@@ -47,6 +49,7 @@ import AccountsManager from "./AccountsManager";
 import { protectUnsavedChanges } from "./unsaved-changes";
 import AccountSettings from "./AccountSettings";
 import ProfileAvatar from "./ProfileAvatar";
+import HoldingTradeEditor from "./HoldingTradeEditor";
 import AssetSortSelect, { compareAssets, isAssetSort, type AssetSort } from "./asset-sort";
 import styles from "./page.module.css";
 
@@ -228,12 +231,14 @@ export default function PortfolioPage() {
   const [holdingQuantity, setHoldingQuantity] = useState("");
   const [holdingCost, setHoldingCost] = useState("");
   const [holdingSaving, setHoldingSaving] = useState(false);
+  const [holdingTradeMode, setHoldingTradeMode] = useState(true);
+  const [holdingTradeDirty, setHoldingTradeDirty] = useState(false);
   const [assetAddOpen, setAssetAddOpen] = useState(false);
   const [deletingHoldingId, setDeletingHoldingId] = useState<string | null>(null);
   const [pendingHoldingRemoval, setPendingHoldingRemoval] = useState<string | null>(null);
   const editedHolding = holdings.find(row => row.id === editingHoldingId);
-  const holdingDirty = Boolean(view === "edit" && editedHolding && (holdingQuantity !== String(editedHolding.quantity) || holdingCost !== (editedHolding.averageCost === null ? "" : String(editedHolding.averageCost))));
-  const unsavedChanges = portfolioDirty || holdingDirty || (view === "import" && draft.length > 0);
+  const holdingDirty = Boolean(view === "edit" && !holdingTradeMode && editedHolding && (holdingQuantity !== String(editedHolding.quantity) || holdingCost !== (editedHolding.averageCost === null ? "" : String(editedHolding.averageCost))));
+  const unsavedChanges = portfolioDirty || holdingDirty || holdingTradeDirty || (view === "import" && draft.length > 0);
   useEffect(() => { navigationState.current.dirty = unsavedChanges; }, [unsavedChanges]);
   useEffect(() => protectUnsavedChanges(window, unsavedChanges), [unsavedChanges]);
 
@@ -583,6 +588,7 @@ export default function PortfolioPage() {
   }
 
   function beginHoldingEdit(row: Holding) {
+    setHoldingTradeMode(true);
     setEditingHoldingId(row.id);
     setHoldingQuantity(String(row.quantity));
     setHoldingCost(row.averageCost === null ? "" : String(row.averageCost));
@@ -1526,6 +1532,12 @@ export default function PortfolioPage() {
                         )}
                         {view === "edit" && editingHoldingId === row.id && (
                           <div className={styles.holdingEdit}>
+                            {holdingTradeMode ? <HoldingTradeEditor key={row.id} holding={row} onDirty={setHoldingTradeDirty} onBusy={setHoldingSaving}
+                              onCancel={() => setEditingHoldingId(null)} onDirect={() => setHoldingTradeMode(false)}
+                              onSaved={(next, message) => {
+                                setHoldings(withPreviousQuotes(next, holdings));
+                                setEditingHoldingId(null);setNotice(message);
+                              }} /> : <>
                             <p className={styles.editStatus} role="status">미저장 · 이 종목만 수정 후 저장하세요.</p>
                             <div className={styles.editTitle}>
                               <strong>{row.name}</strong>
@@ -1623,6 +1635,7 @@ export default function PortfolioPage() {
                                 </select>
                               ) : null}
                             </div>
+                            </>}
                           </div>
                         )}
                       </Fragment>

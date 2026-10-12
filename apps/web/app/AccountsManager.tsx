@@ -1,5 +1,7 @@
 "use client";
 
+import { withPreviousQuotes } from "./holdings";
+
 import { useEffect, useState } from "react";
 import { Plus, Pencil, ArrowRight, Wallet } from "lucide-react";
 import type { Holding, Market } from "./holdings";
@@ -10,6 +12,7 @@ import {
 } from "./accounts-model";
 import AssetIcon from "./AssetIcon";
 import NumberInput from "./NumberInput";
+import HoldingTradeEditor from "./HoldingTradeEditor";
 import styles from "./AccountsManager.module.css";
 
 type Instrument = {
@@ -65,6 +68,8 @@ export default function AccountsManager({
   const [searching, setSearching] = useState(false),
     [quantity, setQuantity] = useState(""),
     [cost, setCost] = useState("");
+  const [tradeMode, setTradeMode] = useState(true);
+  const [tradeDirty, setTradeDirty] = useState(false);
   const [pendingMove, setPendingMove] = useState<{
     holdingId: string;
     targetId: string;
@@ -82,7 +87,7 @@ export default function AccountsManager({
   );
   const editingRow = holdings.find((row) => row.id === editingId);
   const stockDirty = Boolean(
-    formOpen &&
+    formOpen && !(editingRow && tradeMode) &&
       (editingRow
         ? quantity !== String(editingRow.quantity) ||
           cost !==
@@ -92,7 +97,7 @@ export default function AccountsManager({
         : instrument || query || quantity || cost),
   );
   const createDirty = Boolean(creating && (newBroker || newName));
-  const inputDirty = accountDirty || stockDirty || createDirty;
+  const inputDirty = accountDirty || stockDirty || createDirty || tradeDirty;
   const dirty = inputDirty || Boolean(pendingMove);
   const valuation = accountValuation(rows);
   const totalCost = purchaseTotal(quantity, cost);
@@ -271,7 +276,7 @@ export default function AccountsManager({
           ),
         }),
       );
-      onHoldings(result.holdings);
+      onHoldings(withPreviousQuotes(result.holdings, holdings));
       resetStock();
       onNotice(
         `${selected.name} · ${instrument.name} ${editingId ? "수정" : "추가"} 완료`,
@@ -284,6 +289,7 @@ export default function AccountsManager({
     }
   }
   function editStock(row: Holding) {
+    setTradeMode(true);
     if (
       dirty &&
       !window.confirm("저장하지 않은 입력을 버리고 이 종목을 수정할까요?")
@@ -568,8 +574,10 @@ export default function AccountsManager({
                   종목 직접 추가
                 </button>
               </div>
-              {formOpen && (
-                <form
+              {formOpen && (editingRow && tradeMode ? <HoldingTradeEditor key={editingRow.id} holding={editingRow}
+                onDirty={setTradeDirty} onBusy={setBusy} onCancel={resetStock} onDirect={() => setTradeMode(false)}
+                onSaved={(next, message) => { onHoldings(withPreviousQuotes(next, holdings));resetStock();onNotice(message); }}
+              /> : <form
                   className={styles.form}
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -876,6 +884,7 @@ export default function AccountsManager({
             createDirty && "새 계좌 입력",
             accountDirty && "계좌 정보 변경",
             stockDirty && (editingId ? "보유 종목 수정" : "종목 추가 입력"),
+            tradeDirty && "매수·매도 입력",
             pendingMove && "계좌 이동 확인",
           ]
             .filter(Boolean)
