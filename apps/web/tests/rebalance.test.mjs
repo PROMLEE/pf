@@ -322,3 +322,26 @@ test("target gap can cap a portfolio purchase even with a larger total budget", 
   assert.ok(blocked.limitKrw < result.buyBudget);
   assert.equal(result.trades.length, 0);
 });
+
+
+test("buying increases a portfolio value while its weight can fall after new funds", () => {
+  const rows = [holding("a", "A", 182, 100), holding("b", "B", 75, 100), holding("c", "C", 743, 100)];
+  const p = plan([["a", "A"], ["b", "B"], ["c", "C"]], [rule("A", "A", 100), rule("Y", "B", 1800)], {
+    tolerancePercent: 2,
+    buckets: [
+      {id:"A", name:"Nasdaq", targetPercent:20, color:"#000"},
+      {id:"B", name:"Kospi", targetPercent:10, color:"#000"},
+      {id:"C", name:"Other", targetPercent:70, color:"#000"},
+    ],
+  });
+  const result = rebalance(p, rows, "add-only", 2000);
+  const item = result.items.find(item => item.bucket.id === "A");
+  const buys = result.trades.filter(trade => trade.bucketId === "A" && trade.side === "buy");
+  assert.equal(buys.reduce((sum, trade) => sum + trade.amountKrw, 0), 200);
+  assert.equal(item.currentPercent, 18.2);
+  assert.ok(item.fundedPercent < item.projectedPercent);
+  assert.ok(item.projectedPercent < item.currentPercent);
+  assert.equal(item.fundedPercent, 18200 / 102000 * 100);
+  assert.equal(item.projectedPercent, 18400 / 102000 * 100);
+  assertMatchesActual(result, p, rows);
+});

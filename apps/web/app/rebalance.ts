@@ -56,6 +56,7 @@ export type RebalanceItem = {
   currentPercent: number;
   gapPercent: number;
   fundedGapPercent: number;
+  fundedPercent: number;
   projectedPercent: number;
   remainingGapKrw: number;
   advice: string;
@@ -502,6 +503,7 @@ export function rebalance(
       currentPercent,
       gapPercent: bucket.targetPercent - currentPercent,
       fundedGapPercent,
+      fundedPercent: targetTotal > 0 ? (current / targetTotal) * 100 : 0,
       projectedPercent:
         projected.total > 0 ? (projectedValue / projected.total) * 100 : 0,
       remainingGapKrw,

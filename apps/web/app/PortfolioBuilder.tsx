@@ -3045,9 +3045,17 @@ export default function PortfolioBuilder({
                             </span>
                             {item.bucket.name}
                           </strong>
-                          <small>
-                            현재 {pct(item.currentPercent)} → 조정 후 {pct(item.projectedPercent)} · 목표 {pct(item.bucket.targetPercent)}
-                          </small>
+                          {rebalanceMode === "add-only" ? (
+                            <>
+                              <small>현재 {pct(item.currentPercent)} · 목표 {pct(item.bucket.targetPercent)}</small>
+                              <small className={styles.fundedWeight}>
+                                자금 추가 후 {pct(item.fundedPercent)}
+                                {action === "add" ? ` → 매수 후 ${pct(item.projectedPercent)}` : " · 수량 유지"}
+                              </small>
+                            </>
+                          ) : (
+                            <small>현재 {pct(item.currentPercent)} → 조정 후 {pct(item.projectedPercent)} · 목표 {pct(item.bucket.targetPercent)}</small>
+                          )}
                         </div>
                         {!itemTrades.length && item.unaffordableBuys.length > 0 ? (
                           <div className={styles.buyHoldReason}>
@@ -3071,6 +3079,11 @@ export default function PortfolioBuilder({
                           </div>
                         ) : <p>{item.advice}</p>}
                         <div className={styles.tradeDetail}>
+                          {rebalanceMode === "add-only" && action === "add" && Math.round(item.projectedPercent * 10) < Math.round(item.currentPercent * 10) && (
+                            <p className={styles.shareDilutionNote}>
+                              이 포트의 금액은 {fmt(itemTrades.filter(trade => trade.side === "buy").reduce((sum, trade) => sum + trade.amountKrw, 0))} 늘지만, 전체 자산에는 {fmt(advice.newCash)}이 추가되어 현재보다 비중이 낮아집니다.
+                            </p>
+                          )}
                           {(Math.abs(item.remainingGapKrw) >= 1 || item.separateReview) && <details>
                             <summary>포트별 계산 상세</summary>
                           {Math.abs(item.remainingGapKrw) >= 1 && (

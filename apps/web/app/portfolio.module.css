@@ -1699,3 +1699,15 @@
 .advice .buyHoldReason p { grid-column: auto; width: auto; text-align: left; margin: 6px 0 12px; font-weight: 400; }
 .advice .buyHoldReason small { font-size: 13px; line-height: 1.6; color: var(--muted); }
 .buyHoldReason > div { display: grid; gap: 4px; }
+
+.advice > div > .fundedWeight { color: var(--ink); font-size: 13px; }
+.advice .tradeDetail .shareDilutionNote {
+  grid-column: auto;
+  margin: 0;
+  width: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+  text-align: left;
+}
