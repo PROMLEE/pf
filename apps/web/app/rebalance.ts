@@ -13,6 +13,8 @@ export type RebalanceOptions = {
   candidatePolicy?: "priority" | "fallback";
   excludedBuySymbols?: Set<string>;
   buyHoldingIds?: Record<string, string>;
+  buyRuleIds?: Record<string, string>;
+  sellSymbols?: Record<string, string>;
 };
 export type AppliedPrice = {
   unitPrice: number;
@@ -308,6 +310,7 @@ export function rebalance(
           .filter(
             (row) =>
               holdingBucketId(plan, row) === bucket.id &&
+              (!options.sellSymbols?.[bucket.id] || options.sellSymbols[bucket.id] === symbolKey(row.market, row.symbol || row.name)) &&
               !excludedHoldingIds.has(row.id),
           )
           .sort(
@@ -342,7 +345,7 @@ export function rebalance(
             account: holding.account,
             usdKrw: holding.market === "US" ? plan.usdKrw : null,
             selectionReason:
-              "포트 내 매도 제외되지 않은 보유 항목을 평가액 순으로 검토",
+              options.sellSymbols?.[bucket.id] ? "사용자가 선택한 종목의 보유 계좌를 평가액 순으로 검토" : "포트 내 매도 제외되지 않은 보유 항목을 평가액 순으로 검토",
           });
           projectedHoldings.find((row) => row.id === holding.id)!.quantity -=
             shares;
@@ -353,7 +356,8 @@ export function rebalance(
           const stocks = holdings.filter((row) => holdingBucketId(plan, row) === bucket.id);
           addReason(bucket.id, !stocks.length
             ? "이 포트에는 자동 매도할 주식이 없습니다. 별도 검토 자산을 확인하세요."
-            : !owned.length ? "모든 보유 주식이 매도 제외되었습니다."
+            : !owned.length ? options.sellSymbols?.[bucket.id] ? "선택한 종목의 매도 가능한 보유 항목이 없습니다. 종목 선택·매도 제외를 확인하세요." : "모든 보유 주식이 매도 제외되었습니다."
+            : options.sellSymbols?.[bucket.id] ? "선택한 매도 종목만으로 초과분을 모두 조정하지 못했습니다. 다른 종목 또는 자동 선택으로 비교하세요."
             : "주식 제안으로 채우지 못한 초과분이 있습니다. 매도 제외·1주 단위와 별도 검토 자산을 확인하세요.");
         }
       }
@@ -370,7 +374,8 @@ export function rebalance(
     const selectedBuys: { bucket: Bucket; gap: number; rule: Rule; candidate: CandidateEvaluation }[] = [];
     // Select eligible candidates before any portfolio consumes the shared budget.
     for (const { bucket, gap } of deficits) {
-      const rules = plan.rules.filter((rule) => rule.bucketId === bucket.id);
+      const selectedRuleId = options.buyRuleIds?.[bucket.id];
+      const rules = plan.rules.filter((rule) => rule.bucketId === bucket.id && (!selectedRuleId || rule.id === selectedRuleId));
       if (available <= 0) {
         addReason(bucket.id, "이번 계산에서 사용할 매수 자금이 없습니다.");
         continue;
@@ -421,7 +426,7 @@ export function rebalance(
         }
       }
       if (!selected) {
-        if (!rules.length) addReason(bucket.id, "등록된 매수 후보가 없습니다.");
+        if (!rules.length) addReason(bucket.id, selectedRuleId ? "선택한 매수 후보가 이 포트에 없습니다. 종목을 다시 선택하세요." : "등록된 매수 후보가 없습니다.");
         continue;
       }
       selectedBuys.push({ bucket, gap, rule: selected.rule, candidate: selected.candidate });
@@ -458,7 +463,7 @@ export function rebalance(
         broker: owned?.broker ?? null,
         account: owned?.account ?? null,
         usdKrw: rule.market === "US" ? plan.usdKrw : null,
-        selectionReason: `${options.candidatePolicy === "fallback" ? "순서대로 매수 가능한 후보 검토" : "우선 후보 사용"} · ${candidate.reason}`,
+        selectionReason: `${options.buyRuleIds?.[bucket.id] ? "사용자가 선택한 매수 종목" : options.candidatePolicy === "fallback" ? "순서대로 매수 가능한 후보 검토" : "우선 후보 사용"} · ${candidate.reason}`,
       });
       if (owned)
         projectedHoldings.find((row) => row.id === owned.id)!.quantity +=
@@ -495,6 +500,10 @@ export function rebalance(
     // Preserve explicit affordability failures; explain untouched candidates.
     if (!candidate.reason.startsWith("같은 포트") && !candidate.reason.startsWith("사용자가 선택") && !candidate.reason.startsWith("신규 종목")) continue;
     const rule = plan.rules.find((item) => item.id === candidate.ruleId)!;
+    if (options.buyRuleIds?.[rule.bucketId] && options.buyRuleIds[rule.bucketId] !== rule.id) {
+      candidate.reason = "사용자가 같은 포트의 다른 종목을 선택했습니다.";
+      continue;
+    }
     const bucket = plan.buckets.find((item) => item.id === rule.bucketId);
     const fundedPercent = targetTotal > 0 ? (values.get(rule.bucketId) ?? 0) / targetTotal * 100 : 0;
     candidate.reason = !ready ? "자산 배정·가격 확인을 마친 뒤 계산합니다."

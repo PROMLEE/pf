@@ -661,6 +661,9 @@ export default function PortfolioBuilder({
     "priority" | "fallback"
   >("priority");
   const [excludedBuySymbols, setExcludedBuySymbols] = useState<string[]>([]);
+  const [buyRuleIds, setBuyRuleIds] = useState<Record<string, string>>({});
+  const [sellSymbols, setSellSymbols] = useState<Record<string, string>>({});
+  useEffect(() => { setBuyRuleIds({}); setSellSymbols({}); }, [userId]);
   const [buyHoldingIds, setBuyHoldingIds] = useState<Record<string, string>>(
     {},
   );
@@ -1370,6 +1373,8 @@ export default function PortfolioBuilder({
               candidatePolicy,
               excludedBuySymbols: new Set(excludedBuySymbols),
               buyHoldingIds,
+              buyRuleIds,
+              sellSymbols,
             },
           )
         : {
@@ -1395,6 +1400,8 @@ export default function PortfolioBuilder({
       candidatePolicy,
       excludedBuySymbols,
       buyHoldingIds,
+      buyRuleIds,
+      sellSymbols,
     ],
   );
   const rebalanceReady = Boolean(
@@ -2927,6 +2934,8 @@ export default function PortfolioBuilder({
                 </details>
                 <div className={styles.adviceList}>
                   {actionItems.map((item) => {
+                    const bucketRules = draft.rules.filter(rule => rule.bucketId === item.bucket.id);
+                    const sellChoices = [...new Map(holdings.filter(row => holdingBucketId(draft, row) === item.bucket.id).map(row => [symbolKey(row.market, row.symbol || row.name), row])).entries()];
                     const itemTrades = advice.trades.filter(
                       (trade) => trade.bucketId === item.bucket.id,
                     );
@@ -2963,6 +2972,26 @@ export default function PortfolioBuilder({
                               ? ` · ${item.projectedPercent < item.bucket.targetPercent ? "부족" : "초과"} ${Math.abs(item.projectedPercent - item.bucket.targetPercent).toFixed(1)}%p`
                               : " · 목표 도달"}
                           </small>
+                          {bucketRules.length > 0 && item.fundedGapPercent > 0 && (
+                            <label className={styles.proposalChoice}>
+                              매수 종목
+                              <select aria-label={`${item.bucket.name} 매수 종목`} value={buyRuleIds[item.bucket.id] ?? ""} onChange={event => setBuyRuleIds(current => ({...current, [item.bucket.id]: event.target.value}))}>
+                                <option value="">자동 선택 · 후보 설정 사용</option>
+                                {buyRuleIds[item.bucket.id] && !bucketRules.some(rule => rule.id === buyRuleIds[item.bucket.id]) && <option value={buyRuleIds[item.bucket.id]}>선택한 후보가 변경됨 · 다시 선택</option>}
+                                {bucketRules.map(rule => <option key={rule.id} value={rule.id}>{rule.name || rule.symbol}{rule.market === "US" && rule.name ? ` (${rule.symbol})` : ""}</option>)}
+                              </select>
+                            </label>
+                          )}
+                          {rebalanceMode === "trade" && item.currentPercent > item.bucket.targetPercent && sellChoices.length > 0 && (
+                            <label className={styles.proposalChoice}>
+                              매도 종목
+                              <select aria-label={`${item.bucket.name} 매도 종목`} value={sellSymbols[item.bucket.id] ?? ""} onChange={event => setSellSymbols(current => ({...current, [item.bucket.id]: event.target.value}))}>
+                                <option value="">자동 선택 · 평가액 높은순</option>
+                                {sellSymbols[item.bucket.id] && !sellChoices.some(([key]) => key === sellSymbols[item.bucket.id]) && <option value={sellSymbols[item.bucket.id]}>선택한 종목이 변경됨 · 다시 선택</option>}
+                                {sellChoices.map(([key,row]) => <option key={key} value={key}>{row.name || row.symbol}{row.market === "US" && row.name ? ` (${row.symbol})` : ""}</option>)}
+                              </select>
+                            </label>
+                          )}
                         </div>
                         {!itemTrades.length && item.unaffordableBuys.length > 0 ? (
                           <div className={styles.buyHoldReason}>
@@ -2977,7 +3006,7 @@ export default function PortfolioBuilder({
                                 ? "목표 비중에 맞춰 계산한 한도입니다. 입력한 전체 투자금과 다릅니다."
                                 : "현재 남아 있는 매수 예산을 기준으로 계산한 한도입니다."}
                             </small>
-                            {candidatePolicy === "priority" && draft.rules.filter(rule => rule.bucketId === item.bucket.id).length > 1 && (
+                            {candidatePolicy === "priority" && !buyRuleIds[item.bucket.id] && bucketRules.length > 1 && (
                               <div>
                                 <button type="button" onClick={() => setCandidatePolicy("fallback")}>다른 후보도 검토하기</button>
                                 <small>모든 포트의 후보 검토 방식이 함께 바뀝니다.</small>

@@ -394,3 +394,37 @@ test("final tolerance labels use the actual percentage including exact boundarie
   assert.equal(withinTolerance(1,0,2),true);
   assert.equal(withinTolerance(25,25+1e-12,0),true);
 });
+
+test('each portfolio can choose a different purchase candidate and projections match all trades', () => {
+  const rows = [holding('a', 'AX', 10)];
+  const p = plan([['a', 'A']], [rule('AX','A',100),rule('AY','A',50),rule('BX','B',1500),rule('BY','B',100)]);
+  const result = rebalance(p, rows, 'add-only', 3000, new Set(), {buyRuleIds:{A:'AY',B:'BY'}});
+  assert.deepEqual(result.trades.filter(t=>t.side==='buy').map(t=>t.symbol).sort(), ['AY','BY']);
+  assert.equal(result.residualCash,0);
+  assertMatchesActual(result,p,rows);
+});
+test('explicit purchase never falls back to another stock, including blocked and stale choices', () => {
+  const rows=[holding('a','AX',10)];
+  const p=plan([['a','A']], [rule('AX','A',100),rule('BX','B',1500),rule('BY','B',100)]);
+  for (const options of [
+    {buyRuleIds:{B:'BX'},candidatePolicy:'fallback'},
+    {buyRuleIds:{B:'AX'},candidatePolicy:'fallback'},
+    {buyRuleIds:{B:'BY'},candidatePolicy:'fallback',excludedBuySymbols:new Set(['KR:BY'])},
+  ]) {
+    const result=rebalance(p,rows,'add-only',1000,new Set(),options);
+    assert.equal(result.trades.filter(t=>t.side==='buy').length,0);
+    assert.equal(result.residualCash,1000);
+    assertMatchesActual(result,p,rows);
+  }
+});
+test('selected sale stock limits liquidation, respects exclusions and updates joint purchase budget', () => {
+  const rows=[holding('x','X',10,100),holding('y','Y',10,50),holding('z','Z',1,100)];
+  const p=plan([['x','A'],['y','A'],['z','B']], [rule('X','A',100),rule('Y','A',50),rule('Z','B',100)]);
+  const result=rebalance(p,rows,'trade',0,new Set(),{sellSymbols:{A:'KR:Y'}});
+  assert.deepEqual(result.trades.filter(t=>t.side==='sell').map(t=>t.symbol),['Y']);
+  assert.equal(result.trades.find(t=>t.side==='sell').shares,10);
+  assertMatchesActual(result,p,rows);
+  const excluded=rebalance(p,rows,'trade',0,new Set(['y']),{sellSymbols:{A:'KR:Y'}});
+  assert.equal(excluded.trades.length,0);
+  assertMatchesActual(excluded,p,rows);
+});

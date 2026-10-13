@@ -665,6 +665,24 @@
   display: grid;
   gap: 0;
 }
+.proposalChoice {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.proposalChoice select {
+  width: 100%;
+  max-width: 320px;
+  min-width: 0;
+  padding: 7px 9px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
 .rebalanceStatus {
   margin: 0 0 5px;
   color: #6584ab;
