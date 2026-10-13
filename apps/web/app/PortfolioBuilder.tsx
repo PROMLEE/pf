@@ -4,6 +4,7 @@ import { withPreviousQuotes } from "./holdings";
 
 import NumberInput from "./NumberInput";
 import HoldingTradeEditor from "./HoldingTradeEditor";
+import { portfolioCache, tradePortfolioEvent } from "./portfolio-cache";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -46,7 +47,6 @@ type Candidate = {
   exchange: string | null;
 };
 type CryptoMarket = { marketCode: string; name: string; englishName: string };
-const portfolioCache = new Map<string, Portfolio | null>();
 type DailyCryptoQuotes = Record<
   string,
   { previousClose: number | null; checkedAt: string | null }
@@ -602,6 +602,17 @@ export default function PortfolioBuilder({
 
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const {portfolio, cashAssetId} = (event as CustomEvent<{portfolio: Portfolio; cashAssetId: string}>).detail;
+      portfolioCache.set(userId, portfolio);
+      setDraft((current) => current && dirtyRef.current
+        ? { ...current, manualAssets: current.manualAssets.map((asset) => asset.id === cashAssetId ? portfolio.manualAssets.find((saved) => saved.id === cashAssetId) ?? asset : asset), snapshots: portfolio.snapshots }
+        : portfolio);
+    };
+    window.addEventListener(tradePortfolioEvent, receive);
+    return () => window.removeEventListener(tradePortfolioEvent, receive);
+  }, [userId]);
   const [ruleMarket, setRuleMarket] = useState<Market>("KR");
   const [ruleQuery, setRuleQuery] = useState("");
   const [ruleBucketId, setRuleBucketId] = useState("");

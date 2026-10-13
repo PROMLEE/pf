@@ -13,7 +13,10 @@ export type ExpectedPosition = {
   accountId: string;
   revision: string;
 };
-export type HoldingTradeInput = PositionTrade & { expected: ExpectedPosition };
+export type HoldingTradeInput = PositionTrade & {
+  expected: ExpectedPosition;
+  cash?: { assetId: string; expectedBalance: number } | null;
+};
 export class PositionTradeError extends Error {
   constructor(
     message: string,
@@ -46,6 +49,12 @@ export function validateHoldingTrade(
     shares(trade.quantity) &&
     number(trade.price) &&
     number(trade.fee, false) &&
+    (trade.cash == null ||
+      (uuid(trade.cash.assetId) &&
+        typeof trade.cash.expectedBalance === "number" &&
+        Number.isFinite(trade.cash.expectedBalance) &&
+        trade.cash.expectedBalance >= 0 &&
+        trade.cash.expectedBalance <= 1e15)) &&
     Boolean(
       expected &&
         typeof expected === "object" &&
@@ -59,6 +68,23 @@ export function validateHoldingTrade(
         /^\d{1,20}$/.test(expected.revision),
     )
   );
+}
+export function calculateTradeCash(
+  balance: number,
+  trade: PositionTrade,
+  market: "KR" | "US",
+) {
+  const delta =
+    (trade.side === "buy" ? -1 : 1) * trade.quantity * trade.price - trade.fee;
+  const scale = market === "US" ? 1e6 : 100;
+  const next = Math.round((balance + delta) * scale) / scale;
+  if (!Number.isFinite(next) || next > (market === "US" ? 1e12 : 1e15))
+    throw new PositionTradeError("변경 후 현금 잔고가 입력 범위를 초과합니다.");
+  if (next < 0)
+    throw new PositionTradeError(
+      "선택한 현금 잔고가 부족합니다. 잔고 또는 거래 금액을 확인해 주세요.",
+    );
+  return { balance: next, delta: next - balance };
 }
 export function calculatePositionTrade(
   current: { quantity: number; averageCost: number | null },

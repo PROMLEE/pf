@@ -67,6 +67,35 @@
 .fee label {
   margin-top: 8px;
 }
+.cash {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+.editor .cashToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.editor .cashToggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--action-ink);
+}
+.cash select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+}
+.cash small {
+  color: var(--muted);
+  font-size: 13px;
+}
 .preview {
   display: grid;
   gap: 9px;

@@ -12,7 +12,8 @@ const compile = async (path) =>
 const url = (s) =>
   `data:text/javascript;base64,${Buffer.from(s).toString("base64")}`;
 const modelUrl = url(await compile("../app/position-trade.ts"));
-const { calculatePositionTrade, validateHoldingTrade } = await import(modelUrl);
+const { calculatePositionTrade, calculateTradeCash, validateHoldingTrade } =
+  await import(modelUrl);
 const id = "11111111-1111-4111-8111-111111111111";
 const expected = {
   quantity: 10,
@@ -120,6 +121,8 @@ const reset = () => {
   state.calls = [];
   state.missing = false;
   state.snapshotFails = false;
+  state.cash = { name: "달러", value_krw: "1400000", value_usd: "1000" };
+  state.cashMissing = false;
   state.row = {
     quantity: "10",
     average_cost: "100",
@@ -133,11 +136,11 @@ let dbCode = await compile("../lib/holding-trades-db.ts");
 dbCode = dbCode
   .replace(
     /import \{ db \} from "\.\/db";/,
-    `const client={query:async(sql,args)=>{const s=globalThis.__pfTradeTest;s.calls.push({sql,args});if(sql==='begin')s.backup={...s.row};if(sql==='rollback')s.row=s.backup;if(sql.startsWith('select quantity'))return {rows:s.missing?[]:[s.row]};if(sql.startsWith('update portfolio.holdings'))s.row={...s.row,quantity:String(args[2]),average_cost:args[3]===null?null:String(args[3]),revision:'124'};if(sql.startsWith('delete from'))s.row=null;return {rows:[]};},release(){}};const db=()=>({connect:async()=>client});`,
+    `const client={query:async(sql,args)=>{const s=globalThis.__pfTradeTest;s.calls.push({sql,args});if(sql==='begin'){s.backup={...s.row};s.cashBackup={...s.cash};}if(sql==='rollback'){s.row=s.backup;s.cash=s.cashBackup;}if(sql.startsWith('select usd_krw'))return {rows:[{usd_krw:'1400'}]};if(sql.startsWith('select name, value_krw'))return {rows:s.cashMissing?[]:[s.cash]};if(sql.startsWith('update portfolio.manual_assets'))s.cash={...s.cash,value_krw:String(args[2]),value_usd:args[3]===null?null:String(args[3])};if(sql.startsWith('select quantity'))return {rows:s.missing?[]:[s.row]};if(sql.startsWith('update portfolio.holdings'))s.row={...s.row,quantity:String(args[2]),average_cost:args[3]===null?null:String(args[3]),revision:'124'};if(sql.startsWith('delete from'))s.row=null;return {rows:[]};},release(){}};const db=()=>({connect:async()=>client});`,
   )
   .replace(
-    /import \{ recordSnapshot \} from "\.\/portfolio-db";/,
-    `const recordSnapshot=async(user,client)=>{if(globalThis.__pfTradeTest.snapshotFails)throw new Error('snapshot failure');};`,
+    /import \{ recordSnapshot, listPortfolio \} from "\.\/portfolio-db";/,
+    `const listPortfolio=async(user,client)=>({manualAssets:[globalThis.__pfTradeTest.cash]});const recordSnapshot=async(user,client)=>{if(globalThis.__pfTradeTest.snapshotFails)throw new Error('snapshot failure');};`,
   )
   .replace(
     /import \{ listHoldings \} from "\.\/holdings-db";/,
@@ -295,5 +298,99 @@ test("saving a position preserves matching live quotes without discarding its ne
     withPreviousQuotes([{ ...saved, symbol: "MSFT" }], [previous])[0]
       .currentPrice,
     null,
+  );
+});
+
+test("cash purchase debits dollars including fees and full sale credits net proceeds", async () => {
+  reset();
+  const cash = { assetId: id, expectedBalance: 1000 };
+  const r = await applyHoldingTrade("owner", id, input({ cash }));
+  assert.equal(r.cashChange.balance, 690);
+  assert.equal(state.cash.value_usd, "690");
+  assert.equal(state.cash.value_krw, "966000");
+  assert.equal(r.portfolio.manualAssets[0].value_usd, "690");
+  await assert.rejects(
+    () => applyHoldingTrade("owner", id, input({ cash })),
+    (e) => e.status === 409,
+  );
+  assert.equal(state.cash.value_usd, "690");
+  reset();
+  const sold = await applyHoldingTrade(
+    "owner",
+    id,
+    input({ side: "sell", quantity: 10, price: 130, fee: 3, cash }),
+  );
+  assert.equal(sold.cashChange.balance, 2297);
+  assert.deepEqual(sold.holdings, []);
+});
+test("KRW settlement updates won and failed settlement rolls back both assets", async () => {
+  reset();
+  state.row.market = "KR";
+  state.cash.value_usd = null;
+  const r = await applyHoldingTrade(
+    "owner",
+    id,
+    input({
+      expected: { ...expected, market: "KR" },
+      cash: { assetId: id, expectedBalance: 1400000 },
+    }),
+  );
+  assert.equal(r.cashChange.balance, 1399690);
+  assert.equal(state.cash.value_usd, null);
+  for (const kind of [
+    "currency",
+    "missing",
+    "stale",
+    "insufficient",
+    "snapshot",
+  ]) {
+    reset();
+    if (kind === "currency") state.cash.value_usd = null;
+    if (kind === "missing") state.cashMissing = true;
+    if (kind === "insufficient") state.cash.value_usd = "1";
+    if (kind === "snapshot") state.snapshotFails = true;
+    await assert.rejects(() =>
+      applyHoldingTrade(
+        "owner",
+        id,
+        input({
+          cash: {
+            assetId: id,
+            expectedBalance:
+              kind === "stale" ? 999 : kind === "insufficient" ? 1 : 1000,
+          },
+        }),
+      ),
+    );
+    assert.equal(state.row.quantity, "10");
+    assert.equal(
+      state.cash.value_usd,
+      kind === "currency" ? null : kind === "insufficient" ? "1" : "1000",
+    );
+    assert.equal(
+      state.calls.some((c) => c.sql === "commit"),
+      false,
+    );
+  }
+});
+test("cash validation rejects forged IDs and balances", () => {
+  for (const cash of [
+    { assetId: "bad", expectedBalance: 10 },
+    { assetId: id, expectedBalance: -1 },
+    { assetId: id, expectedBalance: NaN },
+  ])
+    assert.equal(validateHoldingTrade(input({ cash })), false);
+  assert.throws(() => calculateTradeCash(1, input(), "US"), /부족/);
+  assert.throws(
+    () => calculateTradeCash(0, input({ side: "sell", fee: 1000 }), "US"),
+    /부족/,
+  );
+  assert.equal(
+    calculateTradeCash(
+      10,
+      { side: "buy", quantity: 0.1, price: 0.3, fee: 0 },
+      "US",
+    ).balance,
+    9.97,
   );
 });
