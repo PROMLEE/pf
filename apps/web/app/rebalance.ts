@@ -10,6 +10,7 @@ import {
 
 export type RebalanceMode = "trade" | "add-only";
 export type RebalanceOptions = {
+  preserveCash?: boolean;
   candidatePolicy?: "priority" | "fallback";
   excludedBuySymbols?: Set<string>;
   buyHoldingIds?: Record<string, string>;
@@ -60,6 +61,7 @@ export type AmountAdjustment = {
 };
 export type RebalanceItem = {
   amountAdjustment: AmountAdjustment | null;
+  fixedAmount: boolean;
   bucket: Bucket;
   current: number;
   currentPercent: number;
@@ -237,13 +239,10 @@ export function rebalance(
             ),
         )
       : 0;
-  const cash =
-    mode === "add-only"
-      ? newCash === null
-        ? theoreticalCash
-        : Number.isFinite(newCash)
-          ? Math.max(0, newCash)
-          : 0
+  const cash = mode === "add-only" && newCash === null
+    ? theoreticalCash
+    : typeof newCash === "number" && Number.isFinite(newCash)
+      ? Math.max(0, newCash)
       : 0;
   const targetTotal = total + cash;
   const projectedHoldings = holdings.map((holding) => ({ ...holding }));
@@ -253,7 +252,7 @@ export function rebalance(
   const unaffordableBuys = new Map<string, UnaffordableBuy[]>();
   const addReason = (id: string, reason: string) =>
     reasons.set(id, [...(reasons.get(id) ?? []), reason]);
-  let available = mode === "add-only" ? cash : 0;
+  let available = cash;
   const candidates: CandidateEvaluation[] = plan.rules.map((rule) => {
     const sameCode = holdings.filter(
       (holding) =>
@@ -307,7 +306,7 @@ export function rebalance(
           !needsAdjustment(
             bucket.targetPercent,
             current,
-            currentPct(bucket),
+            targetTotal > 0 ? current / targetTotal * 100 : 0,
             plan.tolerancePercent,
           )
         )
@@ -547,7 +546,7 @@ export function rebalance(
       && !plan.cryptoAssets.some(asset => asset.bucketId === bucket.id)
       && !plan.rules.some(rule => rule.bucketId === bucket.id);
     const projectedPercent = projected.total > 0 ? projectedValue / projected.total * 100 : 0;
-    const amountAdjustment: AmountAdjustment | null = ready && !impossibleWithoutSelling && directOnly ? {
+    const amountAdjustment: AmountAdjustment | null = ready && !impossibleWithoutSelling && directOnly && !options.preserveCash ? {
       direction: withinTolerance(bucket.targetPercent, projectedPercent, plan.tolerancePercent) ? "hold" : remainingGapKrw > 0 ? "increase" : "decrease",
       amountKrw: withinTolerance(bucket.targetPercent, projectedPercent, plan.tolerancePercent) ? 0 : Math.abs(remainingGapKrw),
       currentKrw: projectedValue,
@@ -590,11 +589,13 @@ export function rebalance(
       else
         advice = (reasons.get(bucket.id) ?? ["매수 예산·후보 가격·주식 1주 단위를 확인하세요."]).join(" ");
     }
+    if (ready && options.preserveCash && directOnly) advice = "등록된 금액을 유지합니다. 현금 비중은 전체 자산 금액에 따라 달라질 수 있습니다.";
     if (amountAdjustment) advice = amountAdjustment.direction === "hold"
       ? "현재 금액을 유지합니다."
       : `${fmt(amountAdjustment.amountKrw)} ${amountAdjustment.direction === "increase" ? "추가 확보 검토" : "다른 포트로 이동 검토"}`;
     return {
       amountAdjustment,
+      fixedAmount: Boolean(options.preserveCash && directOnly),
       bucket,
       current,
       currentPercent,
@@ -619,7 +620,7 @@ export function rebalance(
     ready,
     requiredCash: theoreticalCash,
     newCash: cash,
-    buyBudget: mode === "add-only" ? cash : trades.reduce((sum, trade) => sum + (trade.side === "sell" ? trade.amountKrw : 0), 0),
+    buyBudget: cash + trades.reduce((sum, trade) => sum + (trade.side === "sell" ? trade.amountKrw : 0), 0),
     currentTotal: total,
     targetTotal,
     residualCash: available,

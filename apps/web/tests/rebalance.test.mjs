@@ -457,3 +457,63 @@ test("USD cash uses current FX valuation and mixed portfolios are not treated as
  const mixed=rebalance({...p,assignments:[...p.assignments,{holdingId:'second',bucketId:'B',source:'manual'}]},[holding('stock','X',8),holding('second','Y',1)],'trade',0,new Set());
  assert.equal(mixed.items.find(i=>i.bucket.id==='B').amountAdjustment,null);
 });
+
+test("cash stays fixed while sales and new funding jointly finance final stock weights", () => {
+  const rows = [holding("a", "X", 6), holding("b", "Y", 2)];
+  const p = plan([["a", "A"], ["b", "B"]], [rule("X", "A"), rule("Y", "B")], {
+    buckets: [
+      { id: "A", name: "A", targetPercent: 40, color: "#000" },
+      { id: "B", name: "B", targetPercent: 40, color: "#fff" },
+      { id: "C", name: "현금", targetPercent: 20, color: "#999" },
+    ],
+    manualAssets: [{ id: "cash", bucketId: "C", name: "현금", valueKrw: 200, valueUsd: null }],
+  });
+  const original = JSON.stringify(p);
+  const result = rebalance(p, rows, "trade", 250, new Set(), { preserveCash: true });
+  close(result.targetTotal, 1250);
+  close(result.buyBudget, 350);
+  assert.equal(result.trades.find(t => t.side === "sell").shares, 1);
+  assert.equal(result.trades.find(t => t.side === "buy").shares, 3);
+  close(result.residualCash, 50);
+  const cash = result.items.find(i => i.bucket.id === "C");
+  assert.equal(cash.fixedAmount, true);
+  assert.equal(cash.amountAdjustment, null);
+  close(cash.projectedValue, 200);
+  close(cash.projectedPercent, 16);
+  assert.equal(JSON.stringify(p), original);
+  assertMatchesActual(result, p, rows);
+});
+
+test("new funding prevents sales that are no longer overweight after funding", () => {
+  const rows = [holding("a", "X", 6), holding("b", "Y", 4)];
+  const p = plan([["a", "A"], ["b", "B"]], [rule("Y", "B")]);
+  const result = rebalance(p, rows, "trade", 200, new Set(), { preserveCash: true });
+  assert.equal(result.trades.some(t => t.side === "sell"), false);
+  assert.equal(result.trades.find(t => t.side === "buy").shares, 2);
+  close(result.items[0].projectedPercent, 50);
+  close(result.items[1].projectedPercent, 50);
+  assertMatchesActual(result, p, rows);
+});
+
+test("fixed cash is never spent even when it makes stock targets unreachable", () => {
+  const rows = [holding("a", "X", 1), holding("b", "Y", 1)];
+  const p = plan([["a", "A"], ["b", "B"]], [rule("X", "A"), rule("Y", "B")], {
+    buckets: [
+      { id: "A", name: "A", targetPercent: 45, color: "#000" },
+      { id: "B", name: "B", targetPercent: 45, color: "#fff" },
+      { id: "C", name: "현금", targetPercent: 10, color: "#999" },
+    ],
+    manualAssets: [{ id: "cash", bucketId: "C", name: "현금", valueKrw: 800, valueUsd: null }],
+  });
+  const result = rebalance(p, rows, "trade", 0, new Set(), { preserveCash: true });
+  assert.equal(result.trades.length, 0);
+  close(result.buyBudget, 0);
+  close(result.items.find(i => i.bucket.id === "C").projectedValue, 800);
+  assert.equal(withinTolerance(45, result.items[0].projectedPercent, 0), false);
+  assertMatchesActual(result, p, rows);
+  for (const input of [null, -500, NaN, Infinity]) {
+    const invalid = rebalance(p, rows, "trade", input, new Set(), { preserveCash: true });
+    close(invalid.newCash, 0);
+    assertMatchesActual(invalid, p, rows);
+  }
+});
