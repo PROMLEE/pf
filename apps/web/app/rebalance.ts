@@ -2,6 +2,7 @@ import type { Holding, Market } from "./holdings";
 import {
   holdingBucketId,
   holdingValueKrw,
+  manualAssetValueKrw,
   portfolioValues,
   type Bucket,
   type Portfolio,
@@ -10,7 +11,7 @@ import {
 
 export type RebalanceMode = "trade" | "add-only";
 export type RebalanceOptions = {
-  preserveCash?: boolean;
+  cashBucketId?: string | null;
   candidatePolicy?: "priority" | "fallback";
   excludedBuySymbols?: Set<string>;
   buyHoldingIds?: Record<string, string>;
@@ -61,7 +62,7 @@ export type AmountAdjustment = {
 };
 export type RebalanceItem = {
   amountAdjustment: AmountAdjustment | null;
-  fixedAmount: boolean;
+  cashSettlement: { currentKrw: number; targetKrw: number; projectedKrw: number } | null;
   bucket: Bucket;
   current: number;
   currentPercent: number;
@@ -183,6 +184,15 @@ export function allocatePortfolioBuys(
   return new Map(states.map(entry => [entry.id, entry.shares]));
 }
 
+/** Money portfolios must be selected explicitly; never infer spendable cash from an asset name. */
+export function cashPortfolioBuckets(plan: Portfolio, holdings: Holding[]) {
+  return plan.buckets.filter(bucket =>
+    plan.manualAssets.some(asset => asset.bucketId === bucket.id)
+    && !holdings.some(holding => holdingBucketId(plan, holding) === bucket.id)
+    && !plan.cryptoAssets.some(asset => asset.bucketId === bucket.id)
+    && !plan.rules.some(rule => rule.bucketId === bucket.id));
+}
+
 export function rebalance(
   plan: Portfolio,
   holdings: Holding[],
@@ -196,6 +206,7 @@ export function rebalance(
     holdings,
   );
   const ready = total > 0 && unassigned === 0 && missingPrices === 0;
+  const cashBucket = cashPortfolioBuckets(plan, holdings).find(bucket => bucket.id === options.cashBucketId);
   const currentPct = (bucket: Bucket) =>
     total > 0 ? ((values.get(bucket.id) ?? 0) / total) * 100 : 0;
   const withinRange = plan.buckets.every(
@@ -212,14 +223,14 @@ export function rebalance(
     plan.tolerancePercent === 0 &&
     plan.buckets.some(
       (bucket) =>
-        bucket.targetPercent === 0 && (values.get(bucket.id) ?? 0) > 0,
+        bucket.id !== cashBucket?.id && bucket.targetPercent === 0 && (values.get(bucket.id) ?? 0) > 0,
     );
   const theoreticalCash =
     mode === "add-only" && !withinRange && !impossibleWithoutSelling
       ? Math.max(
           0,
           ...plan.buckets
-            .filter((bucket) => bucket.targetPercent > 0)
+            .filter((bucket) => bucket.id !== cashBucket?.id && bucket.targetPercent > 0)
             .map(
               (bucket) =>
                 (values.get(bucket.id) ?? 0) / (bucket.targetPercent / 100) -
@@ -228,7 +239,7 @@ export function rebalance(
           ...plan.buckets
             .filter(
               (bucket) =>
-                bucket.targetPercent === 0 &&
+                bucket.id !== cashBucket?.id && bucket.targetPercent === 0 &&
                 (values.get(bucket.id) ?? 0) > 0 &&
                 plan.tolerancePercent > 0,
             )
@@ -245,6 +256,10 @@ export function rebalance(
       ? Math.max(0, newCash)
       : 0;
   const targetTotal = total + cash;
+  const cashCurrent = cashBucket ? values.get(cashBucket.id) ?? 0 : 0;
+  const cashTarget = cashBucket ? targetTotal * cashBucket.targetPercent / 100 : 0;
+  const usedFromCash = ready ? Math.max(0, cashCurrent - cashTarget) : 0;
+  const reserveNeeded = ready ? Math.max(0, cashTarget - cashCurrent) : 0;
   const projectedHoldings = holdings.map((holding) => ({ ...holding }));
   const projectedAssignments = [...plan.assignments];
   const trades: Trade[] = [];
@@ -252,7 +267,9 @@ export function rebalance(
   const unaffordableBuys = new Map<string, UnaffordableBuy[]>();
   const addReason = (id: string, reason: string) =>
     reasons.set(id, [...(reasons.get(id) ?? []), reason]);
-  let available = cash;
+  let available = cash + usedFromCash;
+  let reservedCash = 0;
+  let buyBudget = available;
   const candidates: CandidateEvaluation[] = plan.rules.map((rule) => {
     const sameCode = holdings.filter(
       (holding) =>
@@ -296,14 +313,14 @@ export function rebalance(
     };
   });
 
-  if (ready && !impossibleWithoutSelling && (!withinRange || cash > 0)) {
+  if (ready && !impossibleWithoutSelling && (!withinRange || cash > 0 || usedFromCash > 0 || reserveNeeded > 0)) {
     if (mode === "trade") {
       for (const bucket of plan.buckets) {
         const current = values.get(bucket.id) ?? 0;
         const excess = current - (targetTotal * bucket.targetPercent) / 100;
         if (
           excess <= 0 ||
-          !needsAdjustment(
+          reserveNeeded <= cash && !needsAdjustment(
             bucket.targetPercent,
             current,
             targetTotal > 0 ? current / targetTotal * 100 : 0,
@@ -368,6 +385,10 @@ export function rebalance(
         }
       }
     }
+    // Reserve the cash target before sharing the remaining budget across stock buys.
+    reservedCash = Math.min(reserveNeeded, available);
+    available -= reservedCash;
+    buyBudget = available;
     const deficits = plan.buckets
       .map((bucket) => ({
         bucket,
@@ -375,7 +396,7 @@ export function rebalance(
           (targetTotal * bucket.targetPercent) / 100 -
           (values.get(bucket.id) ?? 0),
       }))
-      .filter(({ gap }) => gap > 0)
+      .filter(({ bucket, gap }) => gap > 0 && bucket.id !== cashBucket?.id)
       .sort((a, b) => b.gap - a.gap);
     const selectedBuys: { bucket: Bucket; gap: number; rule: Rule; candidate: CandidateEvaluation }[] = [];
     // Select eligible candidates before any portfolio consumes the shared budget.
@@ -518,17 +539,30 @@ export function rebalance(
       : trades.some((trade) => trade.side === "buy" && trade.bucketId === rule.bucketId) ? "앞선 우선 후보를 선택하여 이 후보는 사용하지 않았습니다."
       : "이 포트에는 생성된 매수 제안이 없습니다. 포트별 예산·우선 후보 안내를 확인하세요.";
   }
-  // Recompute with the same aggregation path used after real quantity edits.
-  const projected = portfolioValues(
-    {
-      ...plan,
-      assignments: projectedAssignments,
-      manualAssets: available > 0
-        ? [...plan.manualAssets, { id: "rebalance:residual", bucketId: null, name: "미배정 잔여 자금", valueKrw: available, valueUsd: null }]
-        : plan.manualAssets,
-    },
-    projectedHoldings,
-  );
+  // Settle all stock proceeds/purchases once. Leftovers belong to the selected
+  // cash portfolio, rather than being counted again as unassigned money.
+  const cashProjected = cashCurrent - usedFromCash + reservedCash + (cashBucket ? available : 0);
+  const cashAllocation = cashBucket ? {
+    bucketId: cashBucket.id, currentKrw: cashCurrent, targetKrw: cashTarget,
+    projectedKrw: cashProjected, usedFromCash, reservedCash,
+  } : null;
+  const projectedManualAssets = plan.manualAssets.map(asset => {
+    if (!cashBucket || asset.bucketId !== cashBucket.id) return asset;
+    const members = plan.manualAssets.filter(row => row.bucketId === cashBucket.id);
+    const share = cashCurrent > 0
+      ? manualAssetValueKrw(asset, plan.usdKrw) / cashCurrent
+      : asset.id === members[0].id ? 1 : 0;
+    const amount = cashProjected * share;
+    return asset.valueUsd === null
+      ? { ...asset, valueKrw: amount }
+      : { ...asset, valueUsd: amount / plan.usdKrw };
+  });
+  const projected = portfolioValues({
+    ...plan, assignments: projectedAssignments,
+    manualAssets: !cashBucket && available > 0
+      ? [...projectedManualAssets, { id: "rebalance:residual", bucketId: null, name: "미배정 잔여 자금", valueKrw: available, valueUsd: null }]
+      : projectedManualAssets,
+  }, projectedHoldings);
   const items: RebalanceItem[] = plan.buckets.map((bucket) => {
     const current = values.get(bucket.id) ?? 0;
     const currentPercent = currentPct(bucket);
@@ -546,7 +580,7 @@ export function rebalance(
       && !plan.cryptoAssets.some(asset => asset.bucketId === bucket.id)
       && !plan.rules.some(rule => rule.bucketId === bucket.id);
     const projectedPercent = projected.total > 0 ? projectedValue / projected.total * 100 : 0;
-    const amountAdjustment: AmountAdjustment | null = ready && !impossibleWithoutSelling && directOnly && !options.preserveCash ? {
+    const amountAdjustment: AmountAdjustment | null = ready && !impossibleWithoutSelling && directOnly && bucket.id !== cashBucket?.id ? {
       direction: withinTolerance(bucket.targetPercent, projectedPercent, plan.tolerancePercent) ? "hold" : remainingGapKrw > 0 ? "increase" : "decrease",
       amountKrw: withinTolerance(bucket.targetPercent, projectedPercent, plan.tolerancePercent) ? 0 : Math.abs(remainingGapKrw),
       currentKrw: projectedValue,
@@ -589,13 +623,13 @@ export function rebalance(
       else
         advice = (reasons.get(bucket.id) ?? ["매수 예산·후보 가격·주식 1주 단위를 확인하세요."]).join(" ");
     }
-    if (ready && options.preserveCash && directOnly) advice = "등록된 금액을 유지합니다. 현금 비중은 전체 자산 금액에 따라 달라질 수 있습니다.";
+
     if (amountAdjustment) advice = amountAdjustment.direction === "hold"
       ? "현재 금액을 유지합니다."
       : `${fmt(amountAdjustment.amountKrw)} ${amountAdjustment.direction === "increase" ? "추가 확보 검토" : "다른 포트로 이동 검토"}`;
     return {
       amountAdjustment,
-      fixedAmount: Boolean(options.preserveCash && directOnly),
+      cashSettlement: cashAllocation?.bucketId === bucket.id ? cashAllocation : null,
       bucket,
       current,
       currentPercent,
@@ -620,11 +654,12 @@ export function rebalance(
     ready,
     requiredCash: theoreticalCash,
     newCash: cash,
-    buyBudget: cash + trades.reduce((sum, trade) => sum + (trade.side === "sell" ? trade.amountKrw : 0), 0),
+    buyBudget,
+    cashAllocation,
     currentTotal: total,
     targetTotal,
     residualCash: available,
     projectedUnassignedPercent:
-      targetTotal > 0 ? (available / targetTotal) * 100 : 0,
+      targetTotal > 0 && !cashBucket ? (available / targetTotal) * 100 : 0,
   };
 }
