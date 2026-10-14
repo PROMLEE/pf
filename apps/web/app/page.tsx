@@ -155,7 +155,7 @@ export default function PortfolioPage() {
     try { localStorage.setItem(`pf-guide-dismissed:${session?.user?.appUserId ?? "account"}`, "1"); } catch { /* Dismiss for this visit when storage is unavailable. */ }
   }
   const [selectedAsset, setSelectedAsset] = useState<AssetSelection | null>(null);
-  const [detailSource, setDetailSource] = useState<"portfolio" | "holdings" | "accounts">("portfolio");
+  const [detailSource, setDetailSource] = useState<"portfolio" | "holdings" | "accounts" | "rebalance">("portfolio");
   const [editFocus, setEditFocus] = useState<AssetSelection | null>(null);
   const [portfolioDirty, setPortfolioDirty] = useState(false);
   const navigationState = useRef({ dirty: false, url: "" });
@@ -172,7 +172,7 @@ export default function PortfolioPage() {
         ? { id, kind } : null;
       if (next === "detail" && !asset) next = "holdings";
       setSelectedAsset(asset);
-      setDetailSource(params.get("source") === "accounts" ? "accounts" : params.get("source") === "holdings" ? "holdings" : "portfolio");
+      setDetailSource(params.get("source") === "rebalance" ? "rebalance" : params.get("source") === "accounts" ? "accounts" : params.get("source") === "holdings" ? "holdings" : "portfolio");
       setView(next);
       setEditFocus(null);
       setEditingHoldingId(null);
@@ -421,7 +421,7 @@ export default function PortfolioPage() {
     setNotice("");
   }
 
-  function openAsset(asset: AssetSelection, source: "portfolio" | "holdings" | "accounts") {
+  function openAsset(asset: AssetSelection, source: "portfolio" | "holdings" | "accounts" | "rebalance") {
     setSelectedAsset(asset);
     setDetailSource(source);
     go("detail", asset, source);
@@ -1300,7 +1300,7 @@ export default function PortfolioPage() {
               onImport={() => go("import")}
               onEditHoldings={() => go("edit")}
               selectedAsset={selectedAsset}
-              onSelectAsset={(asset) => openAsset(asset, "portfolio")}
+              onSelectAsset={(asset) => openAsset(asset, view === "rebalance" ? "rebalance" : view === "detail" ? detailSource : "portfolio")}
               onBack={() => go(detailSource)}
               onNavigate={go}
               onDirtyChange={setPortfolioDirty}

@@ -428,3 +428,32 @@ test('selected sale stock limits liquidation, respects exclusions and updates jo
   assert.equal(excluded.trades.length,0);
   assertMatchesActual(excluded,p,rows);
 });
+
+test("direct cash portfolio gets a monetary target gap after stock sales",()=>{
+ const p=plan([['stock','A']],[],{manualAssets:[{id:'cash',bucketId:'B',name:'네이버 CMA RP',valueKrw:300,valueUsd:null}]});
+ const result=rebalance(p,[holding('stock','X',7)],'trade',0,new Set());
+ const cash=result.items.find(i=>i.bucket.id==='B');
+ assert.deepEqual(cash.amountAdjustment,{direction:'increase',amountKrw:200,currentKrw:300,targetKrw:500});
+ close(result.residualCash,200);close(cash.projectedValue,300);
+ assert.ok(!result.trades.some(t=>t.bucketId==='B'));
+});
+test("cash surplus is proposed as money to move without automatically spending it",()=>{
+ const p=plan([['stock','A']],[rule('X','A')],{manualAssets:[{id:'cash',bucketId:'B',name:'예비 자금',valueKrw:700,valueUsd:null}]});
+ const result=rebalance(p,[holding('stock','X',3)],'trade',0,new Set());
+ assert.deepEqual(result.items.find(i=>i.bucket.id==='B').amountAdjustment,{direction:'decrease',amountKrw:200,currentKrw:700,targetKrw:500});
+ assert.equal(result.trades.length,0);close(result.residualCash,0);
+});
+test("cash adjustment uses the total including new money and respects tolerance",()=>{
+ const p=plan([['stock','A']],[],{manualAssets:[{id:'cash',bucketId:'B',name:'현금',valueKrw:300,valueUsd:null}]});
+ const added=rebalance(p,[holding('stock','X',7)],'add-only',400,new Set());
+ assert.deepEqual(added.items.find(i=>i.bucket.id==='B').amountAdjustment,{direction:'increase',amountKrw:400,currentKrw:300,targetKrw:700});
+ const tolerant=rebalance({...p,tolerancePercent:2,manualAssets:[{...p.manualAssets[0],valueKrw:490}]},[holding('stock','X',5.1)],'trade',0,new Set());
+ assert.equal(tolerant.items.find(i=>i.bucket.id==='B').amountAdjustment.direction,'hold');assert.equal(tolerant.items.find(i=>i.bucket.id==='B').amountAdjustment.amountKrw,0);
+});
+test("USD cash uses current FX valuation and mixed portfolios are not treated as cash-only",()=>{
+ const p=plan([['stock','A']],[],{usdKrw:100,manualAssets:[{id:'cash',bucketId:'B',name:'달러',valueKrw:99999,valueUsd:2}]});
+ const result=rebalance(p,[holding('stock','X',8)],'trade',0,new Set());
+ assert.deepEqual(result.items.find(i=>i.bucket.id==='B').amountAdjustment,{direction:'increase',amountKrw:300,currentKrw:200,targetKrw:500});
+ const mixed=rebalance({...p,assignments:[...p.assignments,{holdingId:'second',bucketId:'B',source:'manual'}]},[holding('stock','X',8),holding('second','Y',1)],'trade',0,new Set());
+ assert.equal(mixed.items.find(i=>i.bucket.id==='B').amountAdjustment,null);
+});

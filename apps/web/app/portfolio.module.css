@@ -1756,3 +1756,10 @@
 @media (max-width: 600px) { .preferenceFields { grid-template-columns: 1fr; gap: 16px; } .preferences section { padding: 20px 0; } }
 
 .advice > div > .targetWeight { color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+.advice > .amountProposal { gap: 6px; min-width: 0; }
+.amountProposal small { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.amountProposal button { justify-self: start; margin-top: 4px; }
+.advice > .amountProposal { grid-column: 3; }
+.advice .amountProposal p { grid-column: auto; margin: 0; text-align: left; }
+@media (max-width: 700px) { .advice > .amountProposal { grid-column: 2; } }

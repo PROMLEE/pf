@@ -52,7 +52,14 @@ export type UnaffordableBuy = {
   limitKrw: number;
   limitedBy: "target" | "cash";
 };
+export type AmountAdjustment = {
+  direction: "increase" | "decrease" | "hold";
+  amountKrw: number;
+  currentKrw: number;
+  targetKrw: number;
+};
 export type RebalanceItem = {
+  amountAdjustment: AmountAdjustment | null;
   bucket: Bucket;
   current: number;
   currentPercent: number;
@@ -533,6 +540,19 @@ export function rebalance(
     const remainingGapKrw =
       (targetTotal * bucket.targetPercent) / 100 - projectedValue;
     const bucketTrades = trades.filter((trade) => trade.bucketId === bucket.id);
+    // Only direct-value portfolios: never infer cash from a user-edited name,
+    // or spend a mixed portfolio's cash as if it were a stock sell order.
+    const directOnly = plan.manualAssets.some(asset => asset.bucketId === bucket.id)
+      && !holdings.some(holding => holdingBucketId(plan, holding) === bucket.id)
+      && !plan.cryptoAssets.some(asset => asset.bucketId === bucket.id)
+      && !plan.rules.some(rule => rule.bucketId === bucket.id);
+    const projectedPercent = projected.total > 0 ? projectedValue / projected.total * 100 : 0;
+    const amountAdjustment: AmountAdjustment | null = ready && !impossibleWithoutSelling && directOnly ? {
+      direction: withinTolerance(bucket.targetPercent, projectedPercent, plan.tolerancePercent) ? "hold" : remainingGapKrw > 0 ? "increase" : "decrease",
+      amountKrw: withinTolerance(bucket.targetPercent, projectedPercent, plan.tolerancePercent) ? 0 : Math.abs(remainingGapKrw),
+      currentKrw: projectedValue,
+      targetKrw: targetTotal * bucket.targetPercent / 100,
+    } : null;
     const separate = [
       ...plan.cryptoAssets
         .filter((asset) => asset.bucketId === bucket.id)
@@ -570,7 +590,11 @@ export function rebalance(
       else
         advice = (reasons.get(bucket.id) ?? ["매수 예산·후보 가격·주식 1주 단위를 확인하세요."]).join(" ");
     }
+    if (amountAdjustment) advice = amountAdjustment.direction === "hold"
+      ? "현재 금액을 유지합니다."
+      : `${fmt(amountAdjustment.amountKrw)} ${amountAdjustment.direction === "increase" ? "추가 확보 검토" : "다른 포트로 이동 검토"}`;
     return {
+      amountAdjustment,
       bucket,
       current,
       currentPercent,

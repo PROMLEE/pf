@@ -2923,7 +2923,7 @@ export default function PortfolioBuilder({
                   {inRangeCount < advice.items.length && " 나머지 포트는 아래의 제안 후 전체 비중에서 확인하세요."}
                 </p>
                 <div className={styles.previewSummary}>
-                  <strong>조정 제안 · 아직 거래 전</strong>
+                  <strong>주식 조정 제안 · 거래 전</strong>
                   <span>
                     제안{" "}
                     {
@@ -2964,7 +2964,8 @@ export default function PortfolioBuilder({
                     const itemTrades = advice.trades.filter(
                       (trade) => trade.bucketId === item.bucket.id,
                     );
-                    const action = itemTrades.some(
+                    const amount = item.amountAdjustment;
+                    const action = amount ? amount.direction === "increase" ? "add" : amount.direction === "decrease" ? "sell" : "hold" : itemTrades.some(
                       (trade) => trade.side === "buy",
                     )
                       ? "add"
@@ -2983,7 +2984,7 @@ export default function PortfolioBuilder({
                         <div>
                           <strong>
                             <span className={styles.actionTag}>
-                              {action === "add"
+                              {amount ? amount.direction === "increase" ? "금액 추가" : amount.direction === "decrease" ? "금액 줄이기" : "금액 유지" : action === "add"
                                 ? "매수 제안"
                                 : action === "sell"
                                   ? "매도 제안"
@@ -2992,13 +2993,13 @@ export default function PortfolioBuilder({
                             {item.bucket.name}
                           </strong>
                           <small className={styles.fundedWeight}>
-                            현재 {pct(item.currentPercent)} → 제안 후 {pct(item.projectedPercent)}
+                            {amount ? `현재 ${pct(item.currentPercent)} · 목표 ${pct(item.bucket.targetPercent)}` : `현재 ${pct(item.currentPercent)} → 제안 후 ${pct(item.projectedPercent)}`}
                           </small>
-                          <small className={styles.targetWeight}>
+                          {!amount && <small className={styles.targetWeight}>
                             목표 {pct(item.bucket.targetPercent)} · {withinTolerance(item.bucket.targetPercent, item.projectedPercent, draft.tolerancePercent)
                               ? "제안 후 허용 범위 이내"
                               : `제안 후 ${item.projectedPercent < item.bucket.targetPercent ? "부족" : "초과"} ${Math.abs(item.projectedPercent - item.bucket.targetPercent).toFixed(1)}%p`}
-                          </small>
+                          </small>}
                           {bucketRules.length > 0 && item.fundedGapPercent > 0 && (
                             <label className={styles.proposalChoice}>
                               매수 종목
@@ -3020,7 +3021,19 @@ export default function PortfolioBuilder({
                             </label>
                           )}
                         </div>
-                        {!itemTrades.length && item.unaffordableBuys.length > 0 ? (
+                        {amount ? (
+                          <div className={styles.amountProposal}>
+                            <p>{amount.direction === "hold" ? "현재 금액을 유지합니다." : `${fmt(amount.amountKrw)} ${amount.direction === "increase" ? "추가 확보 검토" : "다른 포트로 이동 검토"}`}</p>
+                            <small>현재 {fmt(amount.currentKrw)} → 목표 {fmt(amount.targetKrw)}</small>
+                            {amount.direction === "increase" && advice.residualCash > 0 && <small>공통 잔여 자금 {fmt(advice.residualCash)} · 배정에 활용 가능</small>}
+                            {amount.direction !== "hold" && <small>별도 금액 조정 · 주식 예상 비중에는 미반영</small>}
+                            <button type="button" className={styles.ghost} onClick={() => {
+                              const assets = draft.manualAssets.filter(asset => asset.bucketId === item.bucket.id);
+                              if (assets.length === 1 && onSelectAsset) onSelectAsset({kind: "manual", id: assets[0].id});
+                              else onEditHoldings();
+                            }}>금액 수정 <ArrowRight size={14} /></button>
+                          </div>
+                        ) : !itemTrades.length && item.unaffordableBuys.length > 0 ? (
                           <div className={styles.buyHoldReason}>
                             <strong>{item.unaffordableBuys[0].name}{item.unaffordableBuys[0].name !== item.unaffordableBuys[0].symbol ? ` (${item.unaffordableBuys[0].symbol})` : ""}</strong>
                             <p>이 포트의 매수 한도로는 1주를 살 수 없습니다.</p>
@@ -3045,7 +3058,7 @@ export default function PortfolioBuilder({
                           <details>
                             <summary>포트별 계산 상세</summary>
                             <small>현재 {pct(item.currentPercent)}{rebalanceMode === "add-only" ? ` · 자금 추가 후 ${pct(item.fundedPercent)}` : ""} · 제안 반영 후 {pct(item.projectedPercent)}</small>
-                          {rebalanceMode === "add-only" && action === "add" && Math.round(item.projectedPercent * 10) < Math.round(item.currentPercent * 10) && (
+                          {!amount && rebalanceMode === "add-only" && action === "add" && Math.round(item.projectedPercent * 10) < Math.round(item.currentPercent * 10) && (
                             <p className={styles.shareDilutionNote}>
                               이 포트의 금액은 {fmt(itemTrades.filter(trade => trade.side === "buy").reduce((sum, trade) => sum + trade.amountKrw, 0))} 늘지만, 전체 자산에는 {fmt(advice.newCash)}이 추가되어 현재보다 비중이 낮아집니다.
                             </p>
