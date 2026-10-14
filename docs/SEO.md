@@ -50,3 +50,14 @@ API는 robots.txt에서 수집을 제한하고 응답에도 `X-Robots-Tag: noind
 사이트맵·메타데이터 설정이 있다고 전체 SEO 최적화나 검색 유입이 검증된 것은 아닙니다.
 
 공식 기준: [Google 지원 메타태그](https://developers.google.com/search/docs/crawling-indexing/special-tags), [검색 결과 설명](https://developers.google.com/search/docs/appearance/snippet).
+
+## LLM용 공개 안내 (2026-10-15)
+
+- https://pf.promleeblog.com/llms.txt: 서비스 요약과 공개 문서 링크
+- https://pf.promleeblog.com/llms-full.txt: 기능·사용 순서·계산 범위를 정리한 Markdown 텍스트
+
+원본은 `apps/web/public/llms.txt`, `apps/web/public/llms-full.txt`입니다. 정적 공개 파일로 제공하므로 로그인·DB 조회 없이 읽을 수 있습니다. `/about`, `/guide`, `/llms-full.txt`의 HTTP `Link` 헤더에서도 `/llms.txt` 위치를 안내합니다. 내용은 공개 제품 설명으로 한정하고 실제 계좌·보유 내역·인증 비밀이나 운영자 정보를 포함하지 않습니다.
+
+형식은 [llms.txt 제안](https://llmstxt.org/)을 참고합니다. LLM의 문서 발견·읽기를 돕는 안내이며, 검색 노출·인용이나 순위를 보장하지 않습니다. 인증된 자산 API 또는 MCP의 제공·접근 허가와도 별개입니다. 사이트맵은 공개 HTML 안내 페이지 목록을 유지합니다.
+
+기능 변경 시 공개 가이드와 두 파일을 함께 검토하고 갱신일을 수정합니다. 특히 리밸런싱의 현금·추가 투입금, 손익·환율, 거래 반영과 데이터 연동 범위를 확인합니다. 새 기능이 자동 주문이나 계좌 자동 연동으로 오해되지 않도록 실제 구현 범위만 설명합니다.

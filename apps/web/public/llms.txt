@@ -1,0 +1,21 @@
+# PortRhythm · 포트리듬
+
+> PortRhythm is a Korean personal portfolio management service for target asset allocation, holdings tracking, and rebalancing previews across Korean and US stocks, ETFs, cryptocurrency, and cash. 투자는 나만의 리듬으로. 내 기준을 지키며, 꾸준히.
+
+공식 서비스: https://pf.promleeblog.com
+공개 문서 갱신일: 2026-10-15
+
+사용자는 포트별 목표 비중과 허용 오차를 정하고, 보유 자산을 배정해 현재 비중과 비교합니다. 리밸런싱은 추가 투입금, 주식 매수·매도, 선택한 현금 포트의 목표 비중을 함께 반영한 예상 수량과 최종 비중을 보여줍니다. 주식·ETF는 한국투자증권 API, 가상자산은 빗썸 원화 가격으로 조회하며 보유 수량은 직접 등록·수정하거나 잔고 캡처를 검토해 반영합니다.
+
+이 문서는 공개 기능 안내입니다. 개인 자산을 조회하거나 변경하는 공개 API 또는 MCP를 제공한다는 의미가 아닙니다. 실제 주문, 증권 계좌 잔고 자동 동기화, 수익 보장을 제공하지 않습니다.
+
+## Documentation
+
+- [전체 기능과 사용 방법 · Markdown 텍스트](https://pf.promleeblog.com/llms-full.txt): 목표 설계, 계좌·자산 등록, 배정, 손익·환율, 현금 목표 비중을 포함한 리밸런싱, 기록과 설정.
+- [사용 가이드](https://pf.promleeblog.com/guide): 시작 순서, 화면 예시와 자주 묻는 질문을 제공하는 공개 웹 페이지.
+- [서비스 소개](https://pf.promleeblog.com/about): 포트리듬의 핵심 기능, 자산 배분과 리밸런싱 운영 흐름을 소개하는 공개 웹 페이지.
+
+## Optional
+
+- [공개 페이지 사이트맵](https://pf.promleeblog.com/sitemap.xml): 검색 대상 소개·가이드 페이지 목록.
+- [문의·기능 제안](https://github.com/PROMLEE/pf/issues): 공개 문의 경로. 계좌번호, 개인정보, API 키나 개인 자산 캡처를 공개 게시물에 올리지 마세요.
