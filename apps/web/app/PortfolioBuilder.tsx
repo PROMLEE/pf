@@ -3,6 +3,7 @@
 import { withPreviousQuotes } from "./holdings";
 
 import NumberInput from "./NumberInput";
+import { stockGains, cashGains, dailyUsdGains, validFx } from "./fx-gains";
 import HoldingTradeEditor from "./HoldingTradeEditor";
 import { portfolioCache, tradePortfolioEvent } from "./portfolio-cache";
 
@@ -126,6 +127,7 @@ const colors = [
 
 function emptyPortfolio(): Portfolio {
   return {
+    includeFxGains: false,
     title: "나의 투자 포트폴리오",
     usdKrw: 1400,
     usdKrwUpdatedAt: null,
@@ -234,6 +236,7 @@ function AssetList({
   investments,
   manualAssets,
   usdKrw,
+  includeFx=false,previousFx=null,
   gainView,
   dailyLoading,
   onSelectAsset,
@@ -242,6 +245,7 @@ function AssetList({
   investments: AssetSummaryRow[];
   manualAssets: Portfolio["manualAssets"];
   usdKrw: number;
+  includeFx?:boolean;previousFx?:number|null;
   gainView: "total" | "daily";
   dailyLoading: boolean;
   onSelectAsset: (asset: AssetSelection) => void;
@@ -310,7 +314,7 @@ function AssetList({
                           ? dailyLoading
                             ? "일간 시세 조회 중"
                             : "일간 시세 정보 없음"
-                          : "매입가 정보 없음"
+                          : includeFx && asset.kind==="stock" ? "원가·환율 손익 미확인" : "매입가 정보 없음"
                         : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${gainPct(gainPercent)}`})`}
                     </small>
                   </div>
@@ -353,6 +357,7 @@ function AssetList({
                 </div>
                 <div className={styles.mobileAssetValue}>
                   <strong>{fmt(manualAssetValueKrw(asset, usdKrw))}</strong>
+                  {includeFx && asset.valueUsd!==null && (()=>{const total=cashGains(asset,usdKrw);const gain=gainView==="total"?total.gain:previousFx===null?null:asset.valueUsd*(usdKrw-previousFx);const percent=gainView==="total"?total.percent:previousFx?(usdKrw/previousFx-1)*100:null;return <small className={gain===null?"":gain>=0?styles.mobileUp:styles.mobileDown}>{gain===null?"환율 손익 미확인":`${gain>=0?"+":""}${fmt(gain)} (${percent===null?"—":percent.toFixed(2)}%)`}</small>;})()}
                 </div>
               </button>
             ))}
@@ -393,6 +398,7 @@ function AssetDetail({
   const [editCost, setEditCost] = useState("");
   const [editName, setEditName] = useState("");
   const [editValue, setEditValue] = useState("");
+  const [editFxRate,setEditFxRate]=useState("");
   const [saving, setSaving] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState("");
@@ -406,7 +412,7 @@ function AssetDetail({
   const editedCrypto = portfolio.cryptoAssets.find(asset => `crypto:${asset.id}` === editing);
   const editedManual = portfolio.manualAssets.find(asset => asset.id === editing);
   const editDirty = tradeDirty || Boolean(editing && !(editedStock && tradeMode) && (editedManual
-    ? editName !== editedManual.name || editValue !== String(editedManual.valueUsd ?? editedManual.valueKrw)
+    ? editName !== editedManual.name || editValue !== String(editedManual.valueUsd ?? editedManual.valueKrw) || editFxRate !== String(editedManual.averageFxRate??"")
     : editedStock || editedCrypto
       ? editQuantity !== String(editedStock?.quantity ?? editedCrypto?.quantity ?? "") || editCost !== String(editedStock?.averageCost ?? editedCrypto?.averageCostKrw ?? "")
       : false));
@@ -436,12 +442,17 @@ function AssetDetail({
     ? first.currentPrice ?? first.capturedPrice
     : crypto?.quotedPriceKrw ?? null;
   const name = first?.name ?? crypto?.name ?? manual?.name;
+  const stockPriceGain = stockRows.every(row=>stockGains(row,portfolio.usdKrw,true).priceGain!==null)?stockRows.reduce((sum,row)=>sum+(stockGains(row,portfolio.usdKrw,true).priceGain??0),0):null;
+  const stockFxGain = stockRows.every(row=>stockGains(row,portfolio.usdKrw,true).fxGain!==null)?stockRows.reduce((sum,row)=>sum+(stockGains(row,portfolio.usdKrw,true).fxGain??0),0):null;
   const stockValueKnown = stockRows.every((row) => (row.currentPrice ?? row.capturedPrice) !== null);
   const stockValue = stockRows.reduce((sum, row) => sum + holdingValueKrw(row, portfolio.usdKrw), 0);
-  const stockCost = stockRows.reduce((sum, row) => sum + row.quantity * (row.averageCost ?? 0) * (row.market === "US" ? portfolio.usdKrw : 1), 0);
+  const stockCost = stockRows.reduce((sum,row)=>sum+(stockGains(row,portfolio.usdKrw,portfolio.includeFxGains).cost??0),0);
+  const fxCostKnown=stockRows.every(row=>stockGains(row,portfolio.usdKrw,portfolio.includeFxGains).cost!==null);
+  const manualProfit=manual && portfolio.includeFxGains?cashGains(manual,portfolio.usdKrw):null;
   const value = summary?.value ?? (first && stockValueKnown ? stockValue : null);
-  const gain = summary?.gain ?? (first && costKnown && stockValueKnown ? stockValue - stockCost : null);
-  const gainPercent = summary?.gainPercent ?? (gain !== null && stockCost > 0 ? gain / stockCost * 100 : null);
+  const gain = summary?.gain ?? (first && fxCostKnown && stockValueKnown ? stockValue - stockCost : manualProfit?.gain ?? null);
+  const gainPercent = summary?.gainPercent ?? (gain !== null && stockCost > 0 ? gain / stockCost * 100 : manualProfit?.percent ?? null);
+  const displayedFxGain=stockFxGain !== null && stockPriceGain !== null && gain !== null?Math.round(gain)-Math.round(stockPriceGain):stockFxGain;
   if (!name) return <section className={styles.assetDetail}><p>보유 목록에 없는 자산입니다.</p><button type="button" className={styles.detailBack} onClick={onBack}>← 이전 화면</button></section>;
   const unit = first?.market === "US" ? "USD" : "KRW";
   const unitPrice = (value: number | null) => value === null
@@ -455,6 +466,7 @@ function AssetDetail({
     setEditing(row?.id ?? selection.id);
     setEditQuantity(String(row?.quantity ?? crypto?.quantity ?? ""));
     setEditCost(String(row?.averageCost ?? crypto?.averageCostKrw ?? ""));
+    setEditFxRate(String(manual?.averageFxRate??""));
     setEditName(manual?.name ?? "");
     setEditValue(String(manual?.valueUsd ?? manual?.valueKrw ?? ""));
     setError("");
@@ -471,6 +483,7 @@ function AssetDetail({
       setError(manual ? "자산 이름과 0 이상의 금액을 입력해 주세요." : "유효한 수량과 양수 매입단가를 입력해 주세요. 주식 수량은 소수점 6자리까지입니다.");
       return;
     }
+    if(manual?.valueUsd!==null && manual && editFxRate && !validFx(Number(editFxRate))){setError("평균 환전 단가는 100~100,000원으로 입력해 주세요.");return;}
     setSaving(true);
     setError("");
     try {
@@ -481,6 +494,7 @@ function AssetDetail({
         manualAssets: portfolio.manualAssets.map((asset) => asset.id === manual?.id ? {
           ...asset, name: editName.trim(), valueKrw: asset.valueUsd === null ? amount : amount * portfolio.usdKrw,
           valueUsd: asset.valueUsd === null ? null : amount,
+          averageFxRate: asset.valueUsd===null?null:editFxRate===""?null:Number(editFxRate),
         } : asset),
       });
       setEditing(null);
@@ -498,14 +512,15 @@ function AssetDetail({
       <div className={styles.detailTotal}>
         <span>평가 금액</span>
         <strong>{manual ? fmt(manualAssetValueKrw(manual, portfolio.usdKrw)) : value === null ? "—" : fmt(value)}</strong>
-        {!manual && <span>매입단가 기준 평가손익 · 전체 보유분</span>}
-        {!manual && <small className={gain === null ? "" : gain >= 0 ? styles.mobileUp : styles.mobileDown}>
-          {gain === null ? "매입단가 정보 없음" : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${gainPct(gainPercent)}`})`}
+        {(!manual || (portfolio.includeFxGains && manual.valueUsd!==null)) && <span>{portfolio.includeFxGains && (first?.market === "US" || manual?.valueUsd != null) ? "원화 원가 기준 평가손익 · 환율 포함" : "매입단가 기준 평가손익 · 전체 보유분"}</span>}
+        {(!manual || (portfolio.includeFxGains && manual.valueUsd!==null)) && <small className={gain === null ? "" : gain >= 0 ? styles.mobileUp : styles.mobileDown}>
+          {gain === null ? portfolio.includeFxGains ? "원가·환율 손익 미확인" : "매입단가 정보 없음" : `${gain > 0 ? "+" : ""}${fmt(gain)} (${gainPercent === null ? "—" : `${gainPercent > 0 ? "+" : ""}${gainPct(gainPercent)}`})`}
         </small>}
       </div>
       <div className={styles.detailFacts}>
         {manual ? <>
           <div><span>입력 금액</span><strong>{manual.valueUsd === null ? fmt(manual.valueKrw) : `$${manual.valueUsd.toLocaleString("en-US")}`}</strong></div>
+          {manual.valueUsd !== null && <div><span>평균 환전 단가 · 1 USD당 원</span><strong>{manual.averageFxRate == null ? "미확인" : `${manual.averageFxRate.toLocaleString("ko-KR",{maximumFractionDigits:6})}원`}</strong></div>}
         </> : <>
           <div><span>보유 수량</span><strong>{quantityFormat.format(quantity ?? 0)}{first ? "주" : "개"}</strong></div>
           <div><span>현재가</span><strong>{unitPrice(price)}</strong></div>
@@ -513,6 +528,13 @@ function AssetDetail({
           <div><span>평가손익</span><strong className={gain === null ? "" : gain >= 0 ? styles.mobileUp : styles.mobileDown}>{gain === null ? "—" : `${gain > 0 ? "+" : ""}${fmt(gain)}`}</strong></div>
         </>}
       </div>
+      {portfolio.includeFxGains && first?.market === "US" && (
+        <div className={styles.detailFacts}>
+          <div><span>주가 손익</span><strong className={stockPriceGain === null ? "" : stockPriceGain >= 0 ? styles.mobileUp : styles.mobileDown}>{stockPriceGain === null ? "미확인" : `${stockPriceGain > 0 ? "+" : ""}${fmt(stockPriceGain)}`}</strong></div>
+          <div><span>환율 손익</span><strong className={displayedFxGain === null ? "" : displayedFxGain >= 0 ? styles.mobileUp : styles.mobileDown}>{displayedFxGain === null ? "미확인" : `${displayedFxGain > 0 ? "+" : ""}${fmt(displayedFxGain)}`}</strong></div>
+          <div><span>원화 총매입금액</span><strong>{fxCostKnown ? fmt(stockCost) : "미확인"}</strong></div>
+        </div>
+      )}
       {stockRows.length > 0 && <div className={styles.detailAccounts}>
         <h3>계좌별 보유</h3>
         {stockRows.map((row) => <div key={row.id}><span>{row.broker} · {row.account}<small>{quantityFormat.format(row.quantity)}주 · 매입단가 {row.averageCost === null ? "—" : unitPrice(row.averageCost)}</small></span><button type="button" disabled={editing !== null || assigning} onClick={() => beginEdit(row)}>수정</button></div>)}
@@ -539,7 +561,7 @@ function AssetDetail({
         {assigning && <p role="status">포트 배정을 저장하고 있습니다…</p>}
         {error && !editing && <p role="alert">{error}</p>}
       </details>
-      {manual && <p className={styles.detailHint}>직접 입력 자산은 평가 금액만 관리하며 매입단가와 손익은 계산하지 않습니다.</p>}
+      {manual && <p className={styles.detailHint}>{manual.valueUsd!==null?"평균 환전 단가를 입력하면 달러 자산의 환율 손익을 계산합니다.":"직접 입력 원화 자산은 평가 금액만 관리합니다."}</p>}
       {!first && !editing && <button type="button" className={styles.detailEdit} onClick={() => beginEdit()}>자산 수정 <Pencil size={16} /></button>}
       {editing && (editedStock && tradeMode ? <HoldingTradeEditor key={editedStock.id} holding={editedStock}
         onDirty={setTradeDirty} onBusy={setSaving} onCancel={() => setEditing(null)} onDirect={() => setTradeMode(false)}
@@ -548,6 +570,7 @@ function AssetDetail({
         <h3>{first ? `${stockRows.find((row) => row.id === editing)?.account} 보유 정보 수정` : "자산 정보 수정"}</h3>
         <fieldset disabled={saving || assigning}>
           {manual ? <>
+            {manual.valueUsd!==null && <label>평균 환전 단가 · 1 USD당 원<NumberInput value={editFxRate} onValueChange={setEditFxRate} min="100" max="100000" step="any" placeholder="모르면 비워두세요" /></label>}
             <label>자산 이름<input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={100} required /></label>
             <label>{manual.valueUsd === null ? "금액 (원)" : "금액 (USD)"}<NumberInput min="0" step="any" value={editValue} onValueChange={(value) => setEditValue(value)} required /></label>
           </> : <>
@@ -653,6 +676,9 @@ export default function PortfolioBuilder({
     setGainView(next);
     try { localStorage.setItem(`pf-gain-view:${userId}`, next); } catch { /* The toggle still works for this visit. */ }
   }
+  const [previousFx,setPreviousFx]=useState<{rate:number;rateDate:string}|null>(null);
+  useEffect(()=>{let active=true;setPreviousFx(null);if(draft?.includeFxGains && draft.usdKrwMode === "auto") void fetch("/api/portfolio/fx").then(r=>r.json()).then(p=>{if(active && p.previousRate && p.rateDate)setPreviousFx({rate:p.previousRate,rateDate:p.rateDate});}).catch(()=>{});return()=>{active=false;};},[draft?.includeFxGains,draft?.usdKrwMode,draft?.usdKrwRateDate]);
+  const dailyFxRate=draft?.usdKrwMode === "auto" && previousFx?.rateDate === draft?.usdKrwRateDate?previousFx?.rate??null:null;
   const [cashInput, setCashInput] = useState("");
   const [budgetMode, setBudgetMode] = useState<"input" | "theoretical">(
     "input",
@@ -1185,7 +1211,7 @@ export default function PortfolioBuilder({
     const changedSections = ([
       ["title", "포트 이름"], ["buckets", "목표 비중"], ["tolerancePercent", "허용 오차"],
       ["rules", "매수 후보"], ["assignments", "자산 배정"], ["cryptoAssets", "가상자산"],
-      ["manualAssets", "현금·직접 입력 자산"], ["usdKrw", "환율"], ["usdKrwMode", "환율 모드"],
+      ["manualAssets", "현금·직접 입력 자산"], ["usdKrw", "환율"], ["usdKrwMode", "환율 모드"], ["includeFxGains", "환율 손익 설정"],
     ] as const).filter(([key]) => JSON.stringify(saved?.[key]) !== JSON.stringify(draft[key])).map(([, label]) => label);
     const assetsOnly =
       screen === "edit" &&
@@ -1195,6 +1221,7 @@ export default function PortfolioBuilder({
         usdKrw: draft.usdKrw,
         usdKrwMode: draft.usdKrwMode,
         usdKrwRateDate: draft.usdKrwRateDate,
+        includeFxGains:draft.includeFxGains??false,
         tolerancePercent: draft.tolerancePercent,
         buckets: draft.buckets,
         rules: draft.rules,
@@ -1205,6 +1232,7 @@ export default function PortfolioBuilder({
           usdKrw: saved?.usdKrw,
           usdKrwMode: saved?.usdKrwMode,
           usdKrwRateDate: saved?.usdKrwRateDate,
+          includeFxGains:saved?.includeFxGains??false,
           tolerancePercent: saved?.tolerancePercent,
           buckets: saved?.buckets,
           rules: saved?.rules,
@@ -1461,14 +1489,8 @@ export default function PortfolioBuilder({
 
   const knownGains = holdings.reduce(
     (summary, holding) => {
-      const price = holding.currentPrice ?? holding.capturedPrice;
-      if (price !== null && holding.averageCost !== null) {
-        const rate = holding.market === "US" ? (draft?.usdKrw ?? 0) : 1;
-        summary.value +=
-          (price - holding.averageCost) * holding.quantity * rate;
-        summary.cost += holding.averageCost * holding.quantity * rate;
-        summary.count++;
-      }
+      const profit=stockGains(holding,draft?.usdKrw??0,draft?.includeFxGains);
+      if(profit.gain!==null && profit.cost!==null){summary.value+=profit.gain;summary.cost+=profit.cost;summary.count++;}
       return summary;
     },
     { value: 0, cost: 0, count: 0 },
@@ -1481,7 +1503,8 @@ export default function PortfolioBuilder({
       knownGains.count++;
     }
   }
-  const gainEligibleCount = holdings.length + (draft?.cryptoAssets.length ?? 0);
+  for(const asset of draft?.manualAssets??[]){if(draft?.includeFxGains && asset.valueUsd!==null){const profit=cashGains(asset,draft.usdKrw);if(profit.gain!==null && profit.cost!==null){knownGains.value+=profit.gain;knownGains.cost+=profit.cost;knownGains.count++;}}}
+  const gainEligibleCount=holdings.length+(draft?.cryptoAssets.length??0)+(draft?.includeFxGains?draft.manualAssets.filter(a=>a.valueUsd!==null).length:0);
   const mobileStockGroups = new Map<
     string,
     {
@@ -1532,23 +1555,17 @@ export default function PortfolioBuilder({
     group.quantity += holding.quantity;
     group.capturedOnly ||= holding.currentPrice === null;
     group.missingPrice ||= price === null;
-    group.missingCost ||= holding.averageCost === null;
+    const profit=stockGains(holding,draft?.usdKrw??0,draft?.includeFxGains);
+    group.missingCost ||= profit.cost===null;
     group.missingDaily ||=
       holding.currentPrice === null || dailyQuote?.previousClose == null;
     if (holding.currentPrice !== null && dailyQuote?.previousClose != null) {
-      group.dailyGain +=
-        (holding.currentPrice - dailyQuote.previousClose) *
-        holding.quantity *
-        rate;
-      group.dailyBase += dailyQuote.previousClose * holding.quantity * rate;
+      const daily=holding.market === "US"?dailyUsdGains(holding.currentPrice,dailyQuote.previousClose,holding.quantity,rate,dailyFxRate,Boolean(draft?.includeFxGains)):{gain:(holding.currentPrice-dailyQuote.previousClose)*holding.quantity,base:dailyQuote.previousClose*holding.quantity};
+      if(daily){group.dailyGain+=daily.gain;group.dailyBase+=daily.base;}else group.missingDaily=true;
     }
     if (price !== null) group.value += holding.quantity * price * rate;
-    if (holding.averageCost !== null) {
-      group.cost += holding.averageCost * holding.quantity * rate;
-      if (price !== null) {
-        group.gain += (price - holding.averageCost) * holding.quantity * rate;
-      }
-    }
+    if(profit.cost!==null)group.cost+=profit.cost;
+    if(profit.gain!==null)group.gain+=profit.gain;
     mobileStockGroups.set(id, group);
   }
   const mobileInvestments = draft
@@ -1620,6 +1637,7 @@ export default function PortfolioBuilder({
     },
     { value: 0, base: 0, count: 0 },
   );
+  if(draft?.includeFxGains)for(const asset of draft.manualAssets){if(asset.valueUsd!==null && dailyFxRate!==null){dailyKnown.value+=asset.valueUsd*(draft.usdKrw-dailyFxRate);dailyKnown.base+=asset.valueUsd*dailyFxRate;dailyKnown.count++;}}
   const displayedGain =
     gainView === "total"
       ? knownGains.count
@@ -1639,7 +1657,7 @@ export default function PortfolioBuilder({
   const displayedGainNote =
     gainView === "total"
       ? knownGains.count < gainEligibleCount ? `손익 미확인 ${gainEligibleCount - knownGains.count}개` : ""
-      : dailyKnown.count < mobileInvestments.length ? `일간 손익 미확인 ${mobileInvestments.length - dailyKnown.count}개` : "";
+      : dailyKnown.count < gainEligibleCount ? `일간 손익 미확인 ${gainEligibleCount - dailyKnown.count}개` : "";
   const dashboardControls = (
     <div className={styles.dashboardControls}>
       <div className={styles.gainToggle} role="group" aria-label="수익 표시 기간">
@@ -1932,6 +1950,7 @@ export default function PortfolioBuilder({
                 <AssetList
                   investments={mobileInvestments}
                   manualAssets={draft.manualAssets}
+                  includeFx={Boolean(draft.includeFxGains)} previousFx={dailyFxRate}
                   usdKrw={draft.usdKrw}
                   gainView={gainView}
                   dailyLoading={quotesRefreshing || cryptoRefreshing}
@@ -2031,6 +2050,7 @@ export default function PortfolioBuilder({
                 <ChevronDown size={15} />
               </summary>
               <div className={styles.settings}>
+                <label>손익에 환율 변동 포함<select value={draft.includeFxGains?"on":"off"} onChange={event=>change({...draft,includeFxGains:event.target.value==="on"})}><option value="off">끔 · 주가 손익만</option><option value="on">켬 · 원화 원가 기준</option></select><small>총평가액·비중·리밸런싱은 항상 현재 환율로 계산합니다. 과거 원가가 없으면 환율 손익은 미확인입니다.</small></label>
                 <label>
                   포트폴리오 이름
                   <input
@@ -2695,6 +2715,7 @@ export default function PortfolioBuilder({
                     >
                       <Trash2 size={15} />
                     </button>
+                    {asset.valueUsd!==null && <label className={styles.fxBasisField}>평균 환전 단가 · 1 USD당 원<NumberInput value={asset.averageFxRate??""} min="100" max="100000" step="any" placeholder="모르면 비워두세요" onValueChange={value=>change({...draft,manualAssets:draft.manualAssets.map(item=>item.id===asset.id?{...item,averageFxRate:value===""?null:Number(value)}:item)})}/></label>}
                   </div>
                 ))}
               </>

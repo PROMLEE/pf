@@ -15,6 +15,7 @@ export type Holding = {
   quantity: number;
   capturedPrice: number | null;
   averageCost: number | null;
+  averageCostKrw?: number | null;
   capturedAt: string;
   currentPrice: number | null;
   quoteLabel: string | null;

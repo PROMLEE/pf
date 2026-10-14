@@ -11,6 +11,7 @@ const compile = async (path) =>
   }).outputText;
 const url = (s) =>
   `data:text/javascript;base64,${Buffer.from(s).toString("base64")}`;
+const fxUrl = url(await compile("../app/fx-gains.ts"));
 const modelUrl = url(await compile("../app/position-trade.ts"));
 const { calculatePositionTrade, calculateTradeCash, validateHoldingTrade } =
   await import(modelUrl);
@@ -121,11 +122,17 @@ const reset = () => {
   state.calls = [];
   state.missing = false;
   state.snapshotFails = false;
-  state.cash = { name: "달러", value_krw: "1400000", value_usd: "1000" };
+  state.cash = {
+    name: "달러",
+    value_krw: "1400000",
+    value_usd: "1000",
+    average_fx_rate: "1300",
+  };
   state.cashMissing = false;
   state.row = {
     quantity: "10",
     average_cost: "100",
+    average_cost_krw: "130000",
     market: "US",
     symbol: "AAPL",
     account_id: id,
@@ -136,7 +143,7 @@ let dbCode = await compile("../lib/holding-trades-db.ts");
 dbCode = dbCode
   .replace(
     /import \{ db \} from "\.\/db";/,
-    `const client={query:async(sql,args)=>{const s=globalThis.__pfTradeTest;s.calls.push({sql,args});if(sql==='begin'){s.backup={...s.row};s.cashBackup={...s.cash};}if(sql==='rollback'){s.row=s.backup;s.cash=s.cashBackup;}if(sql.startsWith('select usd_krw'))return {rows:[{usd_krw:'1400'}]};if(sql.startsWith('select name, value_krw'))return {rows:s.cashMissing?[]:[s.cash]};if(sql.startsWith('update portfolio.manual_assets'))s.cash={...s.cash,value_krw:String(args[2]),value_usd:args[3]===null?null:String(args[3])};if(sql.startsWith('select quantity'))return {rows:s.missing?[]:[s.row]};if(sql.startsWith('update portfolio.holdings'))s.row={...s.row,quantity:String(args[2]),average_cost:args[3]===null?null:String(args[3]),revision:'124'};if(sql.startsWith('delete from'))s.row=null;return {rows:[]};},release(){}};const db=()=>({connect:async()=>client});`,
+    `const client={query:async(sql,args)=>{const s=globalThis.__pfTradeTest;s.calls.push({sql,args});if(sql==='begin'){s.backup={...s.row};s.cashBackup={...s.cash};}if(sql==='rollback'){s.row=s.backup;s.cash=s.cashBackup;}if(sql.startsWith('select usd_krw'))return {rows:[{usd_krw:'1400'}]};if(sql.startsWith('select name, value_krw'))return {rows:s.cashMissing?[]:[s.cash]};if(sql.startsWith('update portfolio.manual_assets'))s.cash={...s.cash,value_krw:String(args[2]),value_usd:args[3]===null?null:String(args[3]),average_fx_rate:args[4]===null?null:String(args[4])};if(sql.startsWith('select quantity'))return {rows:s.missing?[]:[s.row]};if(sql.startsWith('update portfolio.holdings'))s.row={...s.row,quantity:String(args[2]),average_cost:args[3]===null?null:String(args[3]),average_cost_krw:args[4]===null?null:String(args[4]),revision:'124'};if(sql.startsWith('delete from'))s.row=null;return {rows:[]};},release(){}};const db=()=>({connect:async()=>client});`,
   )
   .replace(
     /import \{ recordSnapshot, listPortfolio \} from "\.\/portfolio-db";/,
@@ -146,6 +153,7 @@ dbCode = dbCode
     /import \{ listHoldings \} from "\.\/holdings-db";/,
     `const listHoldings=async(user,client)=>{if(!client)throw new Error('read must share transaction');const row=globalThis.__pfTradeTest.row;return row?[{quantity:Number(row.quantity),averageCost:Number(row.average_cost)}]:[];};`,
   )
+  .replace('"../app/fx-gains"', JSON.stringify(fxUrl))
   .replace('"../app/position-trade"', JSON.stringify(modelUrl));
 const dbUrl = url(dbCode);
 const { applyHoldingTrade } = await import(dbUrl);
@@ -154,7 +162,9 @@ test("owner lock and current revision protect server-side math and atomic snapsh
   const result = await applyHoldingTrade("owner", id, input());
   assert.equal(result.position.averageCost, 109.166667);
   assert.equal(result.holdings[0].quantity, 12);
-  const lock = state.calls.find((c) => c.sql.includes("for update"));
+  const lock = state.calls.find(
+    (c) => c.sql.includes("portfolio.holdings") && c.sql.includes("for update"),
+  );
   assert.deepEqual(lock.args, ["owner", id]);
   assert.match(lock.sql, /user_id = \$1/);
   assert.ok(state.calls.some((c) => c.sql === "commit"));
@@ -258,10 +268,13 @@ test("trade endpoint uses authenticated owner and denies cross-origin or invalid
     request({ id, trade: input(), userId: "intruder" }),
   );
   assert.equal(response.status, 200);
-  assert.deepEqual(state.calls.find((c) => c.sql.includes("for update")).args, [
-    "owner",
-    id,
-  ]);
+  assert.deepEqual(
+    state.calls.find(
+      (c) =>
+        c.sql.includes("portfolio.holdings") && c.sql.includes("for update"),
+    ).args,
+    ["owner", id],
+  );
 });
 
 const { withPreviousQuotes } = await import(
@@ -393,4 +406,40 @@ test("cash validation rejects forged IDs and balances", () => {
     ).balance,
     9.97,
   );
+});
+
+test("trade updates stock KRW basis and dollar cash basis without inventing unknown history", async () => {
+  reset();
+  await applyHoldingTrade(
+    "owner",
+    id,
+    input({ fxRate: 1400, cash: { assetId: id, expectedBalance: 1000 } }),
+  );
+  assert.equal(Number(state.row.average_cost_krw), 144500);
+  assert.equal(Number(state.cash.average_fx_rate), 1300);
+  reset();
+  await applyHoldingTrade(
+    "owner",
+    id,
+    input({
+      side: "sell",
+      quantity: 2,
+      price: 150,
+      fee: 0,
+      fxRate: 1400,
+      cash: { assetId: id, expectedBalance: 1000 },
+    }),
+  );
+  assert.equal(Number(state.row.average_cost_krw), 130000);
+  assert.equal(Number(state.cash.average_fx_rate), 1323.076923);
+  reset();
+  state.row.average_cost_krw = null;
+  state.cash.average_fx_rate = null;
+  await applyHoldingTrade(
+    "owner",
+    id,
+    input({ fxRate: 1400, cash: { assetId: id, expectedBalance: 1000 } }),
+  );
+  assert.equal(state.row.average_cost_krw, null);
+  assert.equal(state.cash.average_fx_rate, null);
 });

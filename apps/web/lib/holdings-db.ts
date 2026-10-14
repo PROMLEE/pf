@@ -19,6 +19,7 @@ type Row = {
   quantity: string;
   captured_price: string | null;
   average_cost: string | null;
+  average_cost_krw: string | null;
   captured_at: Date;
   current_price: string | null;
   quote_label: string | null;
@@ -42,6 +43,7 @@ function fromRow(row: Row): Holding {
     capturedPrice:
       row.captured_price === null ? null : Number(row.captured_price),
     averageCost: row.average_cost === null ? null : Number(row.average_cost),
+    averageCostKrw: row.average_cost_krw == null ? null : Number(row.average_cost_krw),
     capturedAt: row.captured_at.toISOString(),
     currentPrice: row.current_price === null ? null : Number(row.current_price),
     quoteLabel: row.quote_label,
@@ -51,7 +53,7 @@ function fromRow(row: Row): Holding {
 
 async function select(client: Pick<PoolClient, "query">, userId: string) {
   const result = await client.query<Row>(
-    `select id, xmin::text as revision, broker, account_label, account_id, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, captured_at, current_price, quote_label, quote_checked_at
+    `select id, xmin::text as revision, broker, account_label, account_id, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, average_cost_krw, captured_at, current_price, quote_label, quote_checked_at
      from portfolio.holdings where user_id = $1 order by created_at desc, name asc`,
     [userId],
   );
@@ -95,14 +97,15 @@ export async function addHoldings(
           );
       }
       let previousAssignment:
-        | { bucket_id: string | null; assignment_source: "auto" | "manual" }
+        | { bucket_id: string | null; assignment_source: "auto" | "manual"; average_cost_krw: string | null; average_cost: string | null; quantity: string }
         | undefined;
       if (row.symbol) {
         const deleted = await client.query<{
           bucket_id: string | null;
           assignment_source: "auto" | "manual";
+          average_cost_krw: string | null; average_cost: string | null; quantity: string;
         }>(
-          `delete from portfolio.holdings where user_id = $1 and lower(broker) = lower($2) and lower(account_label) = lower($3) and market = $4 and symbol = $5 and (exchange_code is not distinct from $6 or exchange_code is null or $6::text is null) returning bucket_id, assignment_source`,
+          `delete from portfolio.holdings where user_id = $1 and lower(broker) = lower($2) and lower(account_label) = lower($3) and market = $4 and symbol = $5 and (exchange_code is not distinct from $6 or exchange_code is null or $6::text is null) returning bucket_id, assignment_source, average_cost_krw, average_cost, quantity`,
           [
             userId,
             row.broker,
@@ -126,8 +129,8 @@ export async function addHoldings(
         : (matchedRule?.rows[0]?.bucket_id ?? null);
       await client.query(
         `insert into portfolio.holdings
-         (id, user_id, broker, account_label, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, captured_at, account_id)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+         (id, user_id, broker, account_label, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, captured_at, account_id, average_cost_krw)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
         [
           crypto.randomUUID(),
           userId,
@@ -144,6 +147,7 @@ export async function addHoldings(
           row.averageCost,
           row.capturedAt,
           row.accountId,
+          row.market === "US" && previousAssignment?.average_cost_krw != null && Number(previousAssignment.average_cost) === row.averageCost && Number(previousAssignment.quantity) === row.quantity ? previousAssignment.average_cost_krw : null,
         ],
       );
     }
@@ -190,7 +194,7 @@ export async function updateHoldingAmounts(
     await client.query("begin");
     const result = await client.query(
       `update portfolio.holdings
-       set quantity = $3, average_cost = $4, updated_at = now()
+       set quantity = $3, average_cost_krw = case when average_cost is distinct from $4 then null else average_cost_krw end, average_cost = $4, updated_at = now()
        where user_id = $1 and id = $2`,
       [userId, id, quantity, averageCost],
     );
@@ -223,7 +227,7 @@ export async function updateHoldingInstrument(
     await client.query("begin");
     await client.query(
       `update portfolio.holdings
-     set name = $3, symbol = $4, exchange_code = $5, current_price = null,
+     set average_cost_krw = case when symbol is distinct from $4 then null else average_cost_krw end, name = $3, symbol = $4, exchange_code = $5, current_price = null,
          bucket_id = case when assignment_source = 'manual' then bucket_id
            else (select bucket_id from portfolio.rules where user_id = $1 and market = $6 and symbol = $4) end,
          quote_label = null, quote_checked_at = null, updated_at = now()

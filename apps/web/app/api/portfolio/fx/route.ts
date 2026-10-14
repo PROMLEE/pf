@@ -1,9 +1,39 @@
 import { NextResponse } from "next/server";
 import { currentUserId } from "../../../../lib/auth";
-import { fetchUsdKrwReference } from "../../../../lib/fx";
+import { fetchUsdKrwReference, fetchPreviousUsdKrw } from "../../../../lib/fx";
 import { listPortfolio, updateAutomaticFx } from "../../../../lib/portfolio-db";
+import { db } from "../../../../lib/db";
 
 export const runtime = "nodejs";
+export async function GET() {
+  const userId = await currentUserId();
+  if (!userId)
+    return NextResponse.json(
+      { message: "로그인이 필요합니다." },
+      { status: 401 },
+    );
+  try {
+    const result = await db().query<{
+      usd_krw_mode: string;
+      rate_date: string | null;
+    }>(
+      `select usd_krw_mode, usd_krw_rate_date::text as rate_date from portfolio.plans where user_id=$1`,
+      [userId],
+    );
+    const plan = result.rows[0];
+    if (!plan || plan.usd_krw_mode !== "auto" || !plan.rate_date)
+      return NextResponse.json({ previousRate: null, rateDate: null });
+    return NextResponse.json({
+      previousRate: await fetchPreviousUsdKrw(plan.rate_date),
+      rateDate: plan.rate_date,
+    });
+  } catch {
+    return NextResponse.json(
+      { previousRate: null, rateDate: null },
+      { status: 502 },
+    );
+  }
+}
 
 export async function POST(request: Request) {
   const userId = await currentUserId();

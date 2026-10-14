@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { recordSnapshot, listPortfolio } from "./portfolio-db";
 import { listHoldings } from "./holdings-db";
+import { nextStockBasis, nextCashFx } from "../app/fx-gains";
 import {
   calculatePositionTrade,
   calculateTradeCash,
@@ -16,23 +17,25 @@ export async function applyHoldingTrade(
   const client = await db().connect();
   try {
     await client.query("begin");
-    const plan = trade.cash
-      ? await client.query<{ usd_krw: string }>(
-          `select usd_krw from portfolio.plans where user_id = $1 for update`,
-          [userId],
-        )
-      : null;
+    const plan =
+      trade.cash || trade.expected.market === "US"
+        ? await client.query<{ usd_krw: string }>(
+            `select usd_krw from portfolio.plans where user_id = $1 for update`,
+            [userId],
+          )
+        : null;
     if (trade.cash && !plan?.rows[0])
       throw new PositionTradeError("포트폴리오를 찾지 못했습니다.", 404);
     const result = await client.query<{
       quantity: string;
       average_cost: string | null;
+      average_cost_krw: string | null;
       market: string;
       symbol: string;
       account_id: string;
       revision: string;
     }>(
-      `select quantity, average_cost, market, symbol, account_id, xmin::text as revision from portfolio.holdings where user_id = $1 and id = $2 for update`,
+      `select quantity, average_cost, average_cost_krw, market, symbol, account_id, xmin::text as revision from portfolio.holdings where user_id = $1 and id = $2 for update`,
       [userId, id],
     );
     const row = result.rows[0];
@@ -55,6 +58,24 @@ export async function applyHoldingTrade(
         409,
       );
     const position = calculatePositionTrade(current, trade);
+    const fxRate = trade.fxRate ?? Number(plan?.rows[0]?.usd_krw);
+    if (
+      row.market === "US" &&
+      (!Number.isFinite(fxRate) || fxRate < 100 || fxRate > 100000)
+    )
+      throw new PositionTradeError("이번 거래의 적용 환율을 입력해 주세요.");
+    const averageCostKrw =
+      row.market === "US"
+        ? nextStockBasis(
+            current.quantity,
+            row.average_cost_krw == null ? null : Number(row.average_cost_krw),
+            trade.side,
+            trade.quantity,
+            trade.price,
+            trade.fee,
+            fxRate,
+          )
+        : null;
     let cashChange: {
       name: string;
       balance: number;
@@ -66,8 +87,9 @@ export async function applyHoldingTrade(
         name: string;
         value_krw: string;
         value_usd: string | null;
+        average_fx_rate: string | null;
       }>(
-        `select name, value_krw, value_usd from portfolio.manual_assets where user_id = $1 and id = $2 for update`,
+        `select name, value_krw, value_usd, average_fx_rate from portfolio.manual_assets where user_id = $1 and id = $2 for update`,
         [userId, trade.cash.assetId],
       );
       const cash = cashResult.rows[0];
@@ -92,7 +114,7 @@ export async function applyHoldingTrade(
         row.market as "KR" | "US",
       );
       await client.query(
-        `update portfolio.manual_assets set value_krw = $3, value_usd = $4, updated_at = now() where user_id = $1 and id = $2`,
+        `update portfolio.manual_assets set value_krw = $3, value_usd = $4, average_fx_rate = $5, updated_at = now() where user_id = $1 and id = $2`,
         [
           userId,
           trade.cash.assetId,
@@ -100,6 +122,16 @@ export async function applyHoldingTrade(
             ? change.balance * Number(plan!.rows[0].usd_krw)
             : change.balance,
           row.market === "US" ? change.balance : null,
+          row.market === "US"
+            ? nextCashFx(
+                balance,
+                cash.average_fx_rate == null
+                  ? null
+                  : Number(cash.average_fx_rate),
+                change.delta,
+                fxRate,
+              )
+            : null,
         ],
       );
       cashChange = {
@@ -115,8 +147,8 @@ export async function applyHoldingTrade(
       );
     else
       await client.query(
-        `update portfolio.holdings set quantity = $3, average_cost = $4, updated_at = now() where user_id = $1 and id = $2`,
-        [userId, id, position.quantity, position.averageCost],
+        `update portfolio.holdings set quantity = $3, average_cost = $4, average_cost_krw = $5, updated_at = now() where user_id = $1 and id = $2`,
+        [userId, id, position.quantity, position.averageCost, averageCostKrw],
       );
     await recordSnapshot(userId, client);
     const holdings = await listHoldings(userId, client);

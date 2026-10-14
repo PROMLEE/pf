@@ -24,6 +24,7 @@ function sameOrigin(request: Request) {
 }
 
 function valid(input: Portfolio) {
+  if (input?.includeFxGains !== undefined && typeof input.includeFxGains !== "boolean") return false;
   if (!input || typeof input !== "object") return false;
   if (
     typeof input.title !== "string" ||
@@ -161,6 +162,7 @@ function valid(input: Portfolio) {
           1e-9)
     )
       return false;
+    if (asset.averageFxRate != null && (asset.valueUsd === null || typeof asset.averageFxRate !== "number" || !Number.isFinite(asset.averageFxRate) || asset.averageFxRate < 100 || asset.averageFxRate > 100000)) return false;
     assetIds.add(asset.id);
   }
 

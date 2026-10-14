@@ -1,4 +1,5 @@
 "use client";
+import { stockGains } from "./fx-gains";
 
 import { withPreviousQuotes } from "./holdings";
 
@@ -109,16 +110,6 @@ const dollars = new Intl.NumberFormat("en-US", {
 });
 const money = (value: number, market: Market) =>
   market === "KR" ? `${won.format(value)}원` : `$${dollars.format(value)}`;
-const valueOf = (row: Holding) =>
-  row.quantity * (row.currentPrice ?? row.capturedPrice ?? 0);
-const gainOf = (row: Holding) =>
-  row.averageCost == null || (row.currentPrice ?? row.capturedPrice) == null
-    ? null
-    : valueOf(row) - row.quantity * row.averageCost;
-const gainPercentOf = (row: Holding) =>
-  gainOf(row) === null || !row.averageCost || row.quantity <= 0
-    ? null
-    : (gainOf(row)! / (row.quantity * row.averageCost)) * 100;
 const signedPercent = (value: number) =>
   `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 const signedMoney = (value: number, market: Market) =>
@@ -343,6 +334,13 @@ export default function PortfolioPage() {
     };
   }, [authStatus]);
 
+  const [fxSettings,setFxSettings]=useState({enabled:false,rate:1400});
+  useEffect(()=>{let active=true;if(authStatus === "authenticated" && view === "holdings")void fetch("/api/portfolio",{cache:"no-store"}).then(r=>r.json()).then(p=>{if(active)setFxSettings({enabled:Boolean(p.portfolio?.includeFxGains),rate:p.portfolio?.usdKrw??1400});}).catch(()=>{});return()=>{active=false;};},[authStatus,view,session?.user?.appUserId]);
+  const fxEnabled=fxSettings.enabled && view === "holdings";
+  const valueOf=(row:Holding)=>(row.currentPrice??row.capturedPrice??0)*row.quantity*(row.market === "US" && fxEnabled?fxSettings.rate:1);
+  const gainOf=(row:Holding)=>fxEnabled?stockGains(row,fxSettings.rate,true).gain:row.averageCost===null || (row.currentPrice??row.capturedPrice)===null?null:((row.currentPrice??row.capturedPrice)!-row.averageCost)*row.quantity;
+  const gainPercentOf=(row:Holding)=>fxEnabled?stockGains(row,fxSettings.rate,true).percent:gainOf(row)===null || !row.averageCost || !row.quantity?null:gainOf(row)!/(row.quantity*row.averageCost)*100;
+  const gainCurrency=(market:Market):Market=>market === "US" && fxEnabled?"KR":market;
   const totals = useMemo(
     () =>
       holdings.reduce(
@@ -354,7 +352,7 @@ export default function PortfolioPage() {
           const gain = gainOf(row);
           if (gain !== null) {
             sum.gain[row.market] += gain;
-            sum.cost[row.market] += row.quantity * row.averageCost!;
+            sum.cost[row.market] += fxEnabled?stockGains(row,fxSettings.rate,true).cost??0:row.quantity*row.averageCost!;
             sum.costKnown[row.market]++;
           }
           return sum;
@@ -369,7 +367,7 @@ export default function PortfolioPage() {
           costKnown: { KR: 0, US: 0 },
         },
       ),
-    [holdings],
+    [holdings,fxEnabled,fxSettings],
   );
 
   const shown = useMemo(
@@ -392,7 +390,7 @@ export default function PortfolioPage() {
             );
           },
         ),
-    [holdings, filter, search, assetSort],
+    [holdings, filter, search, assetSort,fxEnabled,fxSettings],
   );
 
   function go(next: View, asset = selectedAsset, source = detailSource) {
@@ -1345,10 +1343,10 @@ export default function PortfolioPage() {
                   </div>
                   <div>
                     <span>미국 평가금액</span>
-                    <strong>{money(totals.US, "US")}</strong>
+                    <strong>{money(totals.US, gainCurrency("US"))}</strong>
                   </div>
                   <div>
-                    <span>미국 평가손익</span>
+                    <span>미국 평가손익{fxEnabled?" · 환율 포함":" · USD"}</span>
                     <strong
                       className={
                         totals.gain.US >= 0
@@ -1357,7 +1355,7 @@ export default function PortfolioPage() {
                       }
                     >
                       {totals.costKnown.US
-                        ? signedMoney(totals.gain.US, "US")
+                        ? signedMoney(totals.gain.US, gainCurrency("US"))
                         : "—"}
                     </strong>
                     {totals.cost.US > 0 && (
@@ -1485,7 +1483,7 @@ export default function PortfolioPage() {
                             <label>평가</label>
                             {price === null
                               ? "—"
-                              : money(valueOf(row), row.market)}
+                              : money(valueOf(row), gainCurrency(row.market))}
                           </strong>
                           <strong
                             className={
@@ -1499,7 +1497,7 @@ export default function PortfolioPage() {
                             <label>손익</label>
                             {gainOf(row) === null
                               ? "—"
-                              : signedMoney(gainOf(row)!, row.market)}
+                              : signedMoney(gainOf(row)!, gainCurrency(row.market))}
                             {gainPercentOf(row) !== null && (
                               <small className={styles.gainPercent}>
                                 {signedPercent(gainPercentOf(row)!)}

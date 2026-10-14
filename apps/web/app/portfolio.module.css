@@ -1741,3 +1741,5 @@
 @media (max-width: 700px) { .finalWeights table { font-size: 13px; } }
 
 .finalResultStatus { color: var(--ink); font-size: 13px; line-height: 1.6; margin: 12px 0; }
+
+.fxBasisField { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 160px); align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }

@@ -25,6 +25,7 @@ export type ManualAsset = {
   name: string;
   valueKrw: number;
   valueUsd: number | null;
+  averageFxRate?: number | null;
 };
 
 export function manualAssetValueKrw(asset: ManualAsset, usdKrw: number) {
@@ -112,6 +113,7 @@ export type CashFlow = {
 };
 
 export type Portfolio = {
+  includeFxGains?: boolean;
   title: string;
   usdKrw: number;
   usdKrwUpdatedAt: string | null;

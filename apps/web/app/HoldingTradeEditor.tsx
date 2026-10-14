@@ -7,6 +7,7 @@ import {
   calculateTradeCash,
   type TradeSide,
 } from "./position-trade";
+import { validFx, nextStockBasis } from "./fx-gains";
 import type { ManualAsset, Portfolio } from "./portfolio-model";
 import { publishTradePortfolio } from "./portfolio-cache";
 import styles from "./HoldingTradeEditor.module.css";
@@ -42,6 +43,25 @@ export default function HoldingTradeEditor({
   const [cashAssets, setCashAssets] = useState<ManualAsset[]>([]);
   const [cashLoading, setCashLoading] = useState(true);
   const [cashError, setCashError] = useState("");
+  const [referenceRate, setReferenceRate] = useState<number | null>(null);
+  const [fxOverride, setFxOverride] = useState<string | null>(null);
+  const [basisInput, setBasisInput] = useState(
+    String(holding.averageCostKrw ?? ""),
+  );
+  const [basisMode, setBasisMode] = useState<"krw" | "fx">("krw");
+  const basisValue =
+    basisInput === ""
+      ? null
+      : basisMode === "fx"
+        ? Number(basisInput) * (base.averageCost ?? 0)
+        : Number(basisInput);
+  const basisDirty =
+    basisMode === "fx"
+      ? Boolean(basisInput)
+      : basisInput !== String(base.averageCostKrw ?? "");
+  const fxRate =
+    fxOverride ?? (referenceRate === null ? "" : String(referenceRate));
+  const fxInvalid = base.market === "US" && !validFx(Number(fxRate));
   const [reflectCash, setReflectCash] = useState(true);
   const [cashId, setCashId] = useState("");
   useEffect(() => {
@@ -59,6 +79,7 @@ export default function HoldingTradeEditor({
           (asset) => (base.market === "US") === (asset.valueUsd !== null),
         );
         if (active) {
+          setReferenceRate(payload.portfolio?.usdKrw ?? null);
           setCashAssets(assets);
           if (assets.length === 1) setCashId(assets[0].id);
         }
@@ -73,14 +94,23 @@ export default function HoldingTradeEditor({
       active = false;
     };
   }, [base.market]);
-  const dirty = Boolean(quantity || priceOverride !== null || fee);
+  const dirty = Boolean(
+    quantity ||
+      priceOverride !== null ||
+      fee ||
+      fxOverride !== null ||
+      basisDirty,
+  );
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
   }, [dirty, onDirty]);
   useEffect(() => {
-    if (!base.revision && holding.revision) setBase(holding);
-  }, [base.revision, holding]);
+    if (!base.revision && holding.revision) {
+      setBase(holding);
+      if (!basisDirty) setBasisInput(String(holding.averageCostKrw ?? ""));
+    }
+  }, [base.revision, holding, basisDirty]);
   useEffect(() => {
     onBusy?.(busy);
     return () => onBusy?.(false);
@@ -112,7 +142,11 @@ export default function HoldingTradeEditor({
     : null;
   let cashPreview: ReturnType<typeof calculateTradeCash> | null = null;
   let cashValidation = "";
-  if (reflectCash && !cashLoading) {
+  if (
+    reflectCash &&
+    !cashLoading &&
+    (quantity || priceOverride !== null || fee)
+  ) {
     if (cashError) cashValidation = cashError;
     else if (!selectedCash)
       cashValidation = cashAssets.length
@@ -132,6 +166,8 @@ export default function HoldingTradeEditor({
     if (
       !preview ||
       busy ||
+      fxInvalid ||
+      basisDirty ||
       (reflectCash && (cashLoading || cashValidation || !selectedCash))
     )
       return;
@@ -145,6 +181,7 @@ export default function HoldingTradeEditor({
           id: base.id,
           trade: {
             ...trade,
+            ...(base.market === "US" ? { fxRate: Number(fxRate) } : {}),
             cash:
               reflectCash && selectedCash
                 ? { assetId: selectedCash.id, expectedBalance: cashBalance }
@@ -176,6 +213,49 @@ export default function HoldingTradeEditor({
       );
     } catch (error) {
       setError(error instanceof Error ? error.message : "거래 반영 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function saveBasis() {
+    if (
+      busy ||
+      !base.revision ||
+      !basisDirty ||
+      (basisValue !== null &&
+        (!Number.isFinite(basisValue) ||
+          basisValue <= 0 ||
+          basisValue >= 1e15)) ||
+      (basisMode === "fx" &&
+        basisInput &&
+        (!validFx(Number(basisInput)) || !base.averageCost))
+    )
+      return;
+    if (
+      (quantity || priceOverride !== null || fee || fxOverride !== null) &&
+      !confirm(
+        "원화 원가를 저장하면 현재 거래 입력이 닫힙니다. 원가를 먼저 저장할까요?",
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/holdings/basis", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: base.id,
+          revision: base.revision,
+          averageCostKrw:
+            basisValue === null ? null : Math.round(basisValue * 1e6) / 1e6,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "원가 저장 실패");
+      onSaved(result.holdings, `${base.name} 원화 원가 저장 완료`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "원가 저장 실패");
     } finally {
       setBusy(false);
     }
@@ -231,6 +311,76 @@ export default function HoldingTradeEditor({
             />
           </label>
         </div>
+        {base.market === "US" && (
+          <>
+            <label>
+              이번 거래 적용 환율 · 1 USD당 원
+              <NumberInput
+                value={fxRate}
+                onValueChange={setFxOverride}
+                min="100"
+                max="100000"
+                step="any"
+              />
+            </label>
+            <details className={styles.fee}>
+              <summary>기존 보유분의 환율 손익 원가 설정</summary>
+              <label>
+                원가 입력 방식
+                <select
+                  aria-label="원가 입력 방식"
+                  value={basisMode}
+                  onChange={(event) => {
+                    setBasisMode(event.target.value as "krw" | "fx");
+                    setBasisInput("");
+                  }}
+                >
+                  <option value="krw">원화 주당 평균 매입단가</option>
+                  <option value="fx">평균 매수 환율</option>
+                </select>
+              </label>
+              <label>
+                {basisMode === "krw"
+                  ? "원화 기준 주당 평균 매입단가 · 원"
+                  : "평균 매수 환율 · 1 USD당 원"}
+                <NumberInput
+                  value={basisInput}
+                  onValueChange={setBasisInput}
+                  min="0"
+                  step="any"
+                  placeholder="모르면 비워두세요"
+                />
+              </label>
+              <small>
+                기존 {base.quantity.toLocaleString()}주 전체의 원가입니다. 현재
+                환율을 과거 원가로 자동 입력하지 않습니다.
+              </small>
+              {basisValue !== null && Number.isFinite(basisValue) && (
+                <small>
+                  원화 총매입금액{" "}
+                  {Math.round(basisValue * base.quantity).toLocaleString()}원
+                </small>
+              )}
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  !basisDirty ||
+                  (basisValue !== null &&
+                    (!Number.isFinite(basisValue) ||
+                      basisValue <= 0 ||
+                      basisValue >= 1e15)) ||
+                  (basisMode === "fx" &&
+                    basisInput !== "" &&
+                    (!validFx(Number(basisInput)) || !base.averageCost))
+                }
+                onClick={saveBasis}
+              >
+                원화 원가 저장
+              </button>
+            </details>
+          </>
+        )}
         <details className={styles.fee}>
           <summary>수수료·거래 비용 입력 (선택)</summary>
           <label>
@@ -286,6 +436,33 @@ export default function HoldingTradeEditor({
         </div>
       </fieldset>
       <div className={styles.preview} role="status">
+        {base.market === "US" && (
+          <div>
+            <span>원화 주당 평균 매입단가</span>
+            <strong>
+              {base.averageCostKrw == null
+                ? "미확인"
+                : `${base.averageCostKrw.toLocaleString("ko-KR", { maximumFractionDigits: 6 })}원`}{" "}
+              →{" "}
+              {preview && !fxInvalid
+                ? (() => {
+                    const basis = nextStockBasis(
+                      base.quantity,
+                      base.averageCostKrw ?? null,
+                      side,
+                      trade.quantity,
+                      trade.price,
+                      trade.fee,
+                      Number(fxRate),
+                    );
+                    return basis === null
+                      ? "미확인"
+                      : `${basis.toLocaleString("ko-KR", { maximumFractionDigits: 6 })}원`;
+                  })()
+                : "—"}
+            </strong>
+          </div>
+        )}
         <div>
           <span>보유 수량</span>
           <strong>
@@ -319,7 +496,7 @@ export default function HoldingTradeEditor({
         )}
         {side === "sell" && preview?.realisedGain !== null && preview && (
           <div>
-            <span>이번 매도 손익</span>
+            <span>이번 매도 손익{base.market === "US" ? " · USD" : ""}</span>
             <strong>{money(preview.realisedGain)}</strong>
           </div>
         )}
@@ -332,9 +509,15 @@ export default function HoldingTradeEditor({
           </small>
         )}
       </div>
-      {(validation || cashValidation || error) && (
+      {(validation ||
+        cashValidation ||
+        error ||
+        (!cashLoading && fxInvalid && Boolean(quantity))) && (
         <p role="alert" className={styles.error}>
-          {error || validation || cashValidation}
+          {error ||
+            validation ||
+            cashValidation ||
+            "이번 거래 적용 환율을 입력해 주세요."}
         </p>
       )}
       {dirty && (
@@ -349,6 +532,8 @@ export default function HoldingTradeEditor({
         <button
           type="submit"
           disabled={
+            fxInvalid ||
+            basisDirty ||
             !preview ||
             busy ||
             !base.revision ||

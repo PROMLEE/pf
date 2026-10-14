@@ -31,6 +31,7 @@ async function insertRows(
   );
 }
 type PlanRow = {
+  include_fx_gains: boolean;
   title: string;
   usd_krw: string;
   usd_krw_updated_at: Date;
@@ -64,6 +65,7 @@ type RuleRow = {
   quote_checked_at: Date | null;
 };
 type ManualRow = {
+  average_fx_rate: string | null;
   id: string;
   bucket_id: string | null;
   name: string;
@@ -120,7 +122,7 @@ export async function listPortfolio(
   client: Client = db(),
 ): Promise<Portfolio | null> {
   const plan = await client.query<PlanRow>(
-    `select title, usd_krw, usd_krw_updated_at, usd_krw_mode, usd_krw_rate_date::text as usd_krw_rate_date, tolerance_percent from portfolio.plans where user_id = $1`,
+    `select include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode, usd_krw_rate_date::text as usd_krw_rate_date, tolerance_percent from portfolio.plans where user_id = $1`,
     [userId],
   );
   if (!plan.rows[0]) return null;
@@ -143,7 +145,7 @@ export async function listPortfolio(
       [userId],
     ),
     client.query<ManualRow>(
-      `select id, bucket_id, name, value_krw, value_usd from portfolio.manual_assets where user_id = $1 order by name`,
+      `select id, bucket_id, name, value_krw, value_usd, average_fx_rate from portfolio.manual_assets where user_id = $1 order by name`,
       [userId],
     ),
     client.query<CryptoRow>(
@@ -165,6 +167,7 @@ export async function listPortfolio(
     ),
   ]);
   return {
+    includeFxGains: plan.rows[0].include_fx_gains,
     title: plan.rows[0].title,
     usdKrw: Number(plan.rows[0].usd_krw),
     usdKrwUpdatedAt: plan.rows[0].usd_krw_updated_at.toISOString(),
@@ -201,6 +204,7 @@ export async function listPortfolio(
         name: row.name,
         valueKrw: Number(row.value_krw),
         valueUsd: row.value_usd === null ? null : Number(row.value_usd),
+        averageFxRate: row.average_fx_rate == null ? null : Number(row.average_fx_rate),
       }),
     ),
     cryptoAssets: cryptoAssets.rows.map(
@@ -274,12 +278,12 @@ export async function savePortfolio(userId: string, input: Portfolio) {
       }
     }
     await client.query(
-      `insert into portfolio.plans (user_id, title, usd_krw, usd_krw_mode, usd_krw_rate_date, tolerance_percent)
-       values ($1,$2,$3,$4,$5,$6)
+      `insert into portfolio.plans (user_id, title, usd_krw, usd_krw_mode, usd_krw_rate_date, tolerance_percent, include_fx_gains)
+       values ($1,$2,$3,$4,$5,$6,$7)
        on conflict (user_id) do update set title = excluded.title, usd_krw = excluded.usd_krw,
          usd_krw_updated_at = case when portfolio.plans.usd_krw is distinct from excluded.usd_krw or portfolio.plans.usd_krw_mode is distinct from excluded.usd_krw_mode then now() else portfolio.plans.usd_krw_updated_at end,
          usd_krw_mode = excluded.usd_krw_mode, usd_krw_rate_date = excluded.usd_krw_rate_date,
-         tolerance_percent = excluded.tolerance_percent, updated_at = now()`,
+         tolerance_percent = excluded.tolerance_percent, include_fx_gains = excluded.include_fx_gains, updated_at = now()`,
       [
         userId,
         input.title,
@@ -287,6 +291,7 @@ export async function savePortfolio(userId: string, input: Portfolio) {
         input.usdKrwMode,
         input.usdKrwRateDate,
         input.tolerancePercent,
+        input.includeFxGains ?? false,
       ],
     );
     const previousPrices = await client.query<{
@@ -407,7 +412,7 @@ export async function savePortfolio(userId: string, input: Portfolio) {
     await insertRows(
       client,
       "portfolio.manual_assets",
-      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd"],
+      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd", "average_fx_rate"],
       input.manualAssets.map((asset) => [
         asset.id,
         userId,
@@ -417,6 +422,7 @@ export async function savePortfolio(userId: string, input: Portfolio) {
           ? asset.valueKrw
           : asset.valueUsd * input.usdKrw,
         asset.valueUsd,
+        asset.valueUsd === null ? null : asset.averageFxRate ?? null,
       ]),
     );
     await insertRows(
@@ -467,7 +473,7 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
   try {
     await client.query("begin");
     const plan = await client.query<PlanRow & { bucket_ids: string[] }>(
-      `select title, usd_krw, usd_krw_updated_at, usd_krw_mode,
+      `select include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode,
          usd_krw_rate_date::text, tolerance_percent,
          array(select id from portfolio.buckets where user_id = $1) as bucket_ids
        from portfolio.plans where user_id = $1`,
@@ -507,7 +513,7 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
     await insertRows(
       client,
       "portfolio.manual_assets",
-      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd"],
+      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd", "average_fx_rate"],
       input.manualAssets.map((asset) => [
         asset.id,
         userId,
@@ -515,6 +521,7 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
         asset.name,
         asset.valueUsd === null ? asset.valueKrw : asset.valueUsd * usdKrw,
         asset.valueUsd,
+        asset.valueUsd === null ? null : asset.averageFxRate ?? null,
       ]),
     );
     await insertRows(

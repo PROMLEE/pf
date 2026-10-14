@@ -14,6 +14,7 @@ export type ExpectedPosition = {
   revision: string;
 };
 export type HoldingTradeInput = PositionTrade & {
+  fxRate?: number;
   expected: ExpectedPosition;
   cash?: { assetId: string; expectedBalance: number } | null;
 };
@@ -49,6 +50,11 @@ export function validateHoldingTrade(
     shares(trade.quantity) &&
     number(trade.price) &&
     number(trade.fee, false) &&
+    (trade.fxRate === undefined ||
+      (typeof trade.fxRate === "number" &&
+        Number.isFinite(trade.fxRate) &&
+        trade.fxRate >= 100 &&
+        trade.fxRate <= 100000)) &&
     (trade.cash == null ||
       (uuid(trade.cash.assetId) &&
         typeof trade.cash.expectedBalance === "number" &&
