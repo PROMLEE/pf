@@ -6,6 +6,8 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://pf.promleeblog.com"),
+  robots: { index: false, follow: true },
   title: "PortRhythm | 투자는 나만의 리듬으로",
   description:
     "투자는 나만의 리듬으로. 내 기준을 지키며, 꾸준히. 나만의 목표 비중을 설계하고 자산을 점검하며 리밸런싱하세요.",

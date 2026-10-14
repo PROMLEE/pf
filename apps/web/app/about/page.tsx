@@ -5,6 +5,7 @@ import Experience, { RebalanceDemo } from "./Experience";
 import styles from "./about.module.css";
 
 export const metadata: Metadata = {
+  robots: { index: true, follow: true },
   title: "PortRhythm 소개 | 투자는 나만의 리듬으로",
   description: "국내·미국 주식, 가상자산, 현금을 나만의 목표 비중으로 관리하세요. 실제 자산과 목표를 비교하고 다음 리밸런싱을 준비하는 PortRhythm.",
   alternates: { canonical: "https://pf.promleeblog.com/about" },
