@@ -4,17 +4,28 @@ import { ArrowRight, ArrowUpRight, Check, SlidersHorizontal, Layers3, RefreshCw 
 import Experience, { RebalanceDemo } from "./Experience";
 import styles from "./about.module.css";
 
+const searchTitle = "포트리듬 PortRhythm | 자산관리·포트폴리오 리밸런싱";
+const searchDescription = "국내·미국 주식과 ETF, 비트코인, 현금을 한곳에서 관리하세요. 나만의 자산 배분과 목표 비중을 설계하고, 현재 비중·손익·리밸런싱 매수·매도 수량과 자산 추이를 확인하는 포트폴리오 관리 서비스입니다.";
+
 export const metadata: Metadata = {
   robots: { index: true, follow: true },
-  title: "PortRhythm 소개 | 투자는 나만의 리듬으로",
-  description: "국내·미국 주식, 가상자산, 현금을 나만의 목표 비중으로 관리하세요. 실제 자산과 목표를 비교하고 다음 리밸런싱을 준비하는 PortRhythm.",
+  title: searchTitle,
+  description: searchDescription,
   alternates: { canonical: "https://pf.promleeblog.com/about" },
   openGraph: {
-    title: "PortRhythm — 투자는 나만의 리듬으로",
-    description: "내 기준을 지키며, 꾸준히. 내 목표 비중부터 다음 조정까지 연결하는 포트폴리오 관리.",
+    title: searchTitle,
+    description: searchDescription,
     url: "https://pf.promleeblog.com/about",
+    siteName: "PortRhythm · 포트리듬",
     type: "website",
     locale: "ko_KR",
+    images: [{ url: "/guide/desktop-composition.jpg", width: 1280, height: 720, alt: "포트리듬의 자산 배분과 목표 비중 비교 화면" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: searchTitle,
+    description: searchDescription,
+    images: ["/guide/desktop-composition.jpg"],
   },
 };
 
@@ -30,9 +41,9 @@ export default function AboutPage() {
         <main id="about-main" className={styles.main}>
           <section className={styles.hero}>
             <div data-reveal>
-              <span className={styles.eyebrow}>내 투자 기준을, 매일 확인할 수 있게</span>
+              <span className={styles.eyebrow}>주식·ETF·가상자산 포트폴리오 관리</span>
               <h1>투자는<br /><em>나만의 리듬으로.</em></h1>
-              <p><strong>내 기준을 지키며, 꾸준히.</strong>나만의 목표 비중과 실제 자산을 연결하고,<br className={styles.desktopBreak} /> 필요한 조정을 확인하세요.</p>
+              <p><strong>내 기준을 지키며, 꾸준히.</strong>국내·미국 주식과 ETF, 가상자산, 현금을 함께 관리하고,<br className={styles.desktopBreak} /> 목표 비중에 맞는 리밸런싱을 준비하세요.</p>
               <div className={styles.actions}><Link href="/" className={styles.primary}>내 포트폴리오 시작하기 <ArrowRight size={18} /></Link><a href="#how-it-works" className={styles.textLink}>어떻게 관리하나요? ↓</a></div>
               <span className={styles.assetScope}>국내·미국 주식 / 가상자산 / 현금</span>
             </div>
@@ -43,11 +54,11 @@ export default function AboutPage() {
           </section>
 
           <section id="how-it-works" className={styles.section} data-reveal>
-            <div className={styles.sectionIntro}><span className={styles.eyebrow}>포트폴리오를 운영하는 하나의 흐름</span><h2>내 계획이 실제 자산과<br />이어지도록.</h2><p>목표 설계부터 자산 배정, 비중 점검, 조정 수량 검토와 기록까지 연결합니다.</p></div>
+            <div className={styles.sectionIntro}><span className={styles.eyebrow}>포트폴리오를 운영하는 하나의 흐름</span><h2>나만의 자산 배분을<br />실제 포트폴리오로.</h2><p>목표 설계부터 자산 배정, 비중 점검, 조정 수량 검토와 기록까지 연결합니다.</p></div>
             <div className={styles.features}>
               <article><SlidersHorizontal size={24} /><h3>내 기준으로 설계</h3><p>지수, 우량주, 금, 비트코인, 현금. 필요한 포트를 만들고 이름·목표 비중·허용 오차를 직접 정하세요.</p></article>
               <article><Layers3 size={24} /><h3>흩어진 자산을 연결</h3><p>여러 계좌의 같은 종목을 코드로 연결하고, 국내·미국 주식과 가상자산·현금을 원화로 함께 확인하세요.</p></article>
-              <article><RefreshCw size={24} /><h3>다음 조정을 준비</h3><p>목표에서 벗어난 비중을 확인하고, 주식의 예상 매수·매도 수량과 조정 후 비중·남는 자금을 검토하세요.</p></article>
+              <article><RefreshCw size={24} /><h3>리밸런싱 수량 확인</h3><p>목표에서 벗어난 비중을 확인하고, 주식의 예상 매수·매도 수량과 조정 후 비중·남는 자금을 검토하세요.</p></article>
             </div>
           </section>
 
@@ -78,7 +89,7 @@ export default function AboutPage() {
           </section>
 
           <section className={`${styles.section} ${styles.faq}`} data-reveal>
-            <div><span className={styles.eyebrow}>시작하기 전에</span><h2>무엇을 할 수 있나요?</h2></div>
+            <div><span className={styles.eyebrow}>포트리듬 · PortRhythm 시작하기 전에</span><h2>무엇을 할 수 있나요?</h2></div>
             <div>
               <details><summary>계좌가 자동으로 동기화되나요?</summary><p>실제 계좌 잔고를 자동으로 가져오지는 않습니다. 주식은 지원하는 증권사 잔고 캡처를 검토하거나 직접 입력하고, 가상자산·현금도 직접 등록합니다. 거래 후 수량을 수정하면 시세 조회와 평가에 반영됩니다.</p></details>
               <details><summary>가격은 어떻게 확인하나요?</summary><p>가격·환율·갱신 기준은 <Link href="/guide">사용 가이드</Link>에서 확인하세요.</p></details>
