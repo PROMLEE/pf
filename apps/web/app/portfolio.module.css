@@ -1743,3 +1743,14 @@
 .finalResultStatus { color: var(--ink); font-size: 13px; line-height: 1.6; margin: 12px 0; }
 
 .fxBasisField { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 160px); align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+
+.preferences { max-width: 760px; }
+.preferences section { padding: 24px 0; border-bottom: 1px solid var(--line); }
+.preferences section:first-child { padding-top: 8px; }
+.preferences h2 { margin: 0 0 12px; font-size: 18px; }
+.preferences p { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 8px 0 16px; }
+.preferenceFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin: 16px 0; }
+.preferenceFields label { display: grid; align-content: start; gap: 8px; font-size: 14px; font-weight: 600; }
+.preferenceFields small { color: var(--muted); font-size: 13px; font-weight: 400; line-height: 1.6; }
+.preferenceFields input, .preferenceFields select { font-size: 15px; padding: 12px; }
+@media (max-width: 600px) { .preferenceFields { grid-template-columns: 1fr; gap: 16px; } .preferences section { padding: 20px 0; } }

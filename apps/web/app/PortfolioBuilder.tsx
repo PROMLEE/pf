@@ -66,6 +66,7 @@ type Props = {
   screen:
     | "dashboard"
     | "strategy"
+    | "preferences"
     | "composition"
     | "allocation"
     | "edit"
@@ -97,7 +98,7 @@ type Props = {
   onSelectAsset?: (asset: AssetSelection) => void;
   onBack?: () => void;
   onNavigate: (
-    screen: "strategy" | "allocation" | "rebalance" | "history" | "settings",
+    screen: "preferences" | "strategy" | "allocation" | "rebalance" | "history" | "settings",
   ) => void;
   onDirtyChange: (dirty: boolean) => void;
 };
@@ -1678,6 +1679,7 @@ export default function PortfolioBuilder({
       "목표 설계",
       "원하는 포트 비중과 리밸런싱 기준을 정하세요.",
     ],
+    preferences: ["PREFERENCES", "설정", "환율과 손익 표시 방식을 관리하세요."],
     composition: [
       "PORTFOLIO MIX",
       "포트별 자산 비중",
@@ -1752,14 +1754,14 @@ export default function PortfolioBuilder({
             <p>{titles[2]}</p>
           </div>
           <div>
-            <button
+            {screen !== "preferences" && <button
               className={styles.ghost}
               onClick={refresh}
               disabled={refreshing || quotesRefreshing}
             >
               <RefreshCw size={16} />{" "}
               {refreshing || quotesRefreshing ? "갱신 중" : "가격 갱신"}
-            </button>
+            </button>}
             {dirty ? (
               <button className={styles.save} onClick={save} disabled={saving}>
                 {saving ? "저장 중" : "미저장 · 변경 내용 저장"}
@@ -2007,6 +2009,49 @@ export default function PortfolioBuilder({
         </div>
       )}
 
+      {screen === "preferences" && (
+        <div className={styles.preferences}>
+          <section aria-labelledby="fx-settings-title">
+            <h2 id="fx-settings-title">환율</h2>
+            <p>달러 자산을 원화로 환산할 때 사용할 환율입니다.</p>
+            <div className={styles.preferenceFields}>
+              <label>환율 적용 방식
+                <select value={draft.usdKrwMode} onChange={(event) => change({ ...draft, usdKrwMode: event.target.value as "auto" | "manual", usdKrwRateDate: null })}>
+                  <option value="auto">자동으로 받아오기</option>
+                  <option value="manual">직접 입력</option>
+                </select>
+              </label>
+              <label>1달러당 원화 금액
+                <NumberInput min="100" max="100000" step="0.01" value={draft.usdKrw} disabled={draft.usdKrwMode === "auto"} onValueChange={(value) => change({ ...draft, usdKrw: Number(value) })} />
+                <small>{draft.usdKrwMode === "auto" ? "자동 환율을 사용 중입니다." : "입력한 환율을 저장하면 평가액에 반영됩니다."}</small>
+              </label>
+            </div>
+          </section>
+          <section aria-labelledby="gain-settings-title">
+            <h2 id="gain-settings-title">손익 표시</h2>
+            <div className={styles.preferenceFields}>
+              <label>손익에 환율 변동 포함
+                <select value={draft.includeFxGains ? "on" : "off"} onChange={(event) => change({ ...draft, includeFxGains: event.target.value === "on" })}>
+                  <option value="off">끔 · 주가 손익만</option>
+                  <option value="on">켬 · 환율 손익도 포함</option>
+                </select>
+              </label>
+            </div>
+            <p>켰을 때는 미국 주식의 원화 매입원가와 달러 현금의 평균 환전 단가가 필요합니다. 모르는 원가는 손익 미확인으로 표시합니다.</p>
+            <p>총평가액·비중·리밸런싱은 이 선택과 관계없이 현재 환율로 계산합니다.</p>
+          </section>
+          <section aria-labelledby="portfolio-settings-title">
+            <h2 id="portfolio-settings-title">포트폴리오</h2>
+            <div className={styles.preferenceFields}>
+              <label>포트폴리오 이름
+                <input value={draft.title} onChange={(event) => change({ ...draft, title: event.target.value })} />
+              </label>
+            </div>
+            <button type="button" className={styles.ghost} onClick={() => onNavigate("strategy")}>목표 비중·허용 오차 변경 <ArrowRight size={15} /></button>
+          </section>
+        </div>
+      )}
+
       {screen === "strategy" && (
         <>
           <section className={styles.panel}>
@@ -2044,52 +2089,9 @@ export default function PortfolioBuilder({
                 %p
               </span>
             </label>
-            <details className={styles.advancedSettings}>
-              <summary>
-                환율·기타 설정 <span>USD {won.format(draft.usdKrw)}원</span>
-                <ChevronDown size={15} />
-              </summary>
-              <div className={styles.settings}>
-                <label>손익에 환율 변동 포함<select value={draft.includeFxGains?"on":"off"} onChange={event=>change({...draft,includeFxGains:event.target.value==="on"})}><option value="off">끔 · 주가 손익만</option><option value="on">켬 · 원화 원가 기준</option></select><small>총평가액·비중·리밸런싱은 항상 현재 환율로 계산합니다. 과거 원가가 없으면 환율 손익은 미확인입니다.</small></label>
-                <label>
-                  포트폴리오 이름
-                  <input
-                    value={draft.title}
-                    onChange={(event) =>
-                      change({ ...draft, title: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  환율 적용 방식
-                  <select
-                    value={draft.usdKrwMode}
-                    onChange={(event) =>
-                      change({
-                        ...draft,
-                        usdKrwMode: event.target.value as "auto" | "manual",
-                        usdKrwRateDate: null,
-                      })
-                    }
-                  >
-                    <option value="auto">자동</option>
-                    <option value="manual">직접 입력</option>
-                  </select>
-                </label>
-                <label>
-                  USD → KRW 환율 (1달러당 원)
-                  <NumberInput
-                    min="100"
-                    step="0.01"
-                    value={draft.usdKrw}
-                    disabled={draft.usdKrwMode === "auto"}
-                    onValueChange={(value) =>
-                      change({ ...draft, usdKrw: Number(value) })
-                    }
-                  />
-                </label>
-              </div>
-            </details>
+            <button type="button" className={styles.ghost} onClick={() => onNavigate("preferences")}>
+              환율·손익 설정 <ArrowRight size={15} />
+            </button>
             <div className={styles.bucketList}>
               {draft.buckets.map((bucket) => {
                 const current = values?.values.get(bucket.id) ?? 0;
@@ -2740,7 +2742,7 @@ export default function PortfolioBuilder({
           )}
         </>
       )}
-      {(screen === "allocation" || screen === "edit") && dirty && (
+      {(screen === "allocation" || screen === "edit" || screen === "preferences") && dirty && (
         <div className={styles.mobileSaveBar}>
           <button type="button" onClick={save} disabled={saving}>
             {saving ? "저장 중" : "미저장 · 변경 내용 저장"}

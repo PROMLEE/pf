@@ -68,10 +68,11 @@ type View =
   | "more"
   | "detail"
   | "settings"
+  | "preferences"
   | "guide";
 const VIEWS: readonly View[] = [
   "portfolio", "holdings", "accounts", "edit", "strategy", "composition", "allocation",
-  "rebalance", "history", "import", "more", "detail", "settings", "guide",
+  "rebalance", "history", "import", "more", "detail", "settings", "preferences", "guide",
 ];
 
 function screenUrl(next: View, asset: AssetSelection | null, source: string) {
@@ -1078,6 +1079,7 @@ export default function PortfolioPage() {
     { id: "rebalance" as View, label: "리밸런싱", Icon: RefreshCw },
     { id: "history" as View, label: "자산 기록", Icon: LayoutDashboard },
     { id: "import" as View, label: "캡처 가져오기", Icon: Camera },
+    { id: "preferences" as View, label: "설정", Icon: Settings2 },
     { id: "settings" as View, label: "계정", Icon: Settings2 },
     { id: "guide" as View, label: "사용 가이드", Icon: CircleHelp },
   ];
@@ -1085,7 +1087,7 @@ export default function PortfolioPage() {
   const menuSections = [
     { label: "포트폴리오", ids: ["strategy", "composition", "rebalance"] },
     { label: "자산 관리", ids: ["accounts", "holdings", "edit", "allocation", "import"] },
-    { label: "기록과 계정", ids: ["history", "settings", "guide"] },
+    { label: "기록과 설정", ids: ["history", "preferences", "settings", "guide"] },
   ];
   const menuDescriptions: Partial<Record<View, string>> = {
     strategy: "목표 비중과 허용 오차 설정",
@@ -1097,6 +1099,7 @@ export default function PortfolioPage() {
     allocation: "보유 자산의 포트 지정",
     import: "증권사 잔고 캡처로 등록",
     history: "포트별 자산 변화 확인",
+    preferences: "환율·환율 손익·포트폴리오 이름",
     settings: "로그인·화면 설정",
     guide: "처음 시작하는 순서와 기능 설명",
   };
@@ -1185,6 +1188,7 @@ export default function PortfolioPage() {
           >
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+          <button type="button" className={styles.themeToggle} aria-label="설정 열기" onClick={() => go("preferences")}><Settings2 size={18} /></button>
           <button className={styles.topAvatar} aria-label="내 계정 열기" onClick={() => go("settings")}>
             <ProfileAvatar image={session.user?.image} name={session.user?.name} />
           </button>
@@ -1250,6 +1254,7 @@ export default function PortfolioPage() {
             [
               "portfolio",
               "strategy",
+              "preferences",
               "composition",
               "allocation",
               "rebalance",
@@ -1264,6 +1269,7 @@ export default function PortfolioPage() {
                   ? "dashboard"
                   : (view as
                       | "strategy"
+                      | "preferences"
                       | "composition"
                       | "allocation"
                       | "rebalance"
