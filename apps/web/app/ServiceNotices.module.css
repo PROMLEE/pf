@@ -1,0 +1,50 @@
+.notices {
+  margin-bottom: 20px;
+  background: var(--soft);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.notices summary {
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+}
+.notices summary > span {
+  color: var(--blue);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.notices summary > strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.notices small {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.notices article {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.notices article:first-child {
+  margin-top: 14px;
+}
+.notices h3 {
+  font-size: 15px;
+  margin: 0 0 5px;
+}
+.notices p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 0;
+}
+.notices h3 span {
+  color: var(--blue);
+}

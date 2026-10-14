@@ -14,13 +14,14 @@ test('existing OAuth account refreshes its photo while keeping identity and nick
  const calls=[];const cb=callbacks(async(sql,args)=>{calls.push({sql,args});return {rows:[{userId:'existing',nickname:'Saved name',profileImageUrl:null}]};});
  const token=await cb.jwt({token:{},account:{provider:'naver',providerAccountId:'id'},user:{name:'Provider name',image:'https://phinf.pstatic.net/new.jpg'}});
  assert.equal(token.appUserId,'existing');assert.equal(token.name,'Saved name');assert.equal(token.picture,'https://phinf.pstatic.net/new.jpg');
- assert.equal(calls.length,2);assert.match(calls[1].sql,/update public\."User"/);assert.deepEqual(calls[1].args,[token.picture,'existing','NAVER','id']);
+ assert.equal(calls.length,3);assert.match(calls[1].sql,/update public\."User"/);assert.deepEqual(calls[1].args,[token.picture,'existing','NAVER','id']);
+ assert.match(calls[2].sql,/insert into portfolio.members/);assert.deepEqual(calls[2].args,['existing']);assert.doesNotMatch(calls[2].sql,/is_admin/);
  const session=await cb.session({session:{user:{}},token});assert.equal(session.user.image,token.picture);
 });
 test('missing photo consent preserves an existing saved photo',async()=>{
  let queries=0;const cb=callbacks(async()=>{queries++;return {rows:[{userId:'existing',nickname:'Name',profileImageUrl:'https://cdn.example.com/saved.jpg'}]};});
  const token=await cb.jwt({token:{},account:{provider:'kakao',providerAccountId:'id'},user:{image:null}});
- assert.equal(token.picture,'https://cdn.example.com/saved.jpg');assert.equal(queries,1);
+ assert.equal(token.picture,'https://cdn.example.com/saved.jpg');assert.equal(queries,2);
 });
 test('existing session loads its saved photo once without repeated DB queries',async()=>{
  let queries=0;const cb=callbacks(async()=>{queries++;return {rows:[{oauthProvider:'NAVER',profileImageUrl:'https://phinf.pstatic.net/saved.jpg'}]};});

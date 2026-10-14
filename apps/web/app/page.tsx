@@ -49,6 +49,7 @@ import UserGuide from "./UserGuide";
 import AccountsManager from "./AccountsManager";
 import { protectUnsavedChanges } from "./unsaved-changes";
 import AccountSettings from "./AccountSettings";
+import ServiceNotices from "./ServiceNotices";
 import ProfileAvatar from "./ProfileAvatar";
 import HoldingTradeEditor from "./HoldingTradeEditor";
 import AssetSortSelect, { compareAssets, isAssetSort, type AssetSort } from "./asset-sort";
@@ -123,6 +124,7 @@ async function data<T>(response: Response): Promise<T> {
 }
 
 export default function PortfolioPage() {
+  const [operator, setOperator] = useState(false);
   const { data: session, status: authStatus } = useSession();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [view, setView] = useState<View>("portfolio");
@@ -1131,6 +1133,7 @@ export default function PortfolioPage() {
             </Fragment>
           ))}
         </div>
+        {operator && <Link href="/admin" style={{ padding: "12px 24px", color: "var(--blue)", fontSize: 14 }}>운영 관리 ↗</Link>}
         <div className={styles.sideFoot}>
           <div className={styles.sideNote}>
             <ShieldCheck size={18} />
@@ -1194,6 +1197,8 @@ export default function PortfolioPage() {
           </button>
         </header>
         <main className={styles.content}>
+          <ServiceNotices onAdminChange={setOperator} />
+          {view === "more" && operator && <Link href="/admin" style={{display:"block",padding:"16px 0",color:"var(--blue)"}}>관리자 전용 · 운영 관리 ↗</Link>}
           {view === "accounts" && <AccountsManager userId={session.user?.appUserId ?? ""} holdings={holdings} onHoldings={(rows)=>{setHoldings(rows);setQuoteVersion(version=>version+1);}} onNotice={setNotice} onDirty={setPortfolioDirty} onOpenAsset={row=>openAsset({id:`holding:${row.id}`,kind:"stock"},"accounts")} onRefreshQuotes={()=>void refreshQuotes(true)} />}
           {view === "guide" && <UserGuide onNavigate={go} />}
           {view === "portfolio" && showStartGuide && (

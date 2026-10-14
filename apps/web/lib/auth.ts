@@ -92,6 +92,7 @@ export const authOptions: NextAuthOptions = {
         token.profileImageChecked = true;
       }
       if (account?.provider === "local-admin" && user?.id) {
+        await db().query(`insert into portfolio.members(user_id,last_login_at) values($1,now()) on conflict(user_id) do update set last_login_at=excluded.last_login_at`, [user.id]);
         token.appUserId = user.id;
         token.name = user.name;
         token.profileImageChecked = true;
@@ -141,6 +142,7 @@ export const authOptions: NextAuthOptions = {
           // Photo persistence failure must not prevent login.
         }
       }
+      await db().query(`insert into portfolio.members(user_id,last_login_at) values($1,now()) on conflict(user_id) do update set last_login_at=excluded.last_login_at`, [appUser.userId]);
       token.appUserId = appUser.userId;
       token.name = appUser.nickname;
       token.picture = incomingImage ?? profileImageUrl(appUser.profileImageUrl);
