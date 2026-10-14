@@ -1317,7 +1317,6 @@
   .topPrivate {
     display: none;
   }
-  .themeToggle { margin-left: auto; }
   .topAvatar { margin-left: 0; }
   .content {
     padding: 23px 16px 88px;
@@ -1911,3 +1910,16 @@
 .holdingDeleteConfirm > div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .holdingDeleteConfirm button { padding: 9px 14px; border: 0; border-radius: 7px; background: var(--surface); color: var(--ink); }
 .holdingDeleteConfirm .confirmDelete { background: #b42332; color: #fff; }
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.topActions .topPrivate,
+.topActions .themeToggle,
+.topActions .topAvatar { margin: 0; }
+.topActions .topAvatar { flex-shrink: 0; }
+.topActions .topAvatar span { margin: 0; }

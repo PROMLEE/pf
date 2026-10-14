@@ -1176,6 +1176,7 @@ export default function PortfolioPage() {
           <div>
             <span className={styles.desktopBreadcrumb}>내 자산 /</span> <strong>{navLabel}</strong>
           </div>
+          <div className={styles.topActions}>
           <span className={styles.topPrivate}>
             <ShieldCheck size={15} /> 개인 자산
           </span>
@@ -1195,6 +1196,7 @@ export default function PortfolioPage() {
           <button className={styles.topAvatar} aria-label="내 계정 열기" onClick={() => go("settings")}>
             <ProfileAvatar image={session.user?.image} name={session.user?.name} />
           </button>
+          </div>
         </header>
         <main className={styles.content}>
           <ServiceNotices onAdminChange={setOperator} />
