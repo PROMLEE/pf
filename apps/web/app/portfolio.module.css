@@ -1754,3 +1754,5 @@
 .preferenceFields small { color: var(--muted); font-size: 13px; font-weight: 400; line-height: 1.6; }
 .preferenceFields input, .preferenceFields select { font-size: 15px; padding: 12px; }
 @media (max-width: 600px) { .preferenceFields { grid-template-columns: 1fr; gap: 16px; } .preferences section { padding: 20px 0; } }
+
+.advice > div > .targetWeight { color: var(--muted); font-size: 12px; line-height: 1.6; }

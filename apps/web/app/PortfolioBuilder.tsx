@@ -2919,11 +2919,11 @@ export default function PortfolioBuilder({
             ) : (
               <>
                 <p className={`${styles.rebalanceStatus} ${styles.finalResultStatus}`}>
-                  제안 모두 반영 후 {advice.items.length}개 중 {inRangeCount}개 포트가 허용 오차 안에 있습니다.
-                  {inRangeCount < advice.items.length && " 허용 범위 밖인 포트가 남아 있습니다. 아래에서 전체 포트의 최종 비중을 확인하세요."}
+                  모든 주식 제안 반영 후, {advice.items.length}개 중 {inRangeCount}개 포트가 허용 범위 이내입니다.
+                  {inRangeCount < advice.items.length && " 나머지 포트는 아래의 제안 후 전체 비중에서 확인하세요."}
                 </p>
                 <div className={styles.previewSummary}>
-                  <strong>이번 주식 조정</strong>
+                  <strong>조정 제안 · 아직 거래 전</strong>
                   <span>
                     제안{" "}
                     {
@@ -2945,10 +2945,10 @@ export default function PortfolioBuilder({
                   </span>
                 </div>
                 <details className={styles.finalWeights}>
-                  <summary>전체 포트의 최종 비중 확인 <ChevronDown size={14} /></summary>
+                  <summary>제안 후 전체 포트 비중 확인 <ChevronDown size={14} /></summary>
                   <table>
                     <caption>모든 주식 제안과 추가 자금을 반영한 예상 비중</caption>
-                    <thead><tr><th>포트</th><th>목표</th><th>최종</th><th>허용 범위</th></tr></thead>
+                    <thead><tr><th>포트</th><th>목표</th><th>제안 후</th><th>허용 범위</th></tr></thead>
                     <tbody>{advice.items.map(item => <tr key={item.bucket.id}>
                       <th scope="row">{item.bucket.name}</th>
                       <td>{pct(item.bucket.targetPercent)}</td>
@@ -2992,10 +2992,12 @@ export default function PortfolioBuilder({
                             {item.bucket.name}
                           </strong>
                           <small className={styles.fundedWeight}>
-                            최종 {pct(item.projectedPercent)} · 목표 {pct(item.bucket.targetPercent)}
-                            {Math.abs(item.projectedPercent - item.bucket.targetPercent) >= 0.05
-                              ? ` · ${item.projectedPercent < item.bucket.targetPercent ? "부족" : "초과"} ${Math.abs(item.projectedPercent - item.bucket.targetPercent).toFixed(1)}%p`
-                              : " · 목표 도달"}
+                            현재 {pct(item.currentPercent)} → 제안 후 {pct(item.projectedPercent)}
+                          </small>
+                          <small className={styles.targetWeight}>
+                            목표 {pct(item.bucket.targetPercent)} · {withinTolerance(item.bucket.targetPercent, item.projectedPercent, draft.tolerancePercent)
+                              ? "제안 후 허용 범위 이내"
+                              : `제안 후 ${item.projectedPercent < item.bucket.targetPercent ? "부족" : "초과"} ${Math.abs(item.projectedPercent - item.bucket.targetPercent).toFixed(1)}%p`}
                           </small>
                           {bucketRules.length > 0 && item.fundedGapPercent > 0 && (
                             <label className={styles.proposalChoice}>
