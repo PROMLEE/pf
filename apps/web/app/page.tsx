@@ -50,6 +50,8 @@ import AccountsManager from "./AccountsManager";
 import { protectUnsavedChanges } from "./unsaved-changes";
 import AccountSettings from "./AccountSettings";
 import ServiceNotices from "./ServiceNotices";
+import { detachPushOnLogout } from "./PushSettings";
+import { noticeReturnPath } from "../lib/notice-link";
 import ProfileAvatar from "./ProfileAvatar";
 import HoldingTradeEditor from "./HoldingTradeEditor";
 import AssetSortSelect, { compareAssets, isAssetSort, type AssetSort } from "./asset-sort";
@@ -251,7 +253,7 @@ export default function PortfolioPage() {
         redirect: false,
         username: localAdminName,
         password: localAdminPassword,
-        callbackUrl: "/",
+        callbackUrl: noticeReturnPath(window.location.href),
       });
       setLocalAdminPassword("");
       if (!result?.ok) {
@@ -1002,13 +1004,13 @@ export default function PortfolioPage() {
             </small>
             <button
               className={styles.kakao}
-              onClick={() => signIn("kakao", { callbackUrl: "/" })}
+              onClick={() => signIn("kakao", { callbackUrl: noticeReturnPath(window.location.href) })}
             >
               <b>K</b> 카카오로 계속하기 <ArrowRight size={17} />
             </button>
             <button
               className={styles.naver}
-              onClick={() => signIn("naver", { callbackUrl: "/" })}
+              onClick={() => signIn("naver", { callbackUrl: noticeReturnPath(window.location.href) })}
             >
               <b>N</b> 네이버로 계속하기 <ArrowRight size={17} />
             </button>
@@ -1101,7 +1103,7 @@ export default function PortfolioPage() {
     allocation: "보유 자산의 포트 지정",
     import: "증권사 잔고 캡처로 등록",
     history: "포트별 자산 변화 확인",
-    preferences: "환율·환율 손익·포트폴리오 이름",
+    preferences: "알림·환율·손익 표시·포트폴리오 이름",
     settings: "로그인·화면 설정",
     guide: "처음 시작하는 순서와 기능 설명",
   };
@@ -1960,7 +1962,7 @@ export default function PortfolioPage() {
               theme={theme}
               onThemeChange={(next) => { if (next !== theme) toggleTheme(); }}
               onNavigate={go}
-              onSignOut={() => signOut({ callbackUrl: "/" })}
+              onSignOut={async () => { try { await detachPushOnLogout(); } finally { await signOut({ callbackUrl: "/" }); } }}
             />
           )}
         </main>

@@ -7,6 +7,9 @@ export type Announcement = {
   starts_at: string | null;
   ends_at: string | null;
   revision: number;
+  push_requested?: boolean;
+  push_sent?: number;
+  push_failed?: number;
   created_at: string;
   updated_at: string;
 };

@@ -1,4 +1,5 @@
 "use client";
+import PushSettings from "./PushSettings";
 
 import { withPreviousQuotes } from "./holdings";
 
@@ -1679,7 +1680,7 @@ export default function PortfolioBuilder({
       "목표 설계",
       "원하는 포트 비중과 리밸런싱 기준을 정하세요.",
     ],
-    preferences: ["PREFERENCES", "설정", "환율과 손익 표시 방식을 관리하세요."],
+    preferences: ["PREFERENCES", "설정", "알림과 환율·손익 표시 방식을 관리하세요."],
     composition: [
       "PORTFOLIO MIX",
       "포트별 자산 비중",
@@ -2011,6 +2012,7 @@ export default function PortfolioBuilder({
 
       {screen === "preferences" && (
         <div className={styles.preferences}>
+          <PushSettings />
           <section aria-labelledby="fx-settings-title">
             <h2 id="fx-settings-title">환율</h2>
             <p>달러 자산을 원화로 환산할 때 사용할 환율입니다.</p>

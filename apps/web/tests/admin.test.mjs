@@ -31,6 +31,11 @@ accessCode = accessCode
 const access = await import(url(accessCode));
 let code = await compile("../app/api/admin/announcements/route.ts");
 code = code
+  .replace(/import \{ after \} from "next\/server";/, "const after=()=>{};")
+  .replace(
+    /import \{ dispatchPush, pushConfig \} from "[^\"]+";/,
+    "const dispatchPush=async()=>{};const pushConfig=async()=>({publicKey:'test'});",
+  )
   .replace(
     /import \{ NextResponse \} from "next\/server";/,
     "const NextResponse={json:(d,o)=>Response.json(d,o)};",
@@ -196,8 +201,64 @@ test("origin check accepts trusted host behind Next proxy and rejects other host
     false,
   );
 });
-let readCode=await compile('../app/api/admin/route.ts');
-readCode=readCode.replace(/import \{ NextResponse \} from "next\/server";/,'const NextResponse={json:(d,o)=>Response.json(d,o)};').replace(/import \{ adminAccess \} from "[^\"]+";/,`const adminAccess=async()=>({userId:'owner',response:globalThis.__pfAdminTest.auth===200?null:Response.json({}, {status:globalThis.__pfAdminTest.auth})});`).replace(/import \{ db \} from "[^\"]+";/,`const db=()=>({query:async(sql,params)=>{globalThis.__pfAdminTest.calls.push({sql,params});return{rows:[{total:0}]};}});`);
-const readRoute=await import(url(readCode));
-test('admin reads deny signed-out and ordinary sessions before reading users',async()=>{for(const status of [401,403]){reset();state.auth=status;assert.equal((await readRoute.GET(new Request('https://pf.example/api/admin'))).status,status);assert.equal(state.calls.length,0);}});
-test('user search escapes LIKE wildcards and uses parameterized service member scope',async()=>{reset();const r=await readRoute.GET(new Request('https://pf.example/api/admin?search=%25_&page=2'));assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'private, no-store');const users=state.calls.find(c=>c.sql.includes('u.nickname,'));assert.ok(users.sql.includes('portfolio.members'));assert.deepEqual(users.params,['%\\%\\_%',30]);});
+let readCode = await compile("../app/api/admin/route.ts");
+readCode = readCode
+  .replace(
+    /import \{ NextResponse \} from "next\/server";/,
+    "const NextResponse={json:(d,o)=>Response.json(d,o)};",
+  )
+  .replace(
+    /import \{ adminAccess \} from "[^\"]+";/,
+    `const adminAccess=async()=>({userId:'owner',response:globalThis.__pfAdminTest.auth===200?null:Response.json({}, {status:globalThis.__pfAdminTest.auth})});`,
+  )
+  .replace(
+    /import \{ db \} from "[^\"]+";/,
+    `const db=()=>({query:async(sql,params)=>{globalThis.__pfAdminTest.calls.push({sql,params});return{rows:[{total:0}]};}});`,
+  );
+const readRoute = await import(url(readCode));
+test("admin reads deny signed-out and ordinary sessions before reading users", async () => {
+  for (const status of [401, 403]) {
+    reset();
+    state.auth = status;
+    assert.equal(
+      (await readRoute.GET(new Request("https://pf.example/api/admin"))).status,
+      status,
+    );
+    assert.equal(state.calls.length, 0);
+  }
+});
+test("user search escapes LIKE wildcards and uses parameterized service member scope", async () => {
+  reset();
+  const r = await readRoute.GET(
+    new Request("https://pf.example/api/admin?search=%25_&page=2"),
+  );
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get("cache-control"), "private, no-store");
+  const users = state.calls.find((c) => c.sql.includes("u.nickname,"));
+  assert.ok(users.sql.includes("portfolio.members"));
+  assert.deepEqual(users.params, ["%\\%\\_%", 30]);
+});
+
+test("only published announcements can queue a push, with queue and audit in the save transaction", async () => {
+  reset();
+  assert.equal(
+    (await route.POST(request({ ...valid, sendPush: true }))).status,
+    400,
+  );
+  assert.equal(state.calls.length, 0);
+  reset();
+  assert.equal(
+    (
+      await route.POST(
+        request({ ...valid, status: "published", sendPush: true }),
+      )
+    ).status,
+    201,
+  );
+  const queue = state.calls.find((c) =>
+    c.sql.includes("insert into portfolio.push_campaigns"),
+  );
+  assert.ok(queue);
+  assert.ok(queue.sql.includes("on conflict do nothing"));
+  assert.equal(state.calls.at(-1).sql, "commit");
+});

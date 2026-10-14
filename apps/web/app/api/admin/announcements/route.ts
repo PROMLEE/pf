@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
+import { dispatchPush, pushConfig } from "../../../../lib/push";
 import { adminAccess, sameOrigin } from "../../../../lib/admin";
 import { announcementInput } from "../../../../lib/announcements";
 import { db } from "../../../../lib/db";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 async function mutate(request: Request, edit: boolean) {
   try {
@@ -23,6 +26,22 @@ async function mutate(request: Request, edit: boolean) {
       );
     }
     const input = announcementInput(body);
+    if (body?.sendPush !== undefined && typeof body.sendPush !== "boolean")
+      return NextResponse.json(
+        { message: "알림 발송 여부를 확인해 주세요." },
+        { status: 400 },
+      );
+    if (
+      body?.sendPush &&
+      (input?.status !== "published" || !(await pushConfig()))
+    )
+      return NextResponse.json(
+        {
+          message:
+            "알림은 서버 설정이 준비된 게시 공지에서만 요청할 수 있습니다.",
+        },
+        { status: 400 },
+      );
     if (
       !input ||
       (edit &&
@@ -81,6 +100,11 @@ async function mutate(request: Request, edit: boolean) {
           { status: 409 },
         );
       }
+      if (body.sendPush)
+        await client.query(
+          `insert into portfolio.push_campaigns(announcement_id) values($1) on conflict do nothing`,
+          [result.rows[0].id],
+        );
       await client.query(
         `insert into portfolio.admin_events(actor_id,action,announcement_id,details) values($1,$2,$3,$4::jsonb)`,
         [
@@ -91,10 +115,19 @@ async function mutate(request: Request, edit: boolean) {
             title: input.title,
             status: input.status,
             revision: result.rows[0].revision,
+            pushRequested: body.sendPush === true,
           }),
         ],
       );
       await client.query("commit");
+      if (body.sendPush)
+        after(async () => {
+          try {
+            await dispatchPush();
+          } catch {
+            console.error("Push dispatch deferred to scheduled retry");
+          }
+        });
       return NextResponse.json(
         { announcement: result.rows[0] },
         { status: edit ? 200 : 201 },

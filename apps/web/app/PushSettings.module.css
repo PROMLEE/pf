@@ -1,0 +1,48 @@
+.settings h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.settings p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 20px 0 12px;
+}
+.row > div {
+  display: grid;
+  gap: 8px;
+}
+.row strong,
+.install strong {
+  font-size: 14px;
+}
+.row small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.settings button {
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--action-fill);
+  color: var(--action-ink);
+  white-space: nowrap;
+}
+.settings button:disabled {
+  opacity: 0.5;
+}
+.install {
+  margin-top: 24px;
+}
+.install button {
+  margin: 12px 0 0 16px;
+}

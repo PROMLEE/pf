@@ -6,6 +6,8 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
+  applicationName: "PortRhythm",
+  appleWebApp: { capable: true, title: "PortRhythm", statusBarStyle: "default" },
   metadataBase: new URL("https://pf.promleeblog.com"),
   robots: { index: false, follow: true },
   title: "PortRhythm | 투자는 나만의 리듬으로",

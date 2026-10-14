@@ -26,7 +26,7 @@ export async function GET(request: Request) {
         [pattern],
       ),
       db().query(
-        `select * from portfolio.announcements order by updated_at desc limit 100`,
+        `select a.*, (c.announcement_id is not null) as push_requested, (select count(*)::int from portfolio.push_deliveries d where d.announcement_id=a.id and d.state='sent') as push_sent, (select count(*)::int from portfolio.push_deliveries d where d.announcement_id=a.id and d.state='failed') as push_failed from portfolio.announcements a left join portfolio.push_campaigns c on c.announcement_id=a.id order by a.updated_at desc limit 100`,
       ),
       db().query(
         `select e.id::text, e.action, e.details, e.created_at, coalesce(u.nickname,'관리자') as actor from portfolio.admin_events e left join public."User" u on u."userId"=e.actor_id order by e.created_at desc,e.id desc limit 30`,

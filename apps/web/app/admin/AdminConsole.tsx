@@ -30,6 +30,7 @@ const empty = {
   body: "",
   status: "draft" as Announcement["status"],
   important: false,
+  sendPush: false,
   startsAt: "",
   endsAt: "",
 };
@@ -107,6 +108,7 @@ export default function AdminConsole() {
             body: a.body,
             status: a.status,
             important: a.important,
+            sendPush: false,
             startsAt: localDate(a.starts_at),
             endsAt: localDate(a.ends_at),
           }
@@ -282,6 +284,10 @@ export default function AdminConsole() {
                                 ...form,
                                 status: e.target
                                   .value as Announcement["status"],
+                                sendPush:
+                                  e.target.value === "published"
+                                    ? form.sendPush
+                                    : false,
                               })
                             }
                           >
@@ -332,6 +338,25 @@ export default function AdminConsole() {
                         />
                         중요 공지 · 목록 상단 표시
                       </label>
+                      <label className={styles.check}>
+                        <input
+                          type="checkbox"
+                          checked={form.sendPush}
+                          disabled={
+                            form.status !== "published" ||
+                            !!editing?.push_requested
+                          }
+                          onChange={(e) =>
+                            update({ ...form, sendPush: e.target.checked })
+                          }
+                        />
+                        푸시 알림도 보내기
+                      </label>
+                      <small>
+                        {editing?.push_requested
+                          ? "이 공지는 알림을 이미 요청했습니다. 같은 공지는 한 번만 발송합니다."
+                          : "게시 상태에서 선택할 수 있습니다. 예약 공지는 게시 시각 이후 발송하며, 알림을 켠 기기만 수신합니다."}
+                      </small>
                       <div className={styles.actions}>
                         <button
                           type="button"
@@ -365,6 +390,14 @@ export default function AdminConsole() {
                             <span className={styles.badge}>중요</span>
                           )}
                           <h3>{a.title}</h3>
+                          {a.push_requested && (
+                            <small>
+                              알림 요청됨 · 발송 성공 {a.push_sent ?? 0}건
+                              {a.push_failed
+                                ? ` · 실패 ${a.push_failed}건`
+                                : ""}
+                            </small>
+                          )}
                           <p>{a.body}</p>
                           <small>
                             수정 {date(a.updated_at)}
@@ -392,8 +425,8 @@ export default function AdminConsole() {
                 </div>
                 <p className={styles.note}>
                   PortRhythm에 등록된 계정만 표시합니다. 개인의 자산·금액은
-                  조회하지 않습니다. 기존 계정의 서비스 등록 시각은 운영 화면 도입
-                  시각이며, 로그인 이력은 도입 이후부터 집계합니다.
+                  조회하지 않습니다. 기존 계정의 서비스 등록 시각은 운영 화면
+                  도입 시각이며, 로그인 이력은 도입 이후부터 집계합니다.
                 </p>
                 <form
                   className={styles.search}
