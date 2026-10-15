@@ -279,7 +279,7 @@ test("stock sales, foreign prices and mixed assets conserve value", () => {
   assert.equal(result.trades[0].currency, "USD");
   assert.equal(result.trades[0].usdKrw, 1400);
   assert.match(result.items[0].separateReview, /현금/);
-  assert.match(result.items[1].separateReview, /비트코인/);
+  assert.equal(result.items[1].separateReview, null);
   assertMatchesActual(result, p, rows);
 });
 
@@ -846,4 +846,24 @@ test("market hours alone never activate an in-band unselected portfolio", () => 
   const rows=[holding("a","A",51),holding("b","B",49)];
   const p=plan([["a","A"],["b","B"]],[rule("A","A"),rule("B","B")],{tolerancePercent:2});
   assert.equal(rebalance(p,rows,"trade",0,new Set(),{...automaticBands,preferredMarket:"KR"}).trades.length,0);
+});
+
+
+test("unchanged bitcoin, solana and ether remain valued without a misleading exclusion notice", () => {
+  const rows=[holding("a","A",50)];
+  const coins=[{...coin(0.00002),id:"btc"},{...coin(0.00002),id:"sol",marketCode:"KRW-SOL",name:"솔라나"},{...coin(0.00001),id:"eth",marketCode:"KRW-ETH",name:"이더리움"}];
+  const p=plan([["a","A"]],[rule("A","A")],{cryptoAssets:coins,tolerancePercent:2});
+  const r=rebalance(p,rows,"trade",0,new Set(),automaticBands);
+  assert.equal(r.currentTotal,10000);
+  close(r.items.find(i=>i.bucket.id==="B").current,5000);
+  assert.equal(r.items.find(i=>i.bucket.id==="B").separateReview,null);
+  assert.equal(r.cryptoTrades.length,0);
+  assertMatchesActual(r,p,rows);
+});
+test("settled cash is not described as excluded while manual unmodeled assets explain their scope", () => {
+  const {p,rows}=cashPlan(4,4,200);
+  const settled=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C"});
+  assert.equal(settled.items.find(i=>i.bucket.id==="C").separateReview,null);
+  const separate=rebalance(p,rows,"trade",0,new Set());
+  assert.match(separate.items.find(i=>i.bucket.id==="C").separateReview,/자산 합계에는 포함/);
 });

@@ -670,14 +670,11 @@ export function rebalance(
       currentKrw: projectedValue,
       targetKrw: targetTotal * bucket.targetPercent / 100,
     } : null;
-    const separate = [
-      ...plan.cryptoAssets
-        .filter((asset) => asset.bucketId === bucket.id && !cryptoTrades.some(trade => trade.assetId === asset.id))
-        .map((asset) => `가상자산 ${asset.name}`),
-      ...plan.manualAssets
-        .filter((asset) => asset.bucketId === bucket.id)
-        .map((asset) => `직접 입력 ${asset.name}`),
-    ];
+    // Crypto holdings are fully valued and support fractional trade proposals.
+    // No trade means unchanged quantity, not an asset excluded from the plan.
+    const separate = plan.manualAssets
+      .filter(asset => asset.bucketId === bucket.id && bucket.id !== cashBucket?.id)
+      .map(asset => asset.name);
     const selectedForBucket = Boolean(options.buyRuleIds?.[bucket.id] || options.sellSymbols?.[bucket.id] || options.cryptoAssetIds?.[bucket.id]);
     let advice = bucketTrades
       .map(
@@ -732,7 +729,7 @@ export function rebalance(
       advice,
       unaffordableBuys: unaffordableBuys.get(bucket.id) ?? [],
       separateReview: separate.length
-        ? `${separate.join(" · ")}은 이번 제안에 포함하지 않습니다.`
+        ? `${separate.join(" · ")}: 자산 합계에는 포함되며, 매수·매도 수량은 자동 계산하지 않습니다.`
         : null,
     };
   });
