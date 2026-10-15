@@ -4,6 +4,7 @@ import { stockGains } from "./fx-gains";
 import { withPreviousQuotes } from "./holdings";
 
 import NumberInput from "./NumberInput";
+import EditableHoldingRow from "./EditableHoldingRow";
 
 import {
   ChangeEvent,
@@ -34,7 +35,6 @@ import {
   Settings2,
   ShieldCheck,
   Sun,
-  Trash2,
   Wallet,
   X,
 } from "lucide-react";
@@ -1391,18 +1391,16 @@ export default function PortfolioPage() {
               )}
               {view === "edit" && (
                 <div className={styles.editIntro}>
-                  <strong>수정할 자산을 선택하세요</strong>
-                  <span>
-                    주식 수량과 매입단가를 수정하고, 아래에서 가상자산·직접 입력 자산의 이름과 금액을 관리하세요.
-                  </span>
+                  <strong>보유 주식·ETF</strong>
                   <button
                     type="button"
                     aria-expanded={assetAddOpen}
                     aria-controls="asset-add-options"
                     onClick={() => setAssetAddOpen(open => !open)}
                   >
-                    새 자산 추가 <Plus size={15} />
+                    <Plus size={15} /> 자산 추가
                   </button>
+                  <span>종목을 눌러 수정하세요. 삭제는 ··· 메뉴에서 할 수 있어요.</span>
                   {assetAddOpen && (
                     <div id="asset-add-options" className={styles.assetAddOptions} role="group" aria-label="새 자산 등록 방법">
                       <button type="button" onClick={() => go("accounts")}>
@@ -1458,7 +1456,20 @@ export default function PortfolioPage() {
                     const price = row.currentPrice ?? row.capturedPrice;
                     return (
                       <Fragment key={row.id}>
-                        <div className={`${styles.holdingRow} ${view === "edit" ? styles.editAssetCard : ""}`} id={`edit-stock-${row.id}`}>
+                        {view === "edit" ? <EditableHoldingRow
+                          holding={row}
+                          price={price === null ? "—" : money(price,row.market)}
+                          value={price === null ? "—" : money(valueOf(row),gainCurrency(row.market))}
+                          gain={gainOf(row) === null ? "—" : signedMoney(gainOf(row)!,gainCurrency(row.market))}
+                          percent={gainPercentOf(row) === null ? null : signedPercent(gainPercentOf(row)!)}
+                          gainSign={gainOf(row) === null ? "unknown" : gainOf(row)! >= 0 ? "positive" : "negative"}
+                          editing={editingHoldingId === row.id}
+                          editDisabled={holdingSaving || deletingHoldingId !== null || editingHoldingId === row.id || holdingDirty || holdingTradeDirty}
+                          removeDisabled={deletingHoldingId !== null || holdingSaving || holdingDirty || holdingTradeDirty}
+                          onEdit={() => beginHoldingEdit(row)}
+                          onRemove={() => {setEditingHoldingId(null);setPendingHoldingRemoval(row.id);}}
+                        /> : (
+                        <div className={styles.holdingRow} id={`edit-stock-${row.id}`}>
                           <div className={styles.holdingName}>
                             <AssetIcon
                               kind="stock"
@@ -1512,33 +1523,9 @@ export default function PortfolioPage() {
                               </small>
                             )}
                           </strong>
-                          {view === "edit" ? (
-                            <div className={styles.holdingActions} role="group" aria-label={`${row.name} 자산 관리`}>
-                              <button
-                                type="button"
-                                className={styles.holdingEditAction}
-                                aria-label={`${row.name} 자산 수정`}
-                                aria-expanded={editingHoldingId === row.id}
-                                disabled={holdingSaving || deletingHoldingId !== null || editingHoldingId === row.id || holdingDirty || holdingTradeDirty}
-                                onClick={() => beginHoldingEdit(row)}
-                              >
-                                <Pencil size={15} /> {editingHoldingId === row.id ? "수정 중" : "자산 수정"}
-                              </button>
-                              <button
-                                type="button"
-                                className={styles.holdingRemoveAction}
-                                aria-label={`${row.name} 삭제`}
-                                aria-expanded={pendingHoldingRemoval === row.id}
-                                disabled={deletingHoldingId !== null || holdingSaving || holdingDirty || holdingTradeDirty}
-                                onClick={() => { setEditingHoldingId(null); setPendingHoldingRemoval(row.id); }}
-                              >
-                                <Trash2 size={15} /> 삭제
-                              </button>
-                            </div>
-                          ) : (
-                            <span />
-                          )}
+                          <span />
                         </div>
+                        )}
                         {view === "edit" && pendingHoldingRemoval === row.id && (
                           <div className={styles.holdingDeleteConfirm} role="group" aria-label={`${row.name} 삭제 확인`}>
                             <strong>{row.name}을 등록 자산에서 삭제할까요?</strong>
