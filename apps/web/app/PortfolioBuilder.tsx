@@ -1,5 +1,7 @@
 "use client";
 import PushSettings from "./PushSettings";
+import CashTransfers from "./CashTransfers";
+import type {BrokerageAccount} from "./accounts-model";
 
 import { withPreviousQuotes } from "./holdings";
 
@@ -624,6 +626,10 @@ export default function PortfolioBuilder({
   const [refreshing, setRefreshing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [detailDirty, setDetailDirty] = useState(false);
+  const [transferDirty, setTransferDirty] = useState(false);
+  const [cashAccounts, setCashAccounts] = useState<BrokerageAccount[]>([]);
+  const [manualAccountId, setManualAccountId] = useState("");
+  useEffect(()=>{if(screen!=="edit")return;let live=true;void fetch("/api/accounts",{cache:"no-store"}).then(async response=>{if(!response.ok)throw Error();const data=await response.json();if(live)setCashAccounts(data.accounts);}).catch(()=>{if(live)onNotice("계좌 목록을 불러오지 못했습니다. 새로고침해서 다시 확인해 주세요.");});return()=>{live=false;};},[screen,userId,onNotice]);
 
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
@@ -710,7 +716,7 @@ export default function PortfolioBuilder({
     if (screen !== "history") { setFlowAmount(""); setFlowNote(""); setFlowTime(""); setEditingFlowId(null); }
   }, [screen]);
   const flowDirty = Boolean(flowAmount || flowNote || flowTime || editingFlowId);
-  useEffect(() => onDirtyChange(dirty || detailDirty || flowDirty), [dirty, detailDirty, flowDirty, onDirtyChange]);
+  useEffect(() => onDirtyChange(dirty || detailDirty || flowDirty || transferDirty), [dirty, detailDirty, flowDirty, transferDirty, onDirtyChange]);
   function editFlow(flow: CashFlow) {
     setEditingFlowId(flow.id); setFlowDate(flow.date); setFlowAmount(String(Math.abs(flow.amountKrw)));
     setFlowKind(flow.amountKrw > 0 ? "deposit" : "withdrawal"); setFlowNote(flow.note); setFlowTime(flow.occurredAt ? kstTime(flow.occurredAt, true) : "");
@@ -1093,6 +1099,7 @@ export default function PortfolioBuilder({
         {
           id: crypto.randomUUID(),
           bucketId: manualBucketId || null,
+          accountId: manualAccountId || null,
           name: manualName.trim(),
           valueKrw: manualCurrency === "USD" ? value * draft.usdKrw : value,
           valueUsd: manualCurrency === "USD" ? value : null,
@@ -2201,6 +2208,7 @@ export default function PortfolioBuilder({
             <Portfolio3D portfolio={draft} holdings={holdings} />
           )}
 
+          {screen === "edit" && <CashTransfers portfolio={draft} accounts={cashAccounts} disabled={dirty || saving} onDirty={setTransferDirty} onSaved={(next,message)=>{portfolioCache.set(userId,next);setDraft(next);setDirty(false);onNotice(message);}} />}
           <details className={`${styles.panel} ${styles.collapsible}`} open>
             <summary className={styles.panelHead}>
               <div>
@@ -2631,6 +2639,10 @@ export default function PortfolioBuilder({
                       </option>
                     ))}
                   </select>
+                  <select aria-label="새 현금·직접 입력 자산 계좌" value={manualAccountId} onChange={event=>setManualAccountId(event.target.value)}>
+                    <option value="">계좌 미연결</option>
+                    {cashAccounts.map(account=><option key={account.id} value={account.id}>{account.broker} · {account.name}</option>)}
+                  </select>
                   <button onClick={addManualAsset}>
                     <Plus size={15} /> 추가
                   </button>
@@ -2725,6 +2737,12 @@ export default function PortfolioBuilder({
                     >
                       <Trash2 size={15} />
                     </button>
+                    <label className={styles.fxBasisField}>연결 계좌
+                      <select value={asset.accountId ?? ""} aria-label={`${asset.name} 연결 계좌`} onChange={event=>change({...draft,manualAssets:draft.manualAssets.map(item=>item.id===asset.id?{...item,accountId:event.target.value||null}:item)})}>
+                        <option value="">계좌 미연결</option>
+                        {cashAccounts.map(account=><option key={account.id} value={account.id}>{account.broker} · {account.name}</option>)}
+                      </select>
+                    </label>
                     {asset.valueUsd!==null && <label className={styles.fxBasisField}>평균 환전 단가 · 1 USD당 원<NumberInput value={asset.averageFxRate??""} min="100" max="100000" step="any" placeholder="모르면 비워두세요" onValueChange={value=>change({...draft,manualAssets:draft.manualAssets.map(item=>item.id===asset.id?{...item,averageFxRate:value===""?null:Number(value)}:item)})}/></label>}
                   </div>
                 ))}

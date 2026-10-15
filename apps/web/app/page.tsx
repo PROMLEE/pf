@@ -1203,7 +1203,7 @@ export default function PortfolioPage() {
         <main className={styles.content}>
           <ServiceNotices onAdminChange={setOperator} />
           {view === "more" && operator && <Link href="/admin" style={{display:"block",padding:"16px 0",color:"var(--blue)"}}>관리자 전용 · 운영 관리 ↗</Link>}
-          {view === "accounts" && <AccountsManager userId={session.user?.appUserId ?? ""} holdings={holdings} onHoldings={(rows)=>{setHoldings(rows);setQuoteVersion(version=>version+1);}} onNotice={setNotice} onDirty={setPortfolioDirty} onOpenAsset={row=>openAsset({id:`holding:${row.id}`,kind:"stock"},"accounts")} onRefreshQuotes={()=>void refreshQuotes(true)} />}
+          {view === "accounts" && <AccountsManager onCashManage={()=>go("edit")} userId={session.user?.appUserId ?? ""} holdings={holdings} onHoldings={(rows)=>{setHoldings(rows);setQuoteVersion(version=>version+1);}} onNotice={setNotice} onDirty={setPortfolioDirty} onOpenAsset={row=>openAsset({id:`holding:${row.id}`,kind:"stock"},"accounts")} onRefreshQuotes={()=>void refreshQuotes(true)} />}
           {view === "guide" && <UserGuide onNavigate={go} />}
           {view === "portfolio" && showStartGuide && (
             <section className={styles.startGuide} aria-label="처음 시작 안내">

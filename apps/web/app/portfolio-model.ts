@@ -20,6 +20,7 @@ export type Rule = {
 };
 
 export type ManualAsset = {
+  accountId?: string | null;
   id: string;
   bucketId: string | null;
   name: string;
@@ -113,6 +114,7 @@ export type CashFlow = {
 };
 
 export type Portfolio = {
+  cashRevision?: number;
   includeFxGains?: boolean;
   title: string;
   usdKrw: number;

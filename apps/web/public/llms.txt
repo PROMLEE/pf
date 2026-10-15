@@ -11,7 +11,7 @@
 
 ## Documentation
 
-- [전체 기능과 사용 방법 · Markdown 텍스트](https://pf.promleeblog.com/llms-full.txt): 목표 설계, 계좌·자산 등록, 배정, 손익·환율, 현금 목표 비중을 포함한 리밸런싱, 기록과 설정.
+- [전체 기능과 사용 방법 · Markdown 텍스트](https://pf.promleeblog.com/llms-full.txt): 목표 설계, 계좌·자산 등록, 배정, 손익·환율, 계좌 간 현금 이체 기록, 현금 목표 비중을 포함한 리밸런싱, 기록과 설정.
 - [사용 가이드](https://pf.promleeblog.com/guide): 시작 순서, 화면 예시와 자주 묻는 질문을 제공하는 공개 웹 페이지.
 - [서비스 소개](https://pf.promleeblog.com/about): 포트리듬의 핵심 기능, 자산 배분과 리밸런싱 운영 흐름을 소개하는 공개 웹 페이지.
 

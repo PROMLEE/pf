@@ -11,6 +11,7 @@ import type {
 } from "../app/portfolio-model";
 import { positionSignature } from "../app/portfolio-model";
 import { db } from "./db";
+import { CashTransferError } from "../app/cash-transfer";
 
 type Client = Pick<PoolClient, "query">;
 
@@ -31,6 +32,7 @@ async function insertRows(
   );
 }
 type PlanRow = {
+  cash_revision: string;
   include_fx_gains: boolean;
   title: string;
   usd_krw: string;
@@ -65,6 +67,7 @@ type RuleRow = {
   quote_checked_at: Date | null;
 };
 type ManualRow = {
+  account_id: string | null;
   average_fx_rate: string | null;
   id: string;
   bucket_id: string | null;
@@ -122,7 +125,7 @@ export async function listPortfolio(
   client: Client = db(),
 ): Promise<Portfolio | null> {
   const plan = await client.query<PlanRow>(
-    `select include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode, usd_krw_rate_date::text as usd_krw_rate_date, tolerance_percent from portfolio.plans where user_id = $1`,
+    `select cash_revision, include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode, usd_krw_rate_date::text as usd_krw_rate_date, tolerance_percent from portfolio.plans where user_id = $1`,
     [userId],
   );
   if (!plan.rows[0]) return null;
@@ -145,7 +148,7 @@ export async function listPortfolio(
       [userId],
     ),
     client.query<ManualRow>(
-      `select id, bucket_id, name, value_krw, value_usd, average_fx_rate from portfolio.manual_assets where user_id = $1 order by name`,
+      `select id, account_id, bucket_id, name, value_krw, value_usd, average_fx_rate from portfolio.manual_assets where user_id = $1 order by name`,
       [userId],
     ),
     client.query<CryptoRow>(
@@ -167,6 +170,7 @@ export async function listPortfolio(
     ),
   ]);
   return {
+    cashRevision: Number(plan.rows[0].cash_revision),
     includeFxGains: plan.rows[0].include_fx_gains,
     title: plan.rows[0].title,
     usdKrw: Number(plan.rows[0].usd_krw),
@@ -201,6 +205,7 @@ export async function listPortfolio(
       (row): ManualAsset => ({
         id: row.id,
         bucketId: row.bucket_id,
+        accountId: row.account_id,
         name: row.name,
         valueKrw: Number(row.value_krw),
         valueUsd: row.value_usd === null ? null : Number(row.value_usd),
@@ -255,10 +260,22 @@ export async function listPortfolio(
   };
 }
 
+async function checkCashRevision(client: Client, userId: string, input: Portfolio) {
+  const current = await client.query<{cash_revision: string}>("select cash_revision from portfolio.plans where user_id=$1 for update", [userId]);
+  if (Number(current.rows[0]?.cash_revision ?? 0) !== (input.cashRevision ?? 0))
+    throw new CashTransferError("현금·자산 정보가 변경되었습니다. 새로고침 후 변경 내용을 다시 확인해 주세요.",409);
+  const ids = [...new Set(input.manualAssets.flatMap(asset => asset.accountId ? [asset.accountId] : []))];
+  if (ids.length) {
+    const owned = await client.query("select id from portfolio.accounts where user_id=$1 and id=any($2::uuid[])",[userId,ids]);
+    if (owned.rowCount !== ids.length) throw new CashTransferError("연결할 계좌를 다시 확인해 주세요.");
+  }
+}
+
 export async function savePortfolio(userId: string, input: Portfolio) {
   const client = await db().connect();
   try {
     await client.query("begin");
+    await checkCashRevision(client, userId, input);
     if (input.usdKrwMode === "auto") {
       const currentFx = await client.query<{
         usd_krw: string;
@@ -412,7 +429,7 @@ export async function savePortfolio(userId: string, input: Portfolio) {
     await insertRows(
       client,
       "portfolio.manual_assets",
-      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd", "average_fx_rate"],
+      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd", "average_fx_rate", "account_id"],
       input.manualAssets.map((asset) => [
         asset.id,
         userId,
@@ -423,6 +440,7 @@ export async function savePortfolio(userId: string, input: Portfolio) {
           : asset.valueUsd * input.usdKrw,
         asset.valueUsd,
         asset.valueUsd === null ? null : asset.averageFxRate ?? null,
+        asset.accountId ?? null,
       ]),
     );
     await insertRows(
@@ -456,6 +474,7 @@ export async function savePortfolio(userId: string, input: Portfolio) {
         ];
       }),
     );
+    await client.query("update portfolio.plans set cash_revision=cash_revision+1 where user_id=$1",[userId]);
     await recordSnapshot(userId, client);
     const saved = await listPortfolio(userId, client);
     await client.query("commit");
@@ -472,8 +491,9 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
   const client = await db().connect();
   try {
     await client.query("begin");
+    await checkCashRevision(client, userId, input);
     const plan = await client.query<PlanRow & { bucket_ids: string[] }>(
-      `select include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode,
+      `select cash_revision, include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode,
          usd_krw_rate_date::text, tolerance_percent,
          array(select id from portfolio.buckets where user_id = $1) as bucket_ids
        from portfolio.plans where user_id = $1`,
@@ -513,7 +533,7 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
     await insertRows(
       client,
       "portfolio.manual_assets",
-      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd", "average_fx_rate"],
+      ["id", "user_id", "bucket_id", "name", "value_krw", "value_usd", "average_fx_rate", "account_id"],
       input.manualAssets.map((asset) => [
         asset.id,
         userId,
@@ -522,6 +542,7 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
         asset.valueUsd === null ? asset.valueKrw : asset.valueUsd * usdKrw,
         asset.valueUsd,
         asset.valueUsd === null ? null : asset.averageFxRate ?? null,
+        asset.accountId ?? null,
       ]),
     );
     await insertRows(
@@ -555,10 +576,12 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
         ];
       }),
     );
+    const revision = await client.query("update portfolio.plans set cash_revision=cash_revision+1 where user_id=$1 returning cash_revision",[userId]);
     await recordSnapshot(userId, client);
     await client.query("commit");
     return {
       ...input,
+      cashRevision: Number(revision.rows[0].cash_revision),
       title: savedPlan.title,
       usdKrw,
       usdKrwMode: savedPlan.usd_krw_mode,

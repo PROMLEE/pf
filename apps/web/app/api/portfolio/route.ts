@@ -1,3 +1,4 @@
+import {CashTransferError} from "../../cash-transfer";
 import { NextResponse } from "next/server";
 import type { Portfolio } from "../../portfolio-model";
 import { currentUserId } from "../../../lib/auth";
@@ -136,7 +137,9 @@ function valid(input: Portfolio) {
   }
 
   const assetIds = new Set<string>();
+  if (input.cashRevision !== undefined && (!Number.isSafeInteger(input.cashRevision) || input.cashRevision < 0)) return false;
   for (const asset of input.manualAssets) {
+    if (asset.accountId != null && (typeof asset.accountId !== "string" || !uuid.test(asset.accountId))) return false;
     if (!uuid.test(asset.id) || assetIds.has(asset.id)) return false;
     if (asset.bucketId !== null && !bucketIds.has(asset.bucketId)) return false;
     if (
@@ -292,7 +295,7 @@ async function saveRequest(request: Request, assetsOnly: boolean) {
             ? error.message
             : "포트폴리오를 저장하지 못했습니다",
       },
-      { status: 500 },
+      { status: error instanceof CashTransferError ? error.status : 500 },
     );
   }
 }

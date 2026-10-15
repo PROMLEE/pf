@@ -39,6 +39,7 @@ export default function AccountsManager({
   onDirty,
   onOpenAsset,
   onRefreshQuotes,
+  onCashManage,
 }: {
   userId: string;
   holdings: Holding[];
@@ -47,6 +48,7 @@ export default function AccountsManager({
   onDirty: (dirty: boolean) => void;
   onOpenAsset: (row: Holding) => void;
   onRefreshQuotes: () => void;
+  onCashManage: () => void;
 }) {
   const accountStorageKey = `pf-selected-account:${userId}`;
   const [accounts, setAccounts] = useState<BrokerageAccount[]>([]),
@@ -343,6 +345,7 @@ export default function AccountsManager({
       <header className={styles.header}>
         <div>
           <h1>계좌 관리</h1>
+          <button type="button" onClick={onCashManage}>현금 관리·이체</button>
           <p>증권사·계좌명과 계좌별 주식·ETF를 직접 관리하세요.</p>
         </div>
         <button disabled={busy || dirty} onClick={() => setCreating(!creating)}>

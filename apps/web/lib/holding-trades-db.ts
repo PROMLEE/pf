@@ -140,6 +140,7 @@ export async function applyHoldingTrade(
         currency: row.market === "US" ? "USD" : "KRW",
       };
     }
+    if (trade.cash) await client.query("update portfolio.plans set cash_revision=cash_revision+1 where user_id=$1",[userId]);
     if (position.quantity === 0)
       await client.query(
         `delete from portfolio.holdings where user_id = $1 and id = $2`,
