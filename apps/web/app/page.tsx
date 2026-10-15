@@ -157,6 +157,16 @@ export default function PortfolioPage() {
   }
   const [selectedAsset, setSelectedAsset] = useState<AssetSelection | null>(null);
   const [detailSource, setDetailSource] = useState<"portfolio" | "holdings" | "accounts" | "rebalance">("portfolio");
+  const rebalanceScroll = useRef(0);
+  const previousView = useRef<View>("portfolio");
+  useEffect(() => {
+    const returning = previousView.current === "detail" && view === "rebalance" && detailSource === "rebalance";
+    previousView.current = view;
+    if (returning) {
+      const frame = requestAnimationFrame(() => window.scrollTo({top:rebalanceScroll.current, behavior:"instant"}));
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [view, detailSource]);
   const [editFocus, setEditFocus] = useState<AssetSelection | null>(null);
   const [portfolioDirty, setPortfolioDirty] = useState(false);
   const navigationState = useRef({ dirty: false, url: "" });
@@ -169,7 +179,7 @@ export default function PortfolioPage() {
       let next: View = VIEWS.includes(requested) ? requested : "portfolio";
       const id = params.get("asset");
       const kind = params.get("kind");
-      const asset: AssetSelection | null = id && (kind === "stock" || kind === "crypto" || kind === "manual")
+      const asset: AssetSelection | null = id && (kind === "stock" || kind === "crypto" || kind === "manual" || kind === "candidate")
         ? { id, kind } : null;
       if (next === "detail" && !asset) next = "holdings";
       setSelectedAsset(asset);
@@ -423,6 +433,7 @@ export default function PortfolioPage() {
   }
 
   function openAsset(asset: AssetSelection, source: "portfolio" | "holdings" | "accounts" | "rebalance") {
+    if (view === "rebalance") rebalanceScroll.current = window.scrollY;
     setSelectedAsset(asset);
     setDetailSource(source);
     go("detail", asset, source);
@@ -1303,6 +1314,7 @@ export default function PortfolioPage() {
               onEditHoldings={() => go("edit")}
               selectedAsset={selectedAsset}
               onSelectAsset={(asset) => openAsset(asset, view === "rebalance" ? "rebalance" : view === "detail" ? detailSource : "portfolio")}
+              detailBackLabel={detailSource === "rebalance" ? "리밸런싱으로" : "이전 화면"}
               onBack={() => go(detailSource)}
               onNavigate={go}
               onDirtyChange={setPortfolioDirty}

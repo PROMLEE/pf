@@ -16,6 +16,7 @@ import {
   Camera,
   Check,
   ChevronDown,
+  ChevronRight,
   Plus,
   Pencil,
   RefreshCw,
@@ -56,7 +57,7 @@ type DailyCryptoQuotes = Record<
   { previousClose: number | null; checkedAt: string | null }
 >;
 export type AssetSelection = {
-  kind: "stock" | "crypto" | "manual";
+  kind: "stock" | "crypto" | "manual" | "candidate";
   id: string;
 };
 export function stockAssetId(holding: Holding) {
@@ -100,8 +101,9 @@ type Props = {
   focusAsset?: AssetSelection | null;
   onSelectAsset?: (asset: AssetSelection) => void;
   onBack?: () => void;
+  detailBackLabel?: string;
   onNavigate: (
-    screen: "preferences" | "strategy" | "allocation" | "rebalance" | "history" | "settings",
+    screen: "preferences" | "strategy" | "allocation" | "rebalance" | "history" | "settings" | "accounts",
   ) => void;
   onDirtyChange: (dirty: boolean) => void;
 };
@@ -385,8 +387,10 @@ function AssetDetail({
   onSavePortfolio,
   onAssignStock,
   onEditingChange,
+  backLabel = "이전 화면",
 }: {
   selection: AssetSelection;
+  backLabel?: string;
   portfolio: Portfolio;
   holdings: Holding[];
   summary?: AssetSummaryRow;
@@ -459,7 +463,7 @@ function AssetDetail({
   const gain = summary?.gain ?? (first && fxCostKnown && stockValueKnown ? stockValue - stockCost : manualProfit?.gain ?? null);
   const gainPercent = summary?.gainPercent ?? (gain !== null && stockCost > 0 ? gain / stockCost * 100 : manualProfit?.percent ?? null);
   const displayedFxGain=stockFxGain !== null && stockPriceGain !== null && gain !== null?Math.round(gain)-Math.round(stockPriceGain):stockFxGain;
-  if (!name) return <section className={styles.assetDetail}><p>보유 목록에 없는 자산입니다.</p><button type="button" className={styles.detailBack} onClick={onBack}>← 이전 화면</button></section>;
+  if (!name) return <section className={styles.assetDetail}><p>보유 목록에 없는 자산입니다.</p><button type="button" className={styles.detailBack} onClick={onBack}>← {backLabel}</button></section>;
   const unit = first?.market === "US" ? "USD" : "KRW";
   const unitPrice = (value: number | null) => value === null
     ? "—"
@@ -510,9 +514,9 @@ function AssetDetail({
   }
   return (
     <section className={styles.assetDetail} aria-label={`${name} 상세 정보`}>
-      <button type="button" className={styles.detailBack} onClick={onBack}>← 이전 화면</button>
+      <button type="button" className={styles.detailBack} onClick={onBack}>← {backLabel}</button>
       <div className={styles.detailHead}>
-        <AssetIcon kind={selection.kind === "manual" ? "cash" : selection.kind} symbol={first?.symbol ?? crypto?.marketCode ?? (manual?.valueUsd === null ? "KRW" : "USD")} name={name} market={first?.market} exchange={first?.exchange} />
+        <AssetIcon kind={selection.kind === "manual" ? "cash" : selection.kind === "candidate" ? "stock" : selection.kind} symbol={first?.symbol ?? crypto?.marketCode ?? (manual?.valueUsd === null ? "KRW" : "USD")} name={name} market={first?.market} exchange={first?.exchange} />
         <div><h2>{name}</h2><p>{first?.symbol ?? crypto?.marketCode ?? (manual?.valueUsd === null ? "원화 직접 입력" : "달러 직접 입력")} · {bucketName}</p></div>
       </div>
       <div className={styles.detailTotal}>
@@ -595,6 +599,28 @@ function AssetDetail({
   );
 }
 
+function RebalanceCandidateDetail({rule,portfolio,holdings,onBack,onOpenHolding,onRegister}: {
+  rule: Rule | undefined; portfolio: Portfolio; holdings: Holding[];
+  onBack: () => void; onOpenHolding: (id: string) => void; onRegister: () => void;
+}) {
+  if (!rule) return <section className={styles.assetDetail}><button type="button" className={styles.detailBack} onClick={onBack}>← 리밸런싱으로</button><p>변경되거나 삭제된 매수 후보입니다. 제안을 다시 확인해 주세요.</p></section>;
+  const rows = holdings.filter(row => row.market === rule.market && row.symbol.toUpperCase() === rule.symbol.toUpperCase());
+  const price = rule.quotedPrice ?? rule.manualPrice;
+  const bucket = portfolio.buckets.find(bucket => bucket.id === rule.bucketId);
+  return <section className={styles.assetDetail} aria-label={`${rule.name || rule.symbol} 매수 후보 상세 정보`}>
+    <button type="button" className={styles.detailBack} onClick={onBack}>← 리밸런싱으로</button>
+    <div className={styles.detailHead}>
+      <AssetIcon kind="stock" market={rule.market} symbol={rule.symbol} exchange={rule.exchange} name={rule.name || rule.symbol} />
+      <div><h2>{rule.name || rule.symbol}</h2><p>{rule.symbol} · {bucket?.name ?? "포트 미확인"}</p></div>
+    </div>
+    <div className={styles.detailTotal}><span>매수 후보 · 현재가</span><strong>{price === null ? "—" : rule.market === "US" ? `$${quantityFormat.format(price)}` : fmt(price)}</strong></div>
+    <p className={styles.candidateNote}>{rows.length ? "이 제안은 신규 보유 항목으로 계산했습니다. 같은 종목의 기존 보유 정보도 확인해 주세요." : "아직 보유 자산에 등록되지 않은 신규 매수 후보입니다."}</p>
+    {rows.length > 0 && <div className={styles.detailAccounts}><h3>동일 종목의 보유 계좌</h3>{rows.map(row => <div key={row.id}><span>{row.broker} · {row.account}<small>{quantityFormat.format(row.quantity)}주</small></span><button type="button" onClick={() => onOpenHolding(row.id)}>상세·수정</button></div>)}</div>}
+    {!rows.length && <p className={styles.help}>실제 매수한 수량과 매입단가는 거래 후 등록해 주세요.</p>}
+    <button type="button" className={styles.detailEdit} onClick={onRegister}>계좌에 보유 종목 등록 <ArrowRight size={16} /></button>
+  </section>;
+}
+
 export default function PortfolioBuilder({
   userId,
   screen,
@@ -616,6 +642,7 @@ export default function PortfolioBuilder({
   focusAsset,
   onSelectAsset = () => {},
   onBack = () => {},
+  detailBackLabel,
   onNavigate,
   onDirtyChange,
 }: Props) {
@@ -1715,7 +1742,7 @@ export default function PortfolioBuilder({
       "자산 기록",
       "포트별 자산 추이와 입출금 기록을 확인하세요.",
     ],
-    detail: ["ASSET DETAIL", "자산 상세", "보유 현황과 평가손익을 확인하세요."],
+    detail: ["ASSET DETAIL", selectedAsset?.kind === "candidate" ? "매수 후보 상세" : "자산 상세", selectedAsset?.kind === "candidate" ? "종목 정보와 기존 보유 여부를 확인하세요." : "보유 현황과 평가손익을 확인하세요."],
   }[screen];
 
   if (loading)
@@ -1785,13 +1812,14 @@ export default function PortfolioBuilder({
         </div>
       )}
 
-      {screen === "detail" && selectedAsset && (
+      {screen === "detail" && selectedAsset && selectedAsset.kind !== "candidate" && (
         <AssetDetail
           selection={selectedAsset}
           portfolio={draft}
           holdings={holdings}
           summary={mobileInvestments.find((asset) => asset.id === selectedAsset.id)}
           onBack={onBack}
+          backLabel={detailBackLabel}
           onEditingChange={setDetailDirty}
           onStockTradeSaved={(next, message) => {
             onHoldings(withPreviousQuotes(next, holdings));
@@ -1832,6 +1860,15 @@ export default function PortfolioBuilder({
             portfolioCache.set(userId, result.portfolio);
             onNotice("자산 정보·포트 배정을 저장했습니다.");
           }}
+        />
+      )}
+
+      {screen === "detail" && selectedAsset?.kind === "candidate" && (
+        <RebalanceCandidateDetail
+          rule={draft.rules.find(rule => rule.id === selectedAsset.id)}
+          portfolio={draft} holdings={holdings} onBack={onBack}
+          onOpenHolding={id => onSelectAsset({kind:"stock", id:`holding:${id}`})}
+          onRegister={() => onNavigate("accounts")}
         />
       )}
 
@@ -3093,6 +3130,33 @@ export default function PortfolioBuilder({
                                 <small>모든 포트의 후보 검토 방식이 함께 바뀝니다.</small>
                               </div>
                             )}
+                          </div>
+                        ) : itemTrades.length > 0 ? (
+                          <div className={styles.proposalTrades}>
+                            {itemTrades.map((trade, index) => {
+                              const owned = holdings.find(row => row.id === trade.holdingId);
+                              const candidate = draft.rules.find(rule => rule.id === trade.ruleId);
+                              return <button
+                                type="button" key={`${trade.holdingId ?? trade.ruleId}:${trade.side}:${index}`}
+                                className={styles.proposalTrade}
+                                aria-label={`${trade.name || trade.symbol} ${owned ? "보유 자산" : "매수 후보"} 상세`}
+                                onClick={() => onSelectAsset(owned
+                                  ? {kind:"stock", id:`holding:${owned.id}`}
+                                  : {kind:"candidate", id:trade.ruleId ?? ""})}
+                                disabled={!owned && !candidate}
+                              >
+                                <AssetIcon kind="stock" market={trade.market} symbol={trade.symbol} exchange={owned?.exchange ?? candidate?.exchange} name={trade.name || trade.symbol} />
+                                <span className={styles.proposalSecurity}>
+                                  <strong>{trade.name || trade.symbol}</strong>
+                                  <small>{owned ? `${owned.broker} · ${owned.account || "계좌 미입력"}` : "신규 매수 후보"}</small>
+                                </span>
+                                <span className={`${styles.proposalOrder} ${trade.side === "buy" ? styles.proposalBuy : styles.proposalSell}`}>
+                                  <strong>{quantityFormat.format(trade.shares)}주 {trade.side === "buy" ? "매수" : "매도"}</strong>
+                                  <small>약 {fmt(trade.amountKrw)}</small>
+                                </span>
+                                <ChevronRight size={17} aria-hidden="true" />
+                              </button>;
+                            })}
                           </div>
                         ) : <p>{item.advice}</p>}
                         <div className={styles.tradeDetail}>
