@@ -34,6 +34,7 @@ import {
   Settings2,
   ShieldCheck,
   Sun,
+  Trash2,
   Wallet,
   X,
 } from "lucide-react";
@@ -591,6 +592,7 @@ export default function PortfolioPage() {
   }
 
   function beginHoldingEdit(row: Holding) {
+    setPendingHoldingRemoval(null);
     setHoldingTradeMode(true);
     setEditingHoldingId(row.id);
     setHoldingQuantity(String(row.quantity));
@@ -1443,7 +1445,7 @@ export default function PortfolioPage() {
                   </label>
                   <AssetSortSelect value={assetSort} onChange={chooseAssetSort} className={styles.assetSort} marketGrouped={filter === "ALL"} />
                 </div>
-                <div className={styles.tableHead}>
+                <div className={`${styles.tableHead} ${view === "edit" ? styles.editTableHead : ""}`}>
                   <span>종목</span>
                   <span>보유 수량</span>
                   <span>가격</span>
@@ -1475,15 +1477,6 @@ export default function PortfolioPage() {
                                 {row.broker} · {row.account} ·{" "}
                                 {row.symbol || "코드 미확인"}
                               </small>
-                              {view === "edit" && (
-                                <button
-                                  type="button"
-                                  className={styles.savedCodeButton}
-                                  onClick={() => beginHoldingEdit(row)}
-                                >
-                                  <Pencil size={12} /> 이 종목 수정
-                                </button>
-                              )}
                             </div>
                           </div>
                           <div>
@@ -1520,14 +1513,28 @@ export default function PortfolioPage() {
                             )}
                           </strong>
                           {view === "edit" ? (
-                            <button
-                              className={styles.deleteButton}
-                              aria-label={`${row.name} 삭제`}
-                              disabled={deletingHoldingId !== null || holdingSaving}
-                              onClick={() => setPendingHoldingRemoval(row.id)}
-                            >
-                              <X size={18} />
-                            </button>
+                            <div className={styles.holdingActions} role="group" aria-label={`${row.name} 자산 관리`}>
+                              <button
+                                type="button"
+                                className={styles.holdingEditAction}
+                                aria-label={`${row.name} 자산 수정`}
+                                aria-expanded={editingHoldingId === row.id}
+                                disabled={holdingSaving || deletingHoldingId !== null || editingHoldingId === row.id || holdingDirty || holdingTradeDirty}
+                                onClick={() => beginHoldingEdit(row)}
+                              >
+                                <Pencil size={15} /> {editingHoldingId === row.id ? "수정 중" : "자산 수정"}
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.holdingRemoveAction}
+                                aria-label={`${row.name} 삭제`}
+                                aria-expanded={pendingHoldingRemoval === row.id}
+                                disabled={deletingHoldingId !== null || holdingSaving || holdingDirty || holdingTradeDirty}
+                                onClick={() => { setEditingHoldingId(null); setPendingHoldingRemoval(row.id); }}
+                              >
+                                <Trash2 size={15} /> 삭제
+                              </button>
+                            </div>
                           ) : (
                             <span />
                           )}
