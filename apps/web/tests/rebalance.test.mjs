@@ -808,3 +808,42 @@ test("automatic out-of-band crypto sales use fractional units and fund stock buy
   assert.equal(r.trades.find(t=>t.side==="buy").shares,3);
   assertMatchesActual(r,p,rows);
 });
+
+test("automatic purchase switches market inside the same portfolio without reordering stored candidates", () => {
+  const rows=[holding("a","A",100)];
+  const domestic=rule("KODEX","B",100);
+  const overseas={...rule("SPY","B",1),market:"US",exchange:"AMS"};
+  const p=plan([["a","A"]],[overseas,domestic]);
+  for(const [preferredMarket,expected] of [["KR","KODEX"],["US","SPY"],[null,"SPY"]]) {
+    const r=rebalance(p,rows,"trade",0,new Set(),{...automaticBands,preferredMarket});
+    assert.equal(r.trades.find(t=>t.side==="buy").symbol,expected);
+    assertMatchesActual(r,p,rows);
+  }
+  assert.deepEqual(p.rules.map(r=>r.symbol),["SPY","KODEX"]);
+});
+test("explicit choices beat market hours and cannot switch into another portfolio", () => {
+  const rows=[holding("a","A",100)];
+  const overseas={...rule("SPY","B",1),market:"US",exchange:"AMS"};
+  const p=plan([["a","A"]],[overseas,rule("KODEX","B"),rule("WRONG","A")]);
+  const r=rebalance(p,rows,"trade",0,new Set(),{...automaticBands,preferredMarket:"KR",buyRuleIds:{B:"SPY"}});
+  assert.equal(r.trades.find(t=>t.side==="buy").symbol,"SPY");
+  assertMatchesActual(r,p,rows);
+});
+test("market-aware sales prefer only owned securities and respect exclusions and manual selection", () => {
+  const foreign={...holding("us","SPY",5,1),market:"US",exchange:"AMS"};
+  const rows=[holding("kr","KODEX",20),foreign];
+  const p=plan([["kr","A"],["us","A"]],[rule("B","B")]);
+  const usFirst=rebalance(p,rows,"trade",0,new Set(),{...automaticBands,preferredMarket:"US"});
+  assert.equal(usFirst.trades[0].holdingId,"us");
+  const excluded=rebalance(p,rows,"trade",0,new Set(["us"]),{...automaticBands,preferredMarket:"US"});
+  assert.equal(excluded.trades[0].holdingId,"kr");
+  const selected=rebalance(p,rows,"trade",0,new Set(),{...automaticBands,preferredMarket:"US",sellSymbols:{A:"KR:KODEX"}});
+  assert.ok(selected.trades.filter(t=>t.side==="sell").every(t=>t.holdingId==="kr"));
+  assertMatchesActual(usFirst,p,rows);
+  assertMatchesActual(selected,p,rows);
+});
+test("market hours alone never activate an in-band unselected portfolio", () => {
+  const rows=[holding("a","A",51),holding("b","B",49)];
+  const p=plan([["a","A"],["b","B"]],[rule("A","A"),rule("B","B")],{tolerancePercent:2});
+  assert.equal(rebalance(p,rows,"trade",0,new Set(),{...automaticBands,preferredMarket:"KR"}).trades.length,0);
+});

@@ -1,5 +1,6 @@
 "use client";
 import PushSettings from "./PushSettings";
+import type { MarketSessions } from "./market-sessions";
 import CashTransfers from "./CashTransfers";
 import type {BrokerageAccount} from "./accounts-model";
 
@@ -716,6 +717,32 @@ export default function PortfolioBuilder({
   const [previousFx,setPreviousFx]=useState<{rate:number;rateDate:string}|null>(null);
   useEffect(()=>{let active=true;setPreviousFx(null);if(draft?.includeFxGains && draft.usdKrwMode === "auto") void fetch("/api/portfolio/fx").then(r=>r.json()).then(p=>{if(active && p.previousRate && p.rateDate)setPreviousFx({rate:p.previousRate,rateDate:p.rateDate});}).catch(()=>{});return()=>{active=false;};},[draft?.includeFxGains,draft?.usdKrwMode,draft?.usdKrwRateDate]);
   const dailyFxRate=draft?.usdKrwMode === "auto" && previousFx?.rateDate === draft?.usdKrwRateDate?previousFx?.rate??null:null;
+  const [marketSession, setMarketSession] = useState<MarketSessions | null>(null);
+  useEffect(() => {
+    if (screen !== "rebalance") return;
+    let active = true;
+    let pending = false;
+    let controller: AbortController | null = null;
+    setMarketSession(null);
+    async function refreshSession() {
+      if (pending || document.visibilityState === "hidden") return;
+      pending = true;
+      controller = new AbortController();
+      const timeout = window.setTimeout(() => controller?.abort(), 12_000);
+      try {
+        const response = await fetch("/api/markets/session", {cache:"no-store",signal:controller.signal});
+        if (!response.ok) throw new Error("Session unavailable");
+        const session: MarketSessions = await response.json();
+        if (active) setMarketSession(session);
+      } catch { if (active) setMarketSession(null); }
+      finally { window.clearTimeout(timeout); pending = false; }
+    }
+    void refreshSession();
+    const timer = window.setInterval(() => void refreshSession(), 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") { setMarketSession(null); void refreshSession(); } };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { active=false; controller?.abort(); window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
+  }, [screen,userId]);
   const [cashBucketChoice, setCashBucketChoice] = useState<string | null>(null);
   const [cashInput, setCashInput] = useState("");
   const [budgetMode, setBudgetMode] = useState<"input" | "theoretical">(
@@ -1452,6 +1479,8 @@ export default function PortfolioBuilder({
               cashBucketId,
               requireSelection: true,
               autoOutsideTolerance: true,
+              preferredMarket: marketSession?.preferredMarket ?? null,
+              candidatePolicy: marketSession?.preferredMarket ? "fallback" : "priority",
               cryptoAssetIds,
               excludedBuySymbols: new Set(excludedBuySymbols),
               buyHoldingIds,
@@ -1487,6 +1516,7 @@ export default function PortfolioBuilder({
       buyRuleIds,
       sellSymbols,
       cryptoAssetIds,
+      marketSession,
     ],
   );
   const rebalanceReady = Boolean(
@@ -3019,6 +3049,10 @@ export default function PortfolioBuilder({
                     </tr>)}</tbody>
                   </table>
                 </details>
+                <p className={styles.help}>{marketSession?.preferredMarket
+                  ? `${marketSession.preferredMarket === "KR" ? "국내" : "미국"} 정규장 우선 · 같은 포트의 자동 후보에 적용됩니다. 직접 고른 종목은 유지합니다.`
+                  : marketSession ? marketSession.KR.status === "unknown" || marketSession.US.status === "unknown" ? "장 일정 미확인 · 기존 후보 순서로 계산합니다." : "정규장 외 · 기존 후보 순서로 계산합니다."
+                  : "장 일정 확인 전 · 기존 후보 순서로 계산합니다."}</p>
                 <p className={styles.help}>허용 범위 밖은 자동으로 조정을 제안합니다. 범위 안은 제안 없이 유지하며, 종목을 직접 선택하면 목표 비중까지 계산합니다.</p>
                 <div className={styles.adviceList}>
                   {actionItems.map((item) => {
@@ -3076,7 +3110,7 @@ export default function PortfolioBuilder({
                             <label className={styles.proposalChoice}>
                               매수 종목
                               <select aria-label={`${item.bucket.name} 매수 종목`} value={cryptoAssetIds[item.bucket.id] ? `crypto:${cryptoAssetIds[item.bucket.id]}` : buyRuleIds[item.bucket.id] ?? ""} onChange={event => chooseAdjustment(item.bucket.id, "buy", event.target.value)}>
-                                <option value="">{needsAdjustment ? "자동 선택" : "종목 선택 · 제안 없음"}</option>
+                                <option value="">{needsAdjustment ? marketSession?.preferredMarket ? `자동 선택 · ${marketSession.preferredMarket === "KR" ? "국내" : "미국"} 우선` : "자동 선택" : "종목 선택 · 제안 없음"}</option>
                                 {buyRuleIds[item.bucket.id] && !bucketRules.some(rule => rule.id === buyRuleIds[item.bucket.id]) && <option value={buyRuleIds[item.bucket.id]}>선택한 후보가 변경됨 · 다시 선택</option>}
                                 {bucketRules.map(rule => <option key={rule.id} value={rule.id}>{rule.name || rule.symbol}{rule.market === "US" && rule.name ? ` (${rule.symbol})` : ""}</option>)}
                                 {bucketCrypto.map(asset => <option key={asset.id} value={`crypto:${asset.id}`}>{asset.name} ({asset.marketCode.replace("KRW-", "")})</option>)}
@@ -3087,7 +3121,7 @@ export default function PortfolioBuilder({
                             <label className={styles.proposalChoice}>
                               매도 종목
                               <select aria-label={`${item.bucket.name} 매도 종목`} value={cryptoAssetIds[item.bucket.id] ? `crypto:${cryptoAssetIds[item.bucket.id]}` : sellSymbols[item.bucket.id] ?? ""} onChange={event => chooseAdjustment(item.bucket.id, "sell", event.target.value)}>
-                                <option value="">{needsAdjustment ? "자동 선택" : "종목 선택 · 제안 없음"}</option>
+                                <option value="">{needsAdjustment ? marketSession?.preferredMarket ? `자동 선택 · ${marketSession.preferredMarket === "KR" ? "국내" : "미국"} 우선` : "자동 선택" : "종목 선택 · 제안 없음"}</option>
                                 {sellSymbols[item.bucket.id] && !sellChoices.some(([key]) => key === sellSymbols[item.bucket.id]) && <option value={sellSymbols[item.bucket.id]}>선택한 종목이 변경됨 · 다시 선택</option>}
                                 {sellChoices.map(([key,row]) => <option key={key} value={key}>{row.name || row.symbol}{row.market === "US" && row.name ? ` (${row.symbol})` : ""}</option>)}
                                 {bucketCrypto.map(asset => <option key={asset.id} value={`crypto:${asset.id}`}>{asset.name} ({asset.marketCode.replace("KRW-", "")})</option>)}

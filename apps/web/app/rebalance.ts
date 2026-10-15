@@ -14,6 +14,7 @@ export type RebalanceOptions = {
   cashBucketId?: string | null;
   requireSelection?: boolean;
   autoOutsideTolerance?: boolean;
+  preferredMarket?: Market | null;
   cryptoAssetIds?: Record<string, string>;
   candidatePolicy?: "priority" | "fallback";
   excludedBuySymbols?: Set<string>;
@@ -394,7 +395,8 @@ export function rebalance(
           )
           .sort(
             (a, b) =>
-              holdingValueKrw(b, plan.usdKrw) - holdingValueKrw(a, plan.usdKrw),
+              (options.preferredMarket ? Number(b.market === options.preferredMarket) - Number(a.market === options.preferredMarket) : 0)
+              || holdingValueKrw(b, plan.usdKrw) - holdingValueKrw(a, plan.usdKrw),
           );
         for (const holding of owned) {
           const price = candidatePrice(
@@ -424,7 +426,7 @@ export function rebalance(
             account: holding.account,
             usdKrw: holding.market === "US" ? plan.usdKrw : null,
             selectionReason:
-              options.sellSymbols?.[bucket.id] ? "사용자가 선택한 종목의 보유 계좌를 평가액 순으로 검토" : "포트 내 매도 제외되지 않은 보유 항목을 평가액 순으로 검토",
+              options.sellSymbols?.[bucket.id] ? "사용자가 선택한 종목의 보유 계좌를 평가액 순으로 검토" : options.preferredMarket ? "정규장 운영 시장의 보유 종목을 우선하고 평가액 순으로 검토" : "포트 내 매도 제외되지 않은 보유 항목을 평가액 순으로 검토",
           });
           projectedHoldings.find((row) => row.id === holding.id)!.quantity -=
             shares;
@@ -469,7 +471,9 @@ export function rebalance(
       }
       if (requiresExplicitSelection(bucket) && !options.buyRuleIds?.[bucket.id]) continue;
       const selectedRuleId = options.buyRuleIds?.[bucket.id];
-      const rules = plan.rules.filter((rule) => rule.bucketId === bucket.id && (!selectedRuleId || rule.id === selectedRuleId));
+      const rules = plan.rules.filter((rule) => rule.bucketId === bucket.id && (!selectedRuleId || rule.id === selectedRuleId))
+        .sort((a,b) => options.preferredMarket && !selectedRuleId
+          ? Number(b.market === options.preferredMarket) - Number(a.market === options.preferredMarket) : 0);
       if (available <= 0) {
         addReason(bucket.id, "이번 계산에서 사용할 매수 자금이 없습니다.");
         continue;

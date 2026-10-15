@@ -447,3 +447,11 @@ export async function quoteKis(
 export function kisConfigured() {
   return configured();
 }
+
+/** Trading-day metadata only; reuses the existing shared token and request queue. */
+export async function domesticTradingCalendar(date: string): Promise<unknown> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid calendar date");
+  return kisGet("/uapi/domestic-stock/v1/quotations/chk-holiday", "CTCA0903R", {
+    BASS_DT:date.replaceAll("-", ""), CTX_AREA_FK:"", CTX_AREA_NK:"",
+  });
+}
