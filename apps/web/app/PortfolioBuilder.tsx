@@ -1455,18 +1455,9 @@ export default function PortfolioBuilder({
       values.unassigned === 0 &&
       values.missingPrices === 0,
   );
-  const actionItems = rebalanceReady
-    ? advice.items.filter(
-        (item) =>
-          item.cashSettlement !== null || advice.trades.some((trade) => trade.bucketId === item.bucket.id) ||
-          needsAdjustment(
-            item.bucket.targetPercent,
-            item.current,
-            item.fundedPercent,
-            draft?.tolerancePercent ?? 0,
-          ),
-      )
-    : [];
+  // Keep the portfolio list stable when changing a candidate removes its trades.
+  // A portfolio within tolerance must still expose its result and selection.
+  const actionItems = rebalanceReady ? advice.items : [];
   const inRangeCount = rebalanceReady
     ? advice.items.filter(item => withinTolerance(
         item.bucket.targetPercent, item.projectedPercent, draft?.tolerancePercent ?? 0,

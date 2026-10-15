@@ -5,6 +5,7 @@ import { withPreviousQuotes } from "./holdings";
 
 import NumberInput from "./NumberInput";
 import EditableHoldingRow from "./EditableHoldingRow";
+import HoldingPositionRow from "./HoldingPositionRow";
 
 import {
   ChangeEvent,
@@ -45,7 +46,6 @@ import {
   recognizeHoldings,
 } from "./holdings";
 import PortfolioBuilder, { stockAssetId, type AssetSelection } from "./PortfolioBuilder";
-import AssetIcon from "./AssetIcon";
 import UserGuide from "./UserGuide";
 import AccountsManager from "./AccountsManager";
 import { protectUnsavedChanges } from "./unsaved-changes";
@@ -1316,11 +1316,11 @@ export default function PortfolioPage() {
                   <p>
                     {view === "edit"
                       ? "주식·가상자산·현금의 수량과 매입가를 한곳에서 관리하세요."
-                      : "평가액, 손익률과 가격 출처를 함께 확인하세요."}
+                      : "현재가와 평균 매입가, 보유 자산의 평가손익을 확인하세요."}
                   </p>
                 </div>
                 <button
-                  className={styles.primaryButton}
+                  className={`${styles.primaryButton} ${styles.assetPageAction}`}
                   onClick={() => go(view === "edit" ? "holdings" : "edit")}
                 >
                   {view === "edit" ? "보유 자산으로" : "자산 수정"}{" "}
@@ -1415,7 +1415,7 @@ export default function PortfolioPage() {
                   )}
                 </div>
               )}
-              <section className={styles.panel}>
+              <section className={`${styles.panel} ${view === "holdings" ? styles.positionsPanel : ""}`}>
                 <div className={styles.toolbar}>
                   <div className={styles.tabs}>
                     {(["ALL", "KR", "US"] as const).map((item) => (
@@ -1443,11 +1443,11 @@ export default function PortfolioPage() {
                   </label>
                   <AssetSortSelect value={assetSort} onChange={chooseAssetSort} className={styles.assetSort} marketGrouped={filter === "ALL"} />
                 </div>
-                <div className={`${styles.tableHead} ${view === "edit" ? styles.editTableHead : ""}`}>
+                <div className={`${styles.tableHead} ${styles.editTableHead}`}>
                   <span>종목</span>
                   <span>보유 수량</span>
-                  <span>가격</span>
-                  <span>평가 금액</span>
+                  <span>{view === "edit" ? "현재가" : "현재가 / 평균 매입가"}</span>
+                  <span>평가액</span>
                   <span>평가손익</span>
                   <span />
                 </div>
@@ -1469,62 +1469,16 @@ export default function PortfolioPage() {
                           onEdit={() => beginHoldingEdit(row)}
                           onRemove={() => {setEditingHoldingId(null);setPendingHoldingRemoval(row.id);}}
                         /> : (
-                        <div className={styles.holdingRow} id={`edit-stock-${row.id}`}>
-                          <div className={styles.holdingName}>
-                            <AssetIcon
-                              kind="stock"
-                              symbol={row.symbol}
-                              name={row.name}
-                              market={row.market}
-                              exchange={row.exchange}
-                            />
-                            <div>
-                              {view === "holdings" ? (
-                                <button type="button" className={styles.holdingDetailLink} onClick={() => openAsset({ kind: "stock", id: `holding:${row.id}` }, "holdings")}>
-                                  {row.name} <ChevronRight size={15} />
-                                </button>
-                              ) : <strong>{row.name}</strong>}
-                              <small>
-                                {row.broker} · {row.account} ·{" "}
-                                {row.symbol || "코드 미확인"}
-                              </small>
-                            </div>
-                          </div>
-                          <div>
-                            <label>수량</label>
-                            {row.quantity.toLocaleString("ko-KR", {maximumFractionDigits:6})}주
-                          </div>
-                          <div>
-                            <label>가격</label>
-                            {price === null ? "—" : money(price, row.market)}
-                          </div>
-                          <strong>
-                            <label>평가</label>
-                            {price === null
-                              ? "—"
-                              : money(valueOf(row), gainCurrency(row.market))}
-                          </strong>
-                          <strong
-                            className={
-                              gainOf(row) === null
-                                ? ""
-                                : gainOf(row)! >= 0
-                                  ? styles.gainPositive
-                                  : styles.gainNegative
-                            }
-                          >
-                            <label>손익</label>
-                            {gainOf(row) === null
-                              ? "—"
-                              : signedMoney(gainOf(row)!, gainCurrency(row.market))}
-                            {gainPercentOf(row) !== null && (
-                              <small className={styles.gainPercent}>
-                                {signedPercent(gainPercentOf(row)!)}
-                              </small>
-                            )}
-                          </strong>
-                          <span />
-                        </div>
+                        <HoldingPositionRow
+                          holding={row}
+                          price={price === null ? "—" : money(price, row.market)}
+                          averageCost={row.averageCost === null ? "—" : money(row.averageCost, row.market)}
+                          value={price === null ? "—" : money(valueOf(row), gainCurrency(row.market))}
+                          gain={gainOf(row) === null ? "—" : signedMoney(gainOf(row)!, gainCurrency(row.market))}
+                          percent={gainPercentOf(row) === null ? null : signedPercent(gainPercentOf(row)!)}
+                          gainSign={gainOf(row) === null ? "unknown" : gainOf(row)! >= 0 ? "positive" : "negative"}
+                          onOpen={() => openAsset({ kind: "stock", id: `holding:${row.id}` }, "holdings")}
+                        />
                         )}
                         {view === "edit" && pendingHoldingRemoval === row.id && (
                           <div className={styles.holdingDeleteConfirm} role="group" aria-label={`${row.name} 삭제 확인`}>

@@ -272,3 +272,78 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* The read-only list shares the editor's alignment, with explicit price labels. */
+.positionMain {
+  padding: 14px 0;
+  gap: 10px;
+}
+.positionPrices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.positionPrices > span {
+  white-space: nowrap;
+}
+.positionPrices small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.positionMain .value > small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 1000px) {
+  .positionMain {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+    padding: 14px 0;
+  }
+  .positionMain .identity {
+    grid-row: 1 / 3;
+  }
+  .positionMain .identityText {
+    gap: 2px;
+  }
+  .positionMain .account {
+    max-width: 100%;
+    font-size: 12px;
+  }
+  .positionMain .positionInfo {
+    font-size: 12px;
+  }
+  .positionPrices {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 3px;
+    font-size: 13px;
+  }
+  .positionMain .value {
+    align-self: center;
+  }
+  .positionMain .value strong {
+    font-size: 15px;
+  }
+  .positionMain .profit {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 4px;
+  }
+  .positionMain .profit > small {
+    display: none;
+  }
+  .positionMain .profit strong,
+  .positionMain .profit > span {
+    font-size: 12px;
+  }
+}

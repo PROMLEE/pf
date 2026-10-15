@@ -1897,3 +1897,51 @@
 .editTableHead > span:last-child {display:none;}
 
 @media(max-width:1000px) { .editTableHead {display:none;} }
+
+/* Asset pages keep named actions visible on phones. */
+.pageHead .assetPageAction {
+  flex-shrink: 0;
+  font-size: 13px;
+  padding: 10px 12px;
+  min-height: 40px;
+  white-space: nowrap;
+}
+.positionsPanel .toolbar {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.holdingStats {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.holdingStats > div {
+  gap: 4px;
+  padding: 14px 16px;
+}
+@media (max-width: 640px) {
+  .holdingStats > div {
+    padding: 10px 12px;
+  }
+  .holdingStats strong {
+    font-size: 16px;
+    letter-spacing: -0.02em;
+  }
+  .holdingStats small {
+    margin-top: 0;
+    font-size: 12px;
+  }
+  .positionsPanel {
+    padding: 12px;
+  }
+}
+.positionsPanel .tableHead {
+  grid-template-columns: minmax(170px, 2fr) minmax(60px, 0.65fr) minmax(80px, 0.85fr) minmax(100px, 1fr) minmax(110px, 1.1fr);
+  padding-inline: 0;
+}
+.positionsPanel .tableHead > span:last-child {
+  display: none;
+}
+.holdingStats small.gainPositive { color: #bb4651; }
+.holdingStats small.gainNegative { color: #2467b2; }
+:global(html[data-theme="dark"]) .holdingStats .gainPositive { color: #ff9ca6; }
+:global(html[data-theme="dark"]) .holdingStats .gainNegative { color: #8abaff; }
