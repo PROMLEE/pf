@@ -2225,6 +2225,113 @@ export default function PortfolioBuilder({
                 : " · 저장하려면 100%로 맞춰 주세요."}
             </p>
           </section>
+          <section className={styles.panel}>
+            <div className={styles.panelHead}><h2>리밸런싱 계산 설정</h2></div>
+            <p className={styles.help}>이번 계산에 적용됩니다. 추가 투입금과 조정할 종목은 리밸런싱에서 선택하세요.</p>
+            <label className={styles.cashBudget}>리밸런싱 방법
+              <select
+                value={rebalanceMode}
+                onChange={(event) =>
+                  setRebalanceMode(event.target.value as "trade" | "add-only")
+                }
+                aria-label="리밸런싱 방법"
+              >
+                <option value="trade">매도 후 매수</option>
+                <option value="add-only">신규 자금으로 매수</option>
+              </select>
+            </label>
+            <label className={styles.cashBudget}>
+              목표 비중을 맞출 현금 포트
+              <select value={cashBucketId} onChange={event => setCashBucketChoice(event.target.value)}>
+                <option value="">현금 포트 선택</option>
+                {cashBucketId && !cashBuckets.some(bucket => bucket.id === cashBucketId) && <option value={cashBucketId}>포트 구성이 변경됨 · 다시 선택</option>}
+                {cashBuckets.map(bucket => <option key={bucket.id} value={bucket.id}>{bucket.name} · 목표 {pct(bucket.targetPercent)}</option>)}
+              </select>
+            </label>
+            <p className={styles.help}>{advice.cashAllocation
+              ? "현금 목표액을 남기고 초과분은 매수에 사용합니다. 부족분은 추가 투입금·매도 대금으로 채웁니다."
+              : "현금·RP 등 직접 입력 자산으로만 구성된 포트를 선택하면, 거래 후 현금 비중도 함께 계산합니다."}</p>
+            <div className={styles.rebalanceOptions}>
+              {rebalanceMode === "add-only" && (
+                <label className={styles.cashBudget}>
+                  예산 기준
+                  <select
+                    value={budgetMode}
+                    onChange={(event) =>
+                      setBudgetMode(
+                        event.target.value as "input" | "theoretical",
+                      )
+                    }
+                  >
+                    <option value="input">내 금액 입력</option>
+                    <option value="theoretical">
+                      이론상 필요 금액으로 계산
+                    </option>
+                  </select>
+                </label>
+              )}
+            <details className={styles.exclusions}>
+              <summary>
+                계좌별 매도 제외 {excludedHoldingIds.length}개{" "}
+                <ChevronDown size={14} />
+              </summary>
+              <div>
+                {holdings.map((holding) => (
+                  <label key={holding.id}>
+                    <input
+                      type="checkbox"
+                      checked={excludedHoldingIds.includes(holding.id)}
+                      onChange={(event) =>
+                        setExcludedHoldingIds((ids) =>
+                          event.target.checked
+                            ? [...ids, holding.id]
+                            : ids.filter((id) => id !== holding.id),
+                        )
+                      }
+                    />
+                    {holding.broker} · {holding.account || "계좌 미입력"} ·{" "}
+                    {holding.name} ({holding.symbol || "코드 없음"})
+                  </label>
+                ))}
+                {!holdings.length && (
+                  <small>제외할 보유 종목이 없습니다.</small>
+                )}
+              </div>
+            </details>
+            <details className={styles.exclusions}>
+              <summary>
+                종목별 추가 매수 제외 {excludedBuySymbols.length}개{" "}
+                <ChevronDown size={14} />
+              </summary>
+              <div>
+                {draft.rules.map((rule) => {
+                  const key = symbolKey(rule.market, rule.symbol);
+                  return (
+                    <label key={rule.id}>
+                      <input
+                        type="checkbox"
+                        checked={excludedBuySymbols.includes(key)}
+                        onChange={(event) =>
+                          setExcludedBuySymbols((keys) =>
+                            event.target.checked
+                              ? [...keys, key]
+                              : keys.filter((value) => value !== key),
+                          )
+                        }
+                      />
+                      {rule.name || rule.symbol} · {rule.market} {rule.symbol}
+                    </label>
+                  );
+                })}
+                {!draft.rules.length && (
+                  <small>등록된 매수 후보가 없습니다.</small>
+                )}
+              </div>
+            </details>
+            </div>
+
+            <button type="button" className={styles.ghost} onClick={() => onNavigate("rebalance")}>리밸런싱 제안 보기 <ArrowRight size={15} /></button>
+          </section>
         </>
       )}
       {(screen === "allocation" || screen === "edit") && (
@@ -2823,22 +2930,11 @@ export default function PortfolioBuilder({
               <div>
                 <h2>조정 제안</h2>
               </div>
-              <select
-                value={rebalanceMode}
-                onChange={(event) =>
-                  setRebalanceMode(event.target.value as "trade" | "add-only")
-                }
-                aria-label="리밸런싱 방법"
-              >
-                <option value="trade">매도 후 매수</option>
-                <option value="add-only">신규 자금으로 매수</option>
-              </select>
+              <button type="button" className={styles.ghost} onClick={() => onNavigate("strategy")}>계산 설정 <ArrowRight size={15} /></button>
             </div>
             <p className={styles.methodNote}>
+              <span>{rebalanceMode === "trade" ? "매도 후 매수" : "신규 자금으로 매수"}</span>
               {draft.toleranceMode === "relative" ? `목표 금액 대비 ±${(draft.relativeTolerancePercent ?? 10).toFixed(1)}%` : `전체 비중 ±${draft.tolerancePercent.toFixed(1)}%p`}
-              <button type="button" onClick={() => onNavigate("strategy")}>
-                기준 변경
-              </button>
               {rebalanceMode === "add-only" && budgetMode === "theoretical" && advice.requiredCash > 0
                 ? ` · 목표 비중까지 이론상 필요한 신규 자금 약 ${fmt(advice.requiredCash)}`
                 : ""}
@@ -2863,96 +2959,6 @@ export default function PortfolioBuilder({
                     : rebalanceMode === "trade" ? advice.cashAllocation ? "추가 투입금·매도 대금·현금 초과분으로 계산합니다. 빈칸은 추가 투입 0원입니다." : "추가 투입금 + 매도 대금 안에서 매수합니다. 빈칸은 추가 투입 0원입니다." : advice.cashAllocation ? "추가 투입금과 선택한 현금 포트의 초과분으로 매수합니다." : "입력한 추가 자금으로만 계산합니다. 기존 현금은 자동 포함하지 않습니다."}
                 </p>
             </>
-            <label className={styles.cashBudget}>
-              목표 비중을 맞출 현금 포트
-              <select value={cashBucketId} onChange={event => setCashBucketChoice(event.target.value)}>
-                <option value="">현금 포트 선택</option>
-                {cashBucketId && !cashBuckets.some(bucket => bucket.id === cashBucketId) && <option value={cashBucketId}>포트 구성이 변경됨 · 다시 선택</option>}
-                {cashBuckets.map(bucket => <option key={bucket.id} value={bucket.id}>{bucket.name} · 목표 {pct(bucket.targetPercent)}</option>)}
-              </select>
-            </label>
-            <p className={styles.help}>{advice.cashAllocation
-              ? "현금 목표액을 남기고 초과분은 매수에 사용합니다. 부족분은 추가 투입금·매도 대금으로 채웁니다."
-              : "현금·RP 등 직접 입력 자산으로만 구성된 포트를 선택하면, 거래 후 현금 비중도 함께 계산합니다."}</p>
-            <details className={styles.rebalanceOptions}>
-              <summary>계산 옵션 · 예산과 거래 제외 <ChevronDown size={14} /></summary>
-              {rebalanceMode === "add-only" && (
-                <label className={styles.cashBudget}>
-                  예산 기준
-                  <select
-                    value={budgetMode}
-                    onChange={(event) =>
-                      setBudgetMode(
-                        event.target.value as "input" | "theoretical",
-                      )
-                    }
-                  >
-                    <option value="input">내 금액 입력</option>
-                    <option value="theoretical">
-                      이론상 필요 금액으로 계산
-                    </option>
-                  </select>
-                </label>
-              )}
-            <details className={styles.exclusions}>
-              <summary>
-                계좌별 매도 제외 {excludedHoldingIds.length}개{" "}
-                <ChevronDown size={14} />
-              </summary>
-              <div>
-                {holdings.map((holding) => (
-                  <label key={holding.id}>
-                    <input
-                      type="checkbox"
-                      checked={excludedHoldingIds.includes(holding.id)}
-                      onChange={(event) =>
-                        setExcludedHoldingIds((ids) =>
-                          event.target.checked
-                            ? [...ids, holding.id]
-                            : ids.filter((id) => id !== holding.id),
-                        )
-                      }
-                    />
-                    {holding.broker} · {holding.account || "계좌 미입력"} ·{" "}
-                    {holding.name} ({holding.symbol || "코드 없음"})
-                  </label>
-                ))}
-                {!holdings.length && (
-                  <small>제외할 보유 종목이 없습니다.</small>
-                )}
-              </div>
-            </details>
-            <details className={styles.exclusions}>
-              <summary>
-                종목별 추가 매수 제외 {excludedBuySymbols.length}개{" "}
-                <ChevronDown size={14} />
-              </summary>
-              <div>
-                {draft.rules.map((rule) => {
-                  const key = symbolKey(rule.market, rule.symbol);
-                  return (
-                    <label key={rule.id}>
-                      <input
-                        type="checkbox"
-                        checked={excludedBuySymbols.includes(key)}
-                        onChange={(event) =>
-                          setExcludedBuySymbols((keys) =>
-                            event.target.checked
-                              ? [...keys, key]
-                              : keys.filter((value) => value !== key),
-                          )
-                        }
-                      />
-                      {rule.name || rule.symbol} · {rule.market} {rule.symbol}
-                    </label>
-                  );
-                })}
-                {!draft.rules.length && (
-                  <small>등록된 매수 후보가 없습니다.</small>
-                )}
-              </div>
-            </details>
-            </details>
             {!rebalanceReady ? (
               <div className={styles.rebalanceStatus}>
                 <span>
@@ -3158,24 +3164,22 @@ export default function PortfolioBuilder({
                         <div className={styles.tradeDetail}>
                           <details>
                             <summary>포트별 계산 상세</summary>
-                            <small>목표 금액 {fmt(advice.targetTotal * item.bucket.targetPercent / 100)} · 허용 금액 {fmt(Math.max(0, advice.targetTotal * (item.bucket.targetPercent - tolerancePoints(draft, item.bucket.targetPercent)) / 100))}~{fmt(advice.targetTotal * (item.bucket.targetPercent + tolerancePoints(draft, item.bucket.targetPercent)) / 100)}</small>
-                            <small>현재 {pct(item.currentPercent)}{advice.newCash > 0 ? ` · 자금 추가 후 ${pct(item.fundedPercent)}` : ""} · 제안 반영 후 {pct(item.projectedPercent)}</small>
+                            <dl className={styles.calculationRows}>
+                              <div><dt>목표 금액</dt><dd>{fmt(advice.targetTotal * item.bucket.targetPercent / 100)}</dd></div>
+                              <div><dt>허용 하한</dt><dd>{fmt(Math.max(0, advice.targetTotal * (item.bucket.targetPercent - tolerancePoints(draft, item.bucket.targetPercent)) / 100))}</dd></div>
+                              <div><dt>허용 상한</dt><dd>{fmt(advice.targetTotal * (item.bucket.targetPercent + tolerancePoints(draft, item.bucket.targetPercent)) / 100)}</dd></div>
+                              <div><dt>현재 비중</dt><dd>{pct(item.currentPercent)}</dd></div>
+                              {advice.newCash > 0 && <div><dt>자금 추가 후</dt><dd>{pct(item.fundedPercent)}</dd></div>}
+                              <div><dt>제안 반영 후</dt><dd>{pct(item.projectedPercent)}</dd></div>
+                              {Math.abs(item.remainingGapKrw) >= 1 && <div><dt>목표 대비 {item.remainingGapKrw > 0 ? "부족" : "초과"}</dt><dd>{fmt(Math.abs(item.remainingGapKrw))}</dd></div>}
+                            </dl>
                           {!amount && advice.newCash > 0 && action === "add" && Math.round(item.projectedPercent * 10) < Math.round(item.currentPercent * 10) && (
                             <p className={styles.shareDilutionNote}>
-                              이 포트의 금액은 {fmt(itemTrades.filter(trade => trade.side === "buy").reduce((sum, trade) => sum + trade.amountKrw, 0))} 늘지만, 전체 자산에는 {fmt(advice.newCash)}이 추가되어 현재보다 비중이 낮아집니다.
+                              이 포트의 금액은 {fmt([...itemTrades, ...itemCryptoTrades].filter(trade => trade.side === "buy").reduce((sum, trade) => sum + trade.amountKrw, 0))} 늘지만, 전체 자산에는 {fmt(advice.newCash)}이 추가되어 현재보다 비중이 낮아집니다.
                             </p>
                           )}
 
-                          {Math.abs(item.remainingGapKrw) >= 1 && (
-                            <small>
-                              제안 반영 후 목표 금액 대비{" "}
-                              {item.remainingGapKrw > 0 ? "부족" : "초과"}{" "}
-                              {fmt(Math.abs(item.remainingGapKrw))}
-                            </small>
-                          )}
-                          {item.separateReview && (
-                            <small>{item.separateReview}</small>
-                          )}
+                          {item.separateReview && <p className={styles.calculationExplanation}>{item.separateReview}</p>}
                           </details>
                           {itemTrades.length > 0 && (
                             <details>
