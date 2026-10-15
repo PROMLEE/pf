@@ -722,7 +722,7 @@
   background: #f7fafc;
 }
 .holdingEdit label { display: grid; gap: 5px; color: #53657d; font-size: 10px; font-weight: 700; }
-.holdingEdit input { width: 145px; padding: 8px 9px; border: 1px solid #dce5f2; border-radius: 7px; background: #fff; color: #253347; }
+.holdingEdit input:not([type="checkbox"]):not([type="radio"]) { width: 145px; padding: 8px 9px; border: 1px solid #dce5f2; border-radius: 7px; background: #fff; color: #253347; }
 .holdingEdit button { padding: 8px 12px; border: 1px solid #cddae5; border-radius: 7px; background: #fff; color: #205772; cursor: pointer; }
 .holdingEdit button:disabled { opacity: .5; cursor: wait; }
 .savedInstrumentSelect {
@@ -1764,7 +1764,7 @@
 :global(html[data-theme="dark"]) :is(.panelHead h2, .holdingName strong, .miniRow strong, .brokerRow strong, .settingRow strong, .profile strong, .holdingRow > strong, .metrics strong) { color: #e7f1f2; }
 :global(html[data-theme="dark"]) :is(.pageHead p, .panelHead p, .miniRow small, .brokerRow small, .holdingRow small, .metrics p, .metrics small, .settingRow span) { color: #9bb1b7; }
 :global(html[data-theme="dark"]) :is(.tableHead, .tabs, .panelNote, .editIntro, .notice, .legacyNotice, .holdingEdit) { background: #24353a; border-color: #3a5156; color: #d9e9ea; }
-:global(html[data-theme="dark"]) :is(.search, .search input, .holdingEdit input, .holdingEdit button, .formGrid input, .formGrid select, .reviewRow input, .codeVerification select) { background: #18272d; border-color: #3b5158; color: #edf5f5; }
+:global(html[data-theme="dark"]) :is(.search, .search input, .holdingEdit input:not([type="checkbox"]):not([type="radio"]), .holdingEdit button, .formGrid input, .formGrid select, .reviewRow input, .codeVerification select) { background: #18272d; border-color: #3b5158; color: #edf5f5; }
 :global(html[data-theme="dark"]) :is(.instrumentSelect, .savedInstrumentSelect, .signOut, .secondaryButton, .upload) { background: #24353a; border-color: #3b5158; color: #dcebed; }
 :global(html[data-theme="dark"]) :is(.reviewEmpty strong, .empty strong, .privacyItem strong, .editIntro strong) { color: #e7f1f2; }
 :global(html[data-theme="dark"]) .holdingRow > strong.gainPositive { color: #ff7782; }
@@ -1830,7 +1830,7 @@
   .holdingEdit { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
   .holdingEdit .editTitle, .holdingEdit > label, .holdingEdit .codeVerification { grid-column: 1 / -1; }
   .holdingEdit label { display: grid; gap: 6px; font-size: 13px; }
-  .holdingEdit input, .holdingEdit button { min-height: 44px; width: 100%; font-size: 14px; }
+  .holdingEdit input:not([type="checkbox"]):not([type="radio"]), .holdingEdit button { min-height: 44px; width: 100%; font-size: 14px; }
 }
 
 /* Shared PR artwork: vector outlines stay consistent across fonts and screens. */

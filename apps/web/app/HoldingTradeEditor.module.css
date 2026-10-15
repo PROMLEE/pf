@@ -46,7 +46,7 @@
   color: var(--ink);
   font-size: 13px;
 }
-.editor input,
+.editor input:not([type="checkbox"]):not([type="radio"]),
 .editor select {
   box-sizing: border-box;
   width: 100%;
@@ -74,14 +74,27 @@
   margin: 16px 0;
 }
 .editor .cashToggle {
-  display: flex;
+  display: inline-flex;
+  justify-self: start;
   align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--ink);
+  font-size: 13px;
+  min-height: 44px;
   gap: 8px;
+  cursor: pointer;
 }
 .editor .cashToggle input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--action-ink);
+  appearance: auto;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--action-fill);
+  cursor: pointer;
 }
 .cash select {
   width: 100%;
