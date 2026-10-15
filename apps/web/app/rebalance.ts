@@ -13,6 +13,7 @@ export type RebalanceMode = "trade" | "add-only";
 export type RebalanceOptions = {
   cashBucketId?: string | null;
   requireSelection?: boolean;
+  autoOutsideTolerance?: boolean;
   cryptoAssetIds?: Record<string, string>;
   candidatePolicy?: "priority" | "fallback";
   excludedBuySymbols?: Set<string>;
@@ -280,6 +281,20 @@ export function rebalance(
       ? Math.max(0, newCash)
       : 0;
   const targetTotal = total + cash;
+  // Judge each portfolio against the funded total, before proposing trades.
+  const requiresExplicitSelection = (bucket: Bucket) => Boolean(options.requireSelection && (
+    !options.autoOutsideTolerance || !needsPortfolioAdjustment(plan, bucket.targetPercent,
+      values.get(bucket.id) ?? 0, targetTotal > 0 ? (values.get(bucket.id) ?? 0) / targetTotal * 100 : 0)
+  ));
+  const cryptoChoice = (bucket: Bucket, side: "buy" | "sell") => {
+    const selected = options.cryptoAssetIds?.[bucket.id];
+    if (selected) return plan.cryptoAssets.find(asset => asset.id === selected && asset.bucketId === bucket.id);
+    if (!options.autoOutsideTolerance || requiresExplicitSelection(bucket)
+      || options.buyRuleIds?.[bucket.id] || options.sellSymbols?.[bucket.id]) return undefined;
+    const stockAvailable = side === "buy" ? plan.rules.some(rule => rule.bucketId === bucket.id)
+      : holdings.some(row => holdingBucketId(plan, row) === bucket.id);
+    return stockAvailable ? undefined : plan.cryptoAssets.find(asset => asset.bucketId === bucket.id);
+  };
   const cashCurrent = cashBucket ? values.get(cashBucket.id) ?? 0 : 0;
   const cashTarget = cashBucket ? targetTotal * cashBucket.targetPercent / 100 : 0;
   const hasSelections = Boolean(Object.values(options.buyRuleIds ?? {}).some(Boolean) || Object.values(options.sellSymbols ?? {}).some(Boolean) || Object.values(options.cryptoAssetIds ?? {}).some(Boolean));
@@ -344,7 +359,7 @@ export function rebalance(
   if (ready && !impossibleWithoutSelling && (!withinRange || cash > 0 || usedFromCash > 0 || reserveNeeded > 0 || hasSelections)) {
     if (mode === "trade") {
       for (const bucket of plan.buckets) {
-        const asset = plan.cryptoAssets.find(asset => asset.id === options.cryptoAssetIds?.[bucket.id] && asset.bucketId === bucket.id);
+        const asset = cryptoChoice(bucket, "sell");
         if (!asset) continue;
         if (!positive(asset.quotedPriceKrw)) { addReason(bucket.id, "가상자산 현재가를 확인해 주세요."); continue; }
         const excess = (values.get(bucket.id) ?? 0) - targetTotal * bucket.targetPercent / 100;
@@ -357,7 +372,7 @@ export function rebalance(
         available += amountKrw;
       }
       for (const bucket of plan.buckets) {
-        if (options.cryptoAssetIds?.[bucket.id] || options.requireSelection && !options.sellSymbols?.[bucket.id]) continue;
+        if (options.cryptoAssetIds?.[bucket.id] || cryptoChoice(bucket, "sell") || requiresExplicitSelection(bucket) && !options.sellSymbols?.[bucket.id]) continue;
         const current = values.get(bucket.id) ?? 0;
         const excess = current - (targetTotal * bucket.targetPercent) / 100;
         if (
@@ -443,7 +458,7 @@ export function rebalance(
     const selectedBuys: { bucket: Bucket; gap: number; rule: Rule; candidate: CandidateEvaluation }[] = [];
     // Select eligible candidates before any portfolio consumes the shared budget.
     for (const { bucket, gap } of deficits) {
-      const cryptoId = options.cryptoAssetIds?.[bucket.id];
+      const cryptoId = options.cryptoAssetIds?.[bucket.id] ?? cryptoChoice(bucket, "buy")?.id;
       if (cryptoId) {
         const asset = plan.cryptoAssets.find(asset => asset.id === cryptoId && asset.bucketId === bucket.id);
         if (!asset) addReason(bucket.id, "선택한 가상자산이 이 포트에 없습니다. 다시 선택하세요.");
@@ -452,7 +467,7 @@ export function rebalance(
         else selectedCryptoBuys.push({bucket,gap,asset});
         continue;
       }
-      if (options.requireSelection && !options.buyRuleIds?.[bucket.id]) continue;
+      if (requiresExplicitSelection(bucket) && !options.buyRuleIds?.[bucket.id]) continue;
       const selectedRuleId = options.buyRuleIds?.[bucket.id];
       const rules = plan.rules.filter((rule) => rule.bucketId === bucket.id && (!selectedRuleId || rule.id === selectedRuleId));
       if (available <= 0) {
@@ -598,7 +613,7 @@ export function rebalance(
     }
     const bucket = plan.buckets.find((item) => item.id === rule.bucketId);
     const fundedPercent = targetTotal > 0 ? (values.get(rule.bucketId) ?? 0) / targetTotal * 100 : 0;
-    candidate.reason = options.requireSelection && !options.buyRuleIds?.[rule.bucketId] ? "아직 선택하지 않은 매수 후보입니다." : !ready ? "자산 배정·가격 확인을 마친 뒤 계산합니다."
+    candidate.reason = bucket && requiresExplicitSelection(bucket) && !options.buyRuleIds?.[rule.bucketId] ? "아직 선택하지 않은 매수 후보입니다." : !ready ? "자산 배정·가격 확인을 마친 뒤 계산합니다."
       : bucket && !needsPortfolioAdjustment(plan, bucket.targetPercent, values.get(bucket.id) ?? 0, fundedPercent) ? "계산 기준 비중이 허용 오차 안에 있어 매수 대상이 아닙니다."
       : bucket && fundedPercent >= bucket.targetPercent ? "계산 기준 비중이 초과되어 추가 매수하지 않습니다."
       : trades.some((trade) => trade.side === "buy" && trade.bucketId === rule.bucketId) ? "앞선 우선 후보를 선택하여 이 후보는 사용하지 않았습니다."
@@ -645,7 +660,7 @@ export function rebalance(
       && !plan.cryptoAssets.some(asset => asset.bucketId === bucket.id)
       && !plan.rules.some(rule => rule.bucketId === bucket.id);
     const projectedPercent = projected.total > 0 ? projectedValue / projected.total * 100 : 0;
-    const amountAdjustment: AmountAdjustment | null = !options.requireSelection && ready && !impossibleWithoutSelling && directOnly && bucket.id !== cashBucket?.id ? {
+    const amountAdjustment: AmountAdjustment | null = !requiresExplicitSelection(bucket) && ready && !impossibleWithoutSelling && directOnly && bucket.id !== cashBucket?.id ? {
       direction: withinPortfolioTolerance(plan, bucket.targetPercent, projectedPercent) ? "hold" : remainingGapKrw > 0 ? "increase" : "decrease",
       amountKrw: withinPortfolioTolerance(plan, bucket.targetPercent, projectedPercent) ? 0 : Math.abs(remainingGapKrw),
       currentKrw: projectedValue,
@@ -690,7 +705,7 @@ export function rebalance(
     }
 
     if (cryptoTrades.some(trade => trade.bucketId === bucket.id)) advice = cryptoTrades.filter(trade => trade.bucketId === bucket.id).map(trade => `${trade.name} ${trade.quantity.toFixed(8)} ${trade.marketCode.replace("KRW-", "")} ${trade.side === "buy" ? "매수" : "매도"} · 약 ${fmt(trade.amountKrw)}`).join(" / ");
-    else if (options.requireSelection && !bucketTrades.length) {
+    else if (requiresExplicitSelection(bucket) && !bucketTrades.length) {
       advice = !selectedForBucket ? "제안 없음 · 조정할 종목을 선택하세요."
         : (reasons.get(bucket.id) ?? [mode === "add-only" && fundedGapPercent < 0 ? "신규 자금 모드에서는 매도하지 않습니다." : options.cryptoAssetIds?.[bucket.id] ? "목표 차이·보유 수량이 최소 계산 단위(0.00000001) 미만이거나 사용할 예산이 없습니다." : "목표 금액 차이가 1주 미만이거나 사용할 예산이 없습니다."]).join(" ");
     }

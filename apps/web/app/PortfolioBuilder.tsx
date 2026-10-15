@@ -1451,6 +1451,7 @@ export default function PortfolioBuilder({
             {
               cashBucketId,
               requireSelection: true,
+              autoOutsideTolerance: true,
               cryptoAssetIds,
               excludedBuySymbols: new Set(excludedBuySymbols),
               buyHoldingIds,
@@ -3018,7 +3019,7 @@ export default function PortfolioBuilder({
                     </tr>)}</tbody>
                   </table>
                 </details>
-                <p className={styles.help}>기본은 제안 없음입니다. 조정할 종목을 선택하면 목표 비중까지의 거래 수량을 계산합니다.</p>
+                <p className={styles.help}>허용 범위 밖은 자동으로 조정을 제안합니다. 범위 안은 제안 없이 유지하며, 종목을 직접 선택하면 목표 비중까지 계산합니다.</p>
                 <div className={styles.adviceList}>
                   {actionItems.map((item) => {
                     const bucketCrypto = draft.cryptoAssets.filter(asset => asset.bucketId === item.bucket.id);
@@ -3028,6 +3029,7 @@ export default function PortfolioBuilder({
                     const itemTrades = advice.trades.filter(
                       (trade) => trade.bucketId === item.bucket.id,
                     );
+                    const needsAdjustment = !withinPortfolioTolerance(draft, item.bucket.targetPercent, item.fundedPercent);
                     const bucketHasSelection = Boolean(buyRuleIds[item.bucket.id] || sellSymbols[item.bucket.id] || cryptoAssetIds[item.bucket.id]);
                     const hasBucketTrades = itemTrades.length > 0 || itemCryptoTrades.length > 0;
                     const resultLabel = hasBucketTrades ? "제안 후" : "계산 기준";
@@ -3056,7 +3058,7 @@ export default function PortfolioBuilder({
                                 ? "매수 제안"
                                 : action === "sell"
                                   ? "매도 제안"
-                                  : settlement ? Math.abs(settlement.projectedKrw - settlement.currentKrw) < 1 ? "현금 유지" : "현금 조정" : item.unaffordableBuys.length > 0 ? "매수 보류" : "제안 없음"}
+                                  : settlement ? Math.abs(settlement.projectedKrw - settlement.currentKrw) < 1 ? "현금 유지" : "현금 조정" : item.unaffordableBuys.length > 0 ? "매수 보류" : needsAdjustment ? item.fundedGapPercent > 0 ? "매수 필요" : rebalanceMode === "trade" ? "매도 필요" : "매도 안 함" : "제안 없음"}
                             </span>
                             {item.bucket.name}
                           </strong>
@@ -3074,7 +3076,7 @@ export default function PortfolioBuilder({
                             <label className={styles.proposalChoice}>
                               매수 종목
                               <select aria-label={`${item.bucket.name} 매수 종목`} value={cryptoAssetIds[item.bucket.id] ? `crypto:${cryptoAssetIds[item.bucket.id]}` : buyRuleIds[item.bucket.id] ?? ""} onChange={event => chooseAdjustment(item.bucket.id, "buy", event.target.value)}>
-                                <option value="">종목 선택 · 제안 없음</option>
+                                <option value="">{needsAdjustment ? "자동 선택" : "종목 선택 · 제안 없음"}</option>
                                 {buyRuleIds[item.bucket.id] && !bucketRules.some(rule => rule.id === buyRuleIds[item.bucket.id]) && <option value={buyRuleIds[item.bucket.id]}>선택한 후보가 변경됨 · 다시 선택</option>}
                                 {bucketRules.map(rule => <option key={rule.id} value={rule.id}>{rule.name || rule.symbol}{rule.market === "US" && rule.name ? ` (${rule.symbol})` : ""}</option>)}
                                 {bucketCrypto.map(asset => <option key={asset.id} value={`crypto:${asset.id}`}>{asset.name} ({asset.marketCode.replace("KRW-", "")})</option>)}
@@ -3085,7 +3087,7 @@ export default function PortfolioBuilder({
                             <label className={styles.proposalChoice}>
                               매도 종목
                               <select aria-label={`${item.bucket.name} 매도 종목`} value={cryptoAssetIds[item.bucket.id] ? `crypto:${cryptoAssetIds[item.bucket.id]}` : sellSymbols[item.bucket.id] ?? ""} onChange={event => chooseAdjustment(item.bucket.id, "sell", event.target.value)}>
-                                <option value="">종목 선택 · 제안 없음</option>
+                                <option value="">{needsAdjustment ? "자동 선택" : "종목 선택 · 제안 없음"}</option>
                                 {sellSymbols[item.bucket.id] && !sellChoices.some(([key]) => key === sellSymbols[item.bucket.id]) && <option value={sellSymbols[item.bucket.id]}>선택한 종목이 변경됨 · 다시 선택</option>}
                                 {sellChoices.map(([key,row]) => <option key={key} value={key}>{row.name || row.symbol}{row.market === "US" && row.name ? ` (${row.symbol})` : ""}</option>)}
                                 {bucketCrypto.map(asset => <option key={asset.id} value={`crypto:${asset.id}`}>{asset.name} ({asset.marketCode.replace("KRW-", "")})</option>)}
@@ -3160,7 +3162,7 @@ export default function PortfolioBuilder({
                               <ChevronRight size={17} aria-hidden="true" />
                             </button>)}
                           </div>
-                        ) : bucketHasSelection ? <p>{item.advice}</p> : null}
+                        ) : bucketHasSelection || needsAdjustment ? <p>{item.advice}</p> : null}
                         <div className={styles.tradeDetail}>
                           <details>
                             <summary>포트별 계산 상세</summary>

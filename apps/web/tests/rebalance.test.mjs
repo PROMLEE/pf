@@ -756,3 +756,55 @@ test("crypto selection includes added funding and settles selected cash exactly 
   close(r.targetTotal,1100);
   assertMatchesActual(r,p,rows);
 });
+
+const automaticBands = {requireSelection:true, autoOutsideTolerance:true};
+test("relative 1% gold band automatically proposes sales for a million-won excess", () => {
+  const rows=[holding("gold","GOLD",234,20000),holding("other","OTHER",68971620,1)];
+  const p=plan([["gold","A"],["other","B"]],[rule("GOLD","A",20000),rule("OTHER","B",1)],{
+    buckets:[{id:"A",name:"금",targetPercent:5,color:"#ca0"},{id:"B",name:"나머지",targetPercent:95,color:"#000"}],
+    toleranceMode:"relative",relativeTolerancePercent:1,
+  });
+  const r=rebalance(p,rows,"trade",0,new Set(),automaticBands);
+  close(r.targetTotal*0.05,3682581);
+  close(r.targetTotal*0.05*0.01,36825.81);
+  const sale=r.trades.find(t=>t.holdingId==="gold" && t.side==="sell");
+  assert.equal(sale.shares,49);
+  assert.ok(withinPortfolioTolerance(p,5,r.items.find(i=>i.bucket.id==="A").projectedPercent));
+  assertMatchesActual(r,p,rows);
+});
+test("automatic outside bands leaves in-band portfolios untouched until explicitly selected", () => {
+  const rows=[holding("a","A",51),holding("b","B",49)];
+  const p=plan([["a","A"],["b","B"]],[rule("A","A"),rule("B","B")],{toleranceMode:"relative",relativeTolerancePercent:5});
+  assert.equal(rebalance(p,rows,"trade",0,new Set(),automaticBands).trades.length,0);
+  const r=rebalance(p,rows,"trade",0,new Set(),{...automaticBands,sellSymbols:{A:"KR:A"},buyRuleIds:{B:"B"}});
+  assert.equal(r.trades.length,2);
+  assertMatchesActual(r,p,rows);
+});
+test("automatic bands use the funded total and never sell in add-only mode", () => {
+  const rows=[holding("a","A",50),holding("b","B",50)];
+  const p=plan([["a","A"],["b","B"]],[rule("A","A"),rule("B","B")],{toleranceMode:"relative",relativeTolerancePercent:1});
+  const r=rebalance(p,rows,"add-only",2000,new Set(),automaticBands);
+  assert.equal(r.trades.filter(t=>t.side==="sell").length,0);
+  assert.equal(r.trades.length,2);
+  assert.ok(r.items.every(i=>i.projectedPercent===50));
+  assertMatchesActual(r,p,rows);
+});
+test("automatic sales respect account exclusions and explicit stock overrides", () => {
+  const rows=[holding("a","A",70),holding("x","X",20),holding("b","B",10)];
+  const p=plan([["a","A"],["x","A"],["b","B"]],[rule("A","A"),rule("B","B")],{tolerancePercent:2});
+  const excluded=rebalance(p,rows,"trade",0,new Set(["a"]),automaticBands);
+  assert.ok(excluded.trades.every(t=>t.holdingId!=="a"));
+  const selected=rebalance(p,rows,"trade",0,new Set(),{...automaticBands,sellSymbols:{A:"KR:X"}});
+  assert.ok(selected.trades.filter(t=>t.side==="sell").every(t=>t.holdingId==="x"));
+  assertMatchesActual(selected,p,rows);
+  const stale=rebalance(p,rows,"trade",0,new Set(),{...automaticBands,cryptoAssetIds:{A:"removed-coin"}});
+  assert.equal(stale.trades.filter(t=>t.side==="sell").length,0);
+});
+test("automatic out-of-band crypto sales use fractional units and fund stock buys", () => {
+  const {rows,p}=coinPlan(2,0.000008);
+  const r=rebalance(p,rows,"trade",0,new Set(),automaticBands);
+  assert.equal(r.cryptoTrades[0].side,"sell");
+  close(r.cryptoTrades[0].quantity,0.000003);
+  assert.equal(r.trades.find(t=>t.side==="buy").shares,3);
+  assertMatchesActual(r,p,rows);
+});
