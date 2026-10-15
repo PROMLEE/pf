@@ -75,7 +75,7 @@ const plan = (rows, rules, other = {}) => ({
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 function assertMatchesActual(result, p, original) {
   const rows = original.map((row) => ({ ...row }));
-  const updatedPlan = { ...p, assignments: [...p.assignments], manualAssets: p.manualAssets.map(asset => ({...asset})) };
+  const updatedPlan = { ...p, assignments: [...p.assignments], manualAssets: p.manualAssets.map(asset => ({...asset})), cryptoAssets:p.cryptoAssets.map(asset=>({...asset})) };
   for (const trade of result.trades) {
     if (trade.holdingId)
       rows.find((row) => row.id === trade.holdingId).quantity +=
@@ -92,6 +92,10 @@ function assertMatchesActual(result, p, original) {
         source: "manual",
       });
     }
+  }
+  for (const trade of result.cryptoTrades ?? []) {
+    const asset = updatedPlan.cryptoAssets.find(asset=>asset.id===trade.assetId);
+    asset.quantity += trade.side === "buy" ? trade.quantity : -trade.quantity;
   }
   if (result.cashAllocation) {
     const selected = updatedPlan.manualAssets.filter(asset => asset.bucketId === result.cashAllocation.bucketId);
@@ -111,7 +115,7 @@ function assertMatchesActual(result, p, original) {
     );
   close(actual.total, result.targetTotal);
   close(actual.unassigned, result.cashAllocation ? 0 : result.residualCash);
-  close(result.buyBudget, result.newCash + (result.cashAllocation?.usedFromCash ?? 0) - (result.cashAllocation?.reservedCash ?? 0) + result.trades.filter((trade) => trade.side === "sell").reduce((sum, trade) => sum + trade.amountKrw, 0));
+  close(result.buyBudget, result.newCash + (result.cashAllocation?.usedFromCash ?? 0) - (result.cashAllocation?.reservedCash ?? 0) + [...result.trades, ...(result.cryptoTrades ?? [])].filter((trade) => trade.side === "sell").reduce((sum, trade) => sum + trade.amountKrw, 0));
 }
 
 test("direct assignment conflict blocks a buy into a different portfolio", () => {
@@ -660,4 +664,95 @@ test("relative cash band does not trigger trades when all portfolios are already
   assert.equal(result.trades.length,0);
   assert.equal(result.cashAllocation.projectedKrw,190);
   assertMatchesActual(result,p,rows);
+});
+
+
+test("selection-only starts with no proposals even outside tolerance or with added funding", () => {
+  const rows=[holding("a","A",9),holding("b","B",1)];
+  const p=plan([["a","A"],["b","B"]],[rule("A","A"),rule("B","B")],{tolerancePercent:2});
+  for(const cash of [0,1000]) {
+    const r=rebalance(p,rows,"trade",cash,new Set(),{requireSelection:true});
+    assert.equal(r.trades.length,0);assert.equal(r.cryptoTrades.length,0);
+    assert.ok(r.items.every(i=>i.advice.startsWith("제안 없음")));
+    assertMatchesActual(r,p,rows);
+  }
+});
+
+test("within-tolerance portfolios only move when the user explicitly selects each security", () => {
+  const rows=[holding("a","A",51),holding("b","B",49)];
+  const p=plan([["a","A"],["b","B"]],[rule("A","A"),rule("B","B")],{tolerancePercent:2});
+  const none=rebalance(p,rows,"trade",0,new Set(),{requireSelection:true});
+  assert.equal(none.trades.length,0);
+  const selected=rebalance(p,rows,"trade",0,new Set(),{requireSelection:true,sellSymbols:{A:"KR:A"},buyRuleIds:{B:"B"}});
+  assert.equal(selected.trades.find(t=>t.side==="sell").shares,1);
+  assert.equal(selected.trades.find(t=>t.side==="buy").shares,1);
+  assert.ok(selected.items.every(i=>i.projectedPercent===50));
+  assertMatchesActual(selected,p,rows);
+});
+
+const coin = (quantity, bucketId="B") => ({id:"btc",bucketId,marketCode:"KRW-BTC",name:"비트코인",quantity,averageCostKrw:90000000,quotedPriceKrw:100000000,quoteCheckedAt:"2026-10-16T00:00:00Z",lastTradeAt:null});
+const coinPlan = (stockShares, coinQuantity) => {
+  const rows=[holding("a","A",stockShares)];
+  const p=plan([["a","A"]],[rule("A","A")],{cryptoAssets:[coin(coinQuantity)],tolerancePercent:2});
+  return {rows,p};
+};
+test("bitcoin fractional buys share stock sale proceeds and reproduce final portfolio values", () => {
+  const {rows,p}=coinPlan(8,0.000002);
+  const r=rebalance(p,rows,"trade",0,new Set(),{requireSelection:true,sellSymbols:{A:"KR:A"},cryptoAssetIds:{B:"btc"}});
+  assert.equal(r.trades[0].shares,3);
+  assert.equal(r.cryptoTrades[0].side,"buy");
+  close(r.cryptoTrades[0].quantity,0.000003);
+  close(r.cryptoTrades[0].amountKrw,300);
+  assertMatchesActual(r,p,rows);
+});
+test("bitcoin fractional sales fund only explicitly selected stock purchases", () => {
+  const {rows,p}=coinPlan(2,0.000008);
+  const r=rebalance(p,rows,"trade",0,new Set(),{requireSelection:true,buyRuleIds:{A:"A"},cryptoAssetIds:{B:"btc"}});
+  assert.equal(r.cryptoTrades[0].side,"sell");
+  close(r.cryptoTrades[0].quantity,0.000003);
+  assert.equal(r.trades[0].shares,3);
+  assertMatchesActual(r,p,rows);
+  const noStock=rebalance(p,rows,"trade",0,new Set(),{requireSelection:true,cryptoAssetIds:{B:"btc"}});
+  assert.equal(noStock.trades.length,0);
+  close(noStock.residualCash,300);
+  assertMatchesActual(noStock,p,rows);
+});
+test("crypto can buy less than one coin with added funds and never sells in add-only mode", () => {
+  const {rows,p}=coinPlan(8,0.000002);
+  const r=rebalance(p,rows,"add-only",10,new Set(),{requireSelection:true,cryptoAssetIds:{B:"btc"}});
+  assert.equal(r.cryptoTrades.length,1);
+  close(r.cryptoTrades[0].quantity,0.0000001);
+  assert.ok(r.cryptoTrades[0].amountKrw<=10);
+  assertMatchesActual(r,p,rows);
+  const sell=coinPlan(2,0.000008);
+  assert.equal(rebalance(sell.p,sell.rows,"add-only",0,new Set(),{requireSelection:true,cryptoAssetIds:{B:"btc"}}).cryptoTrades.length,0);
+});
+test("unselected, stale and wrong-portfolio crypto IDs never modify projections", () => {
+  const {rows,p}=coinPlan(2,0.000008);
+  for(const options of [{},{cryptoAssetIds:{B:"missing"}},{cryptoAssetIds:{A:"btc"}}]) {
+    const r=rebalance(p,rows,"trade",100,new Set(),{requireSelection:true,...options});
+    assert.equal(r.cryptoTrades.length,0);assert.equal(r.trades.length,0);
+    assertMatchesActual(r,p,rows);
+  }
+});
+
+
+test("fractional crypto sells never round up beyond an existing sub-satoshi balance", () => {
+  const {rows,p}=coinPlan(10,0.0000000099999999);
+  p.buckets[0].targetPercent=100;p.buckets[1].targetPercent=0;
+  const r=rebalance(p,rows,"trade",0,new Set(),{requireSelection:true,cryptoAssetIds:{B:"btc"}});
+  assert.equal(r.cryptoTrades.length,0);
+  assertMatchesActual(r,p,rows);
+});
+
+test("crypto selection includes added funding and settles selected cash exactly once", () => {
+  const {rows,p}=coinPlan(6,0.000002);
+  p.buckets=[{id:"A",name:"주식",targetPercent:40,color:"#000"},{id:"B",name:"코인",targetPercent:40,color:"#111"},{id:"C",name:"현금",targetPercent:20,color:"#222"}];
+  p.manualAssets=[{id:"cash",bucketId:"C",name:"현금",valueKrw:200,valueUsd:null}];
+  const r=rebalance(p,rows,"trade",100,new Set(),{requireSelection:true,cashBucketId:"C",sellSymbols:{A:"KR:A"},cryptoAssetIds:{B:"btc"}});
+  assert.equal(r.trades.find(t=>t.side==="sell").shares,1);
+  close(r.cryptoTrades[0].quantity,0.0000018);
+  close(r.cashAllocation.projectedKrw,220);
+  close(r.targetTotal,1100);
+  assertMatchesActual(r,p,rows);
 });

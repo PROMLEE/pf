@@ -721,13 +721,17 @@ export default function PortfolioBuilder({
   const [budgetMode, setBudgetMode] = useState<"input" | "theoretical">(
     "input",
   );
-  const [candidatePolicy, setCandidatePolicy] = useState<
-    "priority" | "fallback"
-  >("priority");
   const [excludedBuySymbols, setExcludedBuySymbols] = useState<string[]>([]);
   const [buyRuleIds, setBuyRuleIds] = useState<Record<string, string>>({});
   const [sellSymbols, setSellSymbols] = useState<Record<string, string>>({});
-  useEffect(() => { setBuyRuleIds({}); setSellSymbols({}); }, [userId]);
+  const [cryptoAssetIds, setCryptoAssetIds] = useState<Record<string, string>>({});
+  useEffect(() => { setBuyRuleIds({}); setSellSymbols({}); setCryptoAssetIds({}); }, [userId]);
+  function chooseAdjustment(bucketId: string, side: "buy" | "sell", value: string) {
+    const crypto = value.startsWith("crypto:");
+    setCryptoAssetIds(current => ({...current, [bucketId]:crypto ? value.slice(7) : ""}));
+    setBuyRuleIds(current => ({...current, [bucketId]:side === "buy" && !crypto ? value : ""}));
+    setSellSymbols(current => ({...current, [bucketId]:side === "sell" && !crypto ? value : ""}));
+  }
   const [buyHoldingIds, setBuyHoldingIds] = useState<Record<string, string>>(
     {},
   );
@@ -1446,7 +1450,8 @@ export default function PortfolioBuilder({
             new Set(excludedHoldingIds),
             {
               cashBucketId,
-              candidatePolicy,
+              requireSelection: true,
+              cryptoAssetIds,
               excludedBuySymbols: new Set(excludedBuySymbols),
               buyHoldingIds,
               buyRuleIds,
@@ -1456,6 +1461,7 @@ export default function PortfolioBuilder({
         : {
             items: [],
             trades: [],
+            cryptoTrades: [],
             requiredCash: 0,
             residualCash: 0,
             newCash: 0,
@@ -1474,12 +1480,12 @@ export default function PortfolioBuilder({
       cashInput,
       budgetMode,
       excludedHoldingIds,
-      candidatePolicy,
       cashBucketId,
       excludedBuySymbols,
       buyHoldingIds,
       buyRuleIds,
       sellSymbols,
+      cryptoAssetIds,
     ],
   );
   const rebalanceReady = Boolean(
@@ -2869,7 +2875,7 @@ export default function PortfolioBuilder({
               ? "현금 목표액을 남기고 초과분은 매수에 사용합니다. 부족분은 추가 투입금·매도 대금으로 채웁니다."
               : "현금·RP 등 직접 입력 자산으로만 구성된 포트를 선택하면, 거래 후 현금 비중도 함께 계산합니다."}</p>
             <details className={styles.rebalanceOptions}>
-              <summary>계산 옵션 · 후보 선택과 거래 제외 <ChevronDown size={14} /></summary>
+              <summary>계산 옵션 · 예산과 거래 제외 <ChevronDown size={14} /></summary>
               {rebalanceMode === "add-only" && (
                 <label className={styles.cashBudget}>
                   예산 기준
@@ -2888,25 +2894,6 @@ export default function PortfolioBuilder({
                   </select>
                 </label>
               )}
-            <label className={styles.cashBudget}>
-              후보 선택
-              <select
-                value={candidatePolicy}
-                onChange={(event) =>
-                  setCandidatePolicy(
-                    event.target.value as "priority" | "fallback",
-                  )
-                }
-              >
-                <option value="priority">첫 번째 후보만 검토</option>
-                <option value="fallback">
-                  다른 후보도 검토
-                </option>
-              </select>
-            </label>
-            <p className={styles.help}>
-              첫 번째 후보를 살 수 없을 때 다른 후보를 검토할지 선택하세요. 후보 목록과 순서는 화면 아래에서 관리합니다.
-            </p>
             <details className={styles.exclusions}>
               <summary>
                 계좌별 매도 제외 {excludedHoldingIds.length}개{" "}
@@ -2987,20 +2974,20 @@ export default function PortfolioBuilder({
             ) : (
               <>
                 <p className={`${styles.rebalanceStatus} ${styles.finalResultStatus}`}>
-                  모든 제안과 현금 잔액 반영 후, {advice.items.length}개 중 {inRangeCount}개 포트가 허용 범위 이내입니다.
+                  선택한 제안과 현금 잔액 반영 후, {advice.items.length}개 중 {inRangeCount}개 포트가 허용 범위 이내입니다.
                   {inRangeCount < advice.items.length && " 나머지 포트는 아래의 제안 후 전체 비중에서 확인하세요."}
                 </p>
                 <div className={styles.previewSummary}>
-                  <strong>주식 조정 제안 · 거래 전</strong>
+                  <strong>선택한 종목 조정 제안 · 거래 전</strong>
                   <span>
                     제안{" "}
                     {
-                      advice.trades.filter((trade) => trade.side === "buy")
+                      [...advice.trades, ...advice.cryptoTrades].filter((trade) => trade.side === "buy")
                         .length
                     }
                     건 매수 ·{" "}
                     {
-                      advice.trades.filter((trade) => trade.side === "sell")
+                      [...advice.trades, ...advice.cryptoTrades].filter((trade) => trade.side === "sell")
                         .length
                     }
                     건 매도
@@ -3015,7 +3002,7 @@ export default function PortfolioBuilder({
                 <details className={styles.finalWeights}>
                   <summary>제안 후 전체 포트 비중 확인 <ChevronDown size={14} /></summary>
                   <table>
-                    <caption>모든 주식 거래·추가 투입금·현금 잔액을 반영한 예상 비중</caption>
+                    <caption>선택한 주식·가상자산 거래와 추가 투입금·현금 잔액을 반영한 예상 비중</caption>
                     <thead><tr><th>포트</th><th>목표</th><th>제안 후</th><th>허용 범위</th></tr></thead>
                     <tbody>{advice.items.map(item => <tr key={item.bucket.id}>
                       <th scope="row">{item.bucket.name}</th>
@@ -3025,20 +3012,26 @@ export default function PortfolioBuilder({
                     </tr>)}</tbody>
                   </table>
                 </details>
+                <p className={styles.help}>기본은 제안 없음입니다. 조정할 종목을 선택하면 목표 비중까지의 거래 수량을 계산합니다.</p>
                 <div className={styles.adviceList}>
                   {actionItems.map((item) => {
+                    const bucketCrypto = draft.cryptoAssets.filter(asset => asset.bucketId === item.bucket.id);
+                    const itemCryptoTrades = advice.cryptoTrades.filter(trade => trade.bucketId === item.bucket.id);
                     const bucketRules = draft.rules.filter(rule => rule.bucketId === item.bucket.id);
                     const sellChoices = [...new Map(holdings.filter(row => holdingBucketId(draft, row) === item.bucket.id).map(row => [symbolKey(row.market, row.symbol || row.name), row])).entries()];
                     const itemTrades = advice.trades.filter(
                       (trade) => trade.bucketId === item.bucket.id,
                     );
+                    const bucketHasSelection = Boolean(buyRuleIds[item.bucket.id] || sellSymbols[item.bucket.id] || cryptoAssetIds[item.bucket.id]);
+                    const hasBucketTrades = itemTrades.length > 0 || itemCryptoTrades.length > 0;
+                    const resultLabel = hasBucketTrades ? "제안 후" : "계산 기준";
                     const amount = item.amountAdjustment;
                     const settlement = item.cashSettlement;
-                    const action = amount ? amount.direction === "increase" ? "add" : amount.direction === "decrease" ? "sell" : "hold" : itemTrades.some(
+                    const action = amount ? amount.direction === "increase" ? "add" : amount.direction === "decrease" ? "sell" : "hold" : [...itemTrades, ...itemCryptoTrades].some(
                       (trade) => trade.side === "buy",
                     )
                       ? "add"
-                      : itemTrades.some((trade) => trade.side === "sell")
+                      : [...itemTrades, ...itemCryptoTrades].some((trade) => trade.side === "sell")
                         ? "sell"
                         : "hold";
                     return (
@@ -3062,32 +3055,34 @@ export default function PortfolioBuilder({
                             {item.bucket.name}
                           </strong>
                           <small className={styles.fundedWeight}>
-                            {amount ? `현재 ${pct(item.currentPercent)} · 목표 ${pct(item.bucket.targetPercent)}` : `현재 ${pct(item.currentPercent)} → 제안 후 ${pct(item.projectedPercent)}`}
+                            {amount ? `현재 ${pct(item.currentPercent)} · 목표 ${pct(item.bucket.targetPercent)}` : hasBucketTrades ? `현재 ${pct(item.currentPercent)} → 제안 후 ${pct(item.projectedPercent)}` : `현재 ${pct(item.currentPercent)}${advice.newCash > 0 ? ` · 자금 반영 ${pct(item.fundedPercent)}` : ""}`}
                           </small>
                           {!amount && <small className={styles.targetWeight}>
                             목표 {pct(item.bucket.targetPercent)} · {withinPortfolioTolerance(draft, item.bucket.targetPercent, item.projectedPercent)
-                              ? "제안 후 허용 범위 이내"
+                              ? `${resultLabel} 허용 범위 이내`
                               : draft.toleranceMode === "relative"
-                                ? `제안 후 ${item.remainingGapKrw > 0 ? "부족" : "초과"} ${fmt(Math.abs(item.remainingGapKrw))}`
-                                : `제안 후 ${item.projectedPercent < item.bucket.targetPercent ? "부족" : "초과"} ${Math.abs(item.projectedPercent - item.bucket.targetPercent).toFixed(1)}%p`}
+                                ? `${resultLabel} ${item.remainingGapKrw > 0 ? "부족" : "초과"} ${fmt(Math.abs(item.remainingGapKrw))}`
+                                : `${resultLabel} ${item.projectedPercent < item.bucket.targetPercent ? "부족" : "초과"} ${Math.abs(item.projectedPercent - item.bucket.targetPercent).toFixed(1)}%p`}
                           </small>}
-                          {bucketRules.length > 0 && item.fundedGapPercent > 0 && (
+                          {(bucketRules.length > 0 || bucketCrypto.length > 0) && item.fundedGapPercent > 1e-9 && (
                             <label className={styles.proposalChoice}>
                               매수 종목
-                              <select aria-label={`${item.bucket.name} 매수 종목`} value={buyRuleIds[item.bucket.id] ?? ""} onChange={event => setBuyRuleIds(current => ({...current, [item.bucket.id]: event.target.value}))}>
-                                <option value="">자동 선택 · 후보 설정 사용</option>
+                              <select aria-label={`${item.bucket.name} 매수 종목`} value={cryptoAssetIds[item.bucket.id] ? `crypto:${cryptoAssetIds[item.bucket.id]}` : buyRuleIds[item.bucket.id] ?? ""} onChange={event => chooseAdjustment(item.bucket.id, "buy", event.target.value)}>
+                                <option value="">종목 선택 · 제안 없음</option>
                                 {buyRuleIds[item.bucket.id] && !bucketRules.some(rule => rule.id === buyRuleIds[item.bucket.id]) && <option value={buyRuleIds[item.bucket.id]}>선택한 후보가 변경됨 · 다시 선택</option>}
                                 {bucketRules.map(rule => <option key={rule.id} value={rule.id}>{rule.name || rule.symbol}{rule.market === "US" && rule.name ? ` (${rule.symbol})` : ""}</option>)}
+                                {bucketCrypto.map(asset => <option key={asset.id} value={`crypto:${asset.id}`}>{asset.name} ({asset.marketCode.replace("KRW-", "")})</option>)}
                               </select>
                             </label>
                           )}
-                          {rebalanceMode === "trade" && item.currentPercent > item.bucket.targetPercent && sellChoices.length > 0 && (
+                          {rebalanceMode === "trade" && item.fundedGapPercent < -1e-9 && (sellChoices.length > 0 || bucketCrypto.length > 0) && (
                             <label className={styles.proposalChoice}>
                               매도 종목
-                              <select aria-label={`${item.bucket.name} 매도 종목`} value={sellSymbols[item.bucket.id] ?? ""} onChange={event => setSellSymbols(current => ({...current, [item.bucket.id]: event.target.value}))}>
-                                <option value="">자동 선택 · 평가액 높은순</option>
+                              <select aria-label={`${item.bucket.name} 매도 종목`} value={cryptoAssetIds[item.bucket.id] ? `crypto:${cryptoAssetIds[item.bucket.id]}` : sellSymbols[item.bucket.id] ?? ""} onChange={event => chooseAdjustment(item.bucket.id, "sell", event.target.value)}>
+                                <option value="">종목 선택 · 제안 없음</option>
                                 {sellSymbols[item.bucket.id] && !sellChoices.some(([key]) => key === sellSymbols[item.bucket.id]) && <option value={sellSymbols[item.bucket.id]}>선택한 종목이 변경됨 · 다시 선택</option>}
                                 {sellChoices.map(([key,row]) => <option key={key} value={key}>{row.name || row.symbol}{row.market === "US" && row.name ? ` (${row.symbol})` : ""}</option>)}
+                                {bucketCrypto.map(asset => <option key={asset.id} value={`crypto:${asset.id}`}>{asset.name} ({asset.marketCode.replace("KRW-", "")})</option>)}
                               </select>
                             </label>
                           )}
@@ -3124,14 +3119,9 @@ export default function PortfolioBuilder({
                                 ? "목표 비중에 맞춰 계산한 한도입니다. 입력한 전체 투자금과 다릅니다."
                                 : "현재 남아 있는 매수 예산을 기준으로 계산한 한도입니다."}
                             </small>
-                            {candidatePolicy === "priority" && !buyRuleIds[item.bucket.id] && bucketRules.length > 1 && (
-                              <div>
-                                <button type="button" onClick={() => setCandidatePolicy("fallback")}>다른 후보도 검토하기</button>
-                                <small>모든 포트의 후보 검토 방식이 함께 바뀝니다.</small>
-                              </div>
-                            )}
+
                           </div>
-                        ) : itemTrades.length > 0 ? (
+                        ) : hasBucketTrades ? (
                           <div className={styles.proposalTrades}>
                             {itemTrades.map((trade, index) => {
                               const owned = holdings.find(row => row.id === trade.holdingId);
@@ -3157,8 +3147,14 @@ export default function PortfolioBuilder({
                                 <ChevronRight size={17} aria-hidden="true" />
                               </button>;
                             })}
+                            {itemCryptoTrades.map(trade => <button type="button" key={`${trade.assetId}:${trade.side}`} className={styles.proposalTrade} aria-label={`${trade.name} 보유 자산 상세`} onClick={() => onSelectAsset({kind:"crypto", id:`crypto:${trade.assetId}`})}>
+                              <AssetIcon kind="crypto" symbol={trade.marketCode} name={trade.name} />
+                              <span className={styles.proposalSecurity}><strong>{trade.name}</strong><small>{trade.marketCode.replace("KRW-", "")}</small></span>
+                              <span className={`${styles.proposalOrder} ${trade.side === "buy" ? styles.proposalBuy : styles.proposalSell}`}><strong>{trade.quantity.toFixed(8)} {trade.marketCode.replace("KRW-", "")} {trade.side === "buy" ? "매수" : "매도"}</strong><small>약 {fmt(trade.amountKrw)}</small></span>
+                              <ChevronRight size={17} aria-hidden="true" />
+                            </button>)}
                           </div>
-                        ) : <p>{item.advice}</p>}
+                        ) : bucketHasSelection ? <p>{item.advice}</p> : null}
                         <div className={styles.tradeDetail}>
                           <details>
                             <summary>포트별 계산 상세</summary>
@@ -3217,19 +3213,19 @@ export default function PortfolioBuilder({
             <div className={styles.previewSummary} aria-label="이번 계산 기준">
               <span>현재 자산 {fmt(advice.currentTotal)}</span>
               <span>
-                주식 매수 가능 예산{" "}
+                이번 매수 가능 예산{" "}
                 {fmt(advice.buyBudget)}
               </span>
               <span>추가 투입금 {fmt(advice.newCash)}</span>
               <span>계산 기준 총액 {fmt(advice.targetTotal)}</span>
             </div>
             <p className={styles.help}>
-              예상 수량은 1주 단위이며 수수료·세금·환전 비용은 포함하지
+              주식은 1주, 가상자산은 소수점 8자리 단위로 계산하며 수수료·세금·환전 비용은 포함하지
               않습니다. {rebalanceMode === "trade" && "매도 대금을 계좌 간 이동할 수 있다고 가정하므로 계좌별 주문 가능 금액·결제일을 별도로 확인하세요. "}
-              {rebalanceMode === "trade" ? "매도 제외는 해당 보유 항목에만 적용하며 추가 매수에는 영향을 주지 않습니다." : advice.cashAllocation ? "주식은 매도하지 않으며 추가 투입금과 현금 초과분으로 매수합니다." : "입력한 추가 자금으로만 매수 수량을 계산합니다. 기존 현금 잔고는 자동 포함하지 않습니다."}
+              {rebalanceMode === "trade" ? "주식 매도 제외는 해당 보유 항목에만 적용하며 추가 매수에는 영향을 주지 않습니다." : advice.cashAllocation ? "매도 없이 추가 투입금과 현금 초과분으로 매수합니다." : "입력한 추가 자금으로만 매수 수량을 계산합니다. 기존 현금 잔고는 자동 포함하지 않습니다."}
             </p>
                 <p className={styles.help}>
-                  {advice.cashAllocation ? "남은 거래 자금은 선택한 현금 포트에 반영합니다. 다른 직접 입력 자산과 가상자산은 유지합니다." : "가상자산·직접 입력 자산의 거래는 별도 검토합니다. 잔여 자금은 미배정으로 총액에 포함합니다."} 제안 확인 →
+                  {advice.cashAllocation ? "남은 거래 자금은 선택한 현금 포트에 반영합니다. 선택하지 않은 자산은 유지합니다." : "직접 입력 자산의 거래는 별도 검토합니다. 잔여 자금은 미배정으로 총액에 포함합니다."} 제안 확인 →
                   증권사·거래소에서 직접 거래 → 실제 잔고 수정 순서로
                   반영하세요.
                 </p>
