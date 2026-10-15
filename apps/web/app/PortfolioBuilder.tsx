@@ -2966,9 +2966,6 @@ export default function PortfolioBuilder({
             <p className={styles.methodNote}>
               <span>{rebalanceMode === "trade" ? "매도 후 매수" : "신규 자금으로 매수"}</span>
               {draft.toleranceMode === "relative" ? `목표 금액 대비 ±${(draft.relativeTolerancePercent ?? 10).toFixed(1)}%` : `전체 비중 ±${draft.tolerancePercent.toFixed(1)}%p`}
-              {rebalanceMode === "add-only" && budgetMode === "theoretical" && advice.requiredCash > 0
-                ? ` · 목표 비중까지 이론상 필요한 신규 자금 약 ${fmt(advice.requiredCash)}`
-                : ""}
             </p>
             <>
                 {(rebalanceMode === "trade" || budgetMode === "input") && (
@@ -2984,11 +2981,8 @@ export default function PortfolioBuilder({
                     />
                   </label>
                 )}
-                <p className={styles.help}>
-                  {rebalanceMode === "add-only" && budgetMode === "theoretical"
-                    ? "현재 비중에서 매도 없이 목표 비중에 도달하기 위한 계산 예산입니다. 적정 투자금 추천이 아닙니다."
-                    : rebalanceMode === "trade" ? advice.cashAllocation ? "추가 투입금·매도 대금·현금 초과분으로 계산합니다. 빈칸은 추가 투입 0원입니다." : "추가 투입금 + 매도 대금 안에서 매수합니다. 빈칸은 추가 투입 0원입니다." : advice.cashAllocation ? "추가 투입금과 선택한 현금 포트의 초과분으로 매수합니다." : "입력한 추가 자금으로만 계산합니다. 기존 현금은 자동 포함하지 않습니다."}
-                </p>
+                {rebalanceMode === "add-only" && budgetMode === "theoretical" && <p className={styles.theoreticalBudget}>이론상 추가금 <strong>{fmt(advice.newCash)}</strong></p>}
+
             </>
             {!rebalanceReady ? (
               <div className={styles.rebalanceStatus}>
@@ -3010,34 +3004,31 @@ export default function PortfolioBuilder({
               </div>
             ) : (
               <>
-                <p className={`${styles.rebalanceStatus} ${styles.finalResultStatus}`}>
-                  선택한 제안과 현금 잔액 반영 후, {advice.items.length}개 중 {inRangeCount}개 포트가 허용 범위 이내입니다.
-                  {inRangeCount < advice.items.length && " 나머지 포트는 아래의 제안 후 전체 비중에서 확인하세요."}
-                </p>
-                <div className={styles.previewSummary}>
-                  <strong>선택한 종목 조정 제안 · 거래 전</strong>
-                  <span>
-                    제안{" "}
+                <div className={styles.rebalanceOverview}>
+                  <strong>
+                    매수{" "}
                     {
                       [...advice.trades, ...advice.cryptoTrades].filter((trade) => trade.side === "buy")
                         .length
                     }
-                    건 매수 ·{" "}
+                    건 · 매도{" "}
                     {
                       [...advice.trades, ...advice.cryptoTrades].filter((trade) => trade.side === "sell")
                         .length
                     }
-                    건 매도
-                  </span>
-                  <span>
+                    건
+                  </strong>
+                  <span>제안 후 범위 이내 {inRangeCount}/{advice.items.length}</span>
+                  <span className={styles.rebalanceCashResult}>
                     {advice.cashAllocation ? `거래 후 ${draft.buckets.find(bucket => bucket.id === advice.cashAllocation?.bucketId)?.name ?? "현금"} ${fmt(advice.cashAllocation.projectedKrw)}` : `매수 후 남는 금액 ${fmt(advice.residualCash)}`}
                     {advice.projectedUnassignedPercent > 0
                       ? ` · 전체의 ${pct(advice.projectedUnassignedPercent)}`
                       : ""}
                   </span>
                 </div>
+                <div className={styles.rebalanceDisclosures}>
                 <details className={styles.finalWeights}>
-                  <summary>제안 후 전체 포트 비중 확인 <ChevronDown size={14} /></summary>
+                  <summary>포트별 예상 비중 <ChevronDown size={14} /></summary>
                   <table>
                     <caption>선택한 주식·가상자산 거래와 추가 투입금·현금 잔액을 반영한 예상 비중</caption>
                     <thead><tr><th>포트</th><th>목표</th><th>제안 후</th><th>허용 범위</th></tr></thead>
@@ -3049,11 +3040,40 @@ export default function PortfolioBuilder({
                     </tr>)}</tbody>
                   </table>
                 </details>
+                <details className={styles.calculationNotes}>
+                  <summary>계산 안내 <ChevronDown size={14} /></summary>
+                <p className={styles.help}>
+                  {rebalanceMode === "add-only" && budgetMode === "theoretical"
+                    ? "현재 비중에서 매도 없이 목표 비중에 도달하기 위한 계산 예산입니다. 적정 투자금 추천이 아닙니다."
+                    : rebalanceMode === "trade" ? advice.cashAllocation ? "추가 투입금·매도 대금·현금 초과분으로 계산합니다. 빈칸은 추가 투입 0원입니다." : "추가 투입금 + 매도 대금 안에서 매수합니다. 빈칸은 추가 투입 0원입니다." : advice.cashAllocation ? "추가 투입금과 선택한 현금 포트의 초과분으로 매수합니다." : "입력한 추가 자금으로만 계산합니다. 기존 현금은 자동 포함하지 않습니다."}
+                </p>
                 <p className={styles.help}>{marketSession?.preferredMarket
                   ? `${marketSession.preferredMarket === "KR" ? "국내" : "미국"} 정규장 우선 · 같은 포트의 자동 후보에 적용됩니다. 직접 고른 종목은 유지합니다.`
                   : marketSession ? marketSession.KR.status === "unknown" || marketSession.US.status === "unknown" ? "장 일정 미확인 · 기존 후보 순서로 계산합니다." : "정규장 외 · 기존 후보 순서로 계산합니다."
                   : "장 일정 확인 전 · 기존 후보 순서로 계산합니다."}</p>
                 <p className={styles.help}>허용 범위 밖은 자동으로 조정을 제안합니다. 범위 안은 제안 없이 유지하며, 종목을 직접 선택하면 목표 비중까지 계산합니다.</p>
+
+            <div className={styles.previewSummary} aria-label="이번 계산 기준">
+              <span>현재 자산 {fmt(advice.currentTotal)}</span>
+              <span>
+                이번 매수 가능 예산{" "}
+                {fmt(advice.buyBudget)}
+              </span>
+              <span>추가 투입금 {fmt(advice.newCash)}</span>
+              <span>계산 기준 총액 {fmt(advice.targetTotal)}</span>
+            </div>
+            <p className={styles.help}>
+              주식은 1주, 가상자산은 소수점 8자리 단위로 계산하며 수수료·세금·환전 비용은 포함하지
+              않습니다. {rebalanceMode === "trade" && "매도 대금을 계좌 간 이동할 수 있다고 가정하므로 계좌별 주문 가능 금액·결제일을 별도로 확인하세요. "}
+              {rebalanceMode === "trade" && "주식 매도 제외는 해당 보유 항목에만 적용하며 추가 매수에는 영향을 주지 않습니다."}
+            </p>
+                <p className={styles.help}>
+                  {advice.cashAllocation ? "남은 거래 자금은 선택한 현금 포트에 반영합니다. 선택하지 않은 자산은 유지합니다." : "직접 입력 자산의 거래는 별도 검토합니다. 잔여 자금은 미배정으로 총액에 포함합니다."} 제안 확인 →
+                  증권사·거래소에서 직접 거래 → 실제 잔고 수정 순서로
+                  반영하세요.
+                </p>
+                </details>
+                </div>
                 <div className={styles.adviceList}>
                   {actionItems.map((item) => {
                     const bucketCrypto = draft.cryptoAssets.filter(asset => asset.bucketId === item.bucket.id);
@@ -3248,28 +3268,7 @@ export default function PortfolioBuilder({
                     );
                   })}
                 </div>
-                <details className={styles.calculationNotes}>
-                  <summary>계산 기준과 포함되지 않은 자산</summary>
-            <div className={styles.previewSummary} aria-label="이번 계산 기준">
-              <span>현재 자산 {fmt(advice.currentTotal)}</span>
-              <span>
-                이번 매수 가능 예산{" "}
-                {fmt(advice.buyBudget)}
-              </span>
-              <span>추가 투입금 {fmt(advice.newCash)}</span>
-              <span>계산 기준 총액 {fmt(advice.targetTotal)}</span>
-            </div>
-            <p className={styles.help}>
-              주식은 1주, 가상자산은 소수점 8자리 단위로 계산하며 수수료·세금·환전 비용은 포함하지
-              않습니다. {rebalanceMode === "trade" && "매도 대금을 계좌 간 이동할 수 있다고 가정하므로 계좌별 주문 가능 금액·결제일을 별도로 확인하세요. "}
-              {rebalanceMode === "trade" ? "주식 매도 제외는 해당 보유 항목에만 적용하며 추가 매수에는 영향을 주지 않습니다." : advice.cashAllocation ? "매도 없이 추가 투입금과 현금 초과분으로 매수합니다." : "입력한 추가 자금으로만 매수 수량을 계산합니다. 기존 현금 잔고는 자동 포함하지 않습니다."}
-            </p>
-                <p className={styles.help}>
-                  {advice.cashAllocation ? "남은 거래 자금은 선택한 현금 포트에 반영합니다. 선택하지 않은 자산은 유지합니다." : "직접 입력 자산의 거래는 별도 검토합니다. 잔여 자금은 미배정으로 총액에 포함합니다."} 제안 확인 →
-                  증권사·거래소에서 직접 거래 → 실제 잔고 수정 순서로
-                  반영하세요.
-                </p>
-                </details>
+
                 <div className={styles.rebalanceLinks}>
                   <button type="button" onClick={onEditHoldings}>
                     거래 후 자산 수정 <ArrowRight size={14} />

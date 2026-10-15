@@ -1913,3 +1913,23 @@
 .calculationRows dt { color: var(--muted); }
 .calculationRows dd { margin: 0; text-align: right; color: var(--ink); overflow-wrap: anywhere; }
 .calculationExplanation { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 12px 0; }
+
+.rebalanceOverview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 12px 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.rebalanceOverview > strong { color: var(--ink); font-size: 14px; }
+.rebalanceOverview > span { color: var(--muted); }
+.rebalanceCashResult { flex-basis: 100%; }
+.rebalanceDisclosures { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 4px 0 16px; }
+.rebalanceDisclosures > details { margin: 0; min-width: 0; }
+.rebalanceDisclosures > details[open] { flex-basis: 100%; }
+.rebalanceDisclosures .calculationNotes > .help { margin: 12px 0; font-size: 13px; }
+.theoreticalBudget { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+.theoreticalBudget strong { color: var(--ink); margin-left: 8px; }
