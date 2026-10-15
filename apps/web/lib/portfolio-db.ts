@@ -40,6 +40,8 @@ type PlanRow = {
   usd_krw_mode: "auto" | "manual";
   usd_krw_rate_date: string | null;
   tolerance_percent: string;
+  tolerance_mode: "percentage-points" | "relative";
+  relative_tolerance_percent: string;
 };
 type CashFlowRow = {
   id: string;
@@ -125,7 +127,7 @@ export async function listPortfolio(
   client: Client = db(),
 ): Promise<Portfolio | null> {
   const plan = await client.query<PlanRow>(
-    `select cash_revision, include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode, usd_krw_rate_date::text as usd_krw_rate_date, tolerance_percent from portfolio.plans where user_id = $1`,
+    `select cash_revision, include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode, usd_krw_rate_date::text as usd_krw_rate_date, tolerance_percent, tolerance_mode, relative_tolerance_percent from portfolio.plans where user_id = $1`,
     [userId],
   );
   if (!plan.rows[0]) return null;
@@ -178,6 +180,8 @@ export async function listPortfolio(
     usdKrwMode: plan.rows[0].usd_krw_mode,
     usdKrwRateDate: plan.rows[0].usd_krw_rate_date,
     tolerancePercent: Number(plan.rows[0].tolerance_percent),
+    toleranceMode: plan.rows[0].tolerance_mode,
+    relativeTolerancePercent: Number(plan.rows[0].relative_tolerance_percent),
     buckets: buckets.rows.map(
       (row): Bucket => ({
         id: row.id,
@@ -295,12 +299,12 @@ export async function savePortfolio(userId: string, input: Portfolio) {
       }
     }
     await client.query(
-      `insert into portfolio.plans (user_id, title, usd_krw, usd_krw_mode, usd_krw_rate_date, tolerance_percent, include_fx_gains)
-       values ($1,$2,$3,$4,$5,$6,$7)
+      `insert into portfolio.plans (user_id, title, usd_krw, usd_krw_mode, usd_krw_rate_date, tolerance_percent, include_fx_gains, tolerance_mode, relative_tolerance_percent)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        on conflict (user_id) do update set title = excluded.title, usd_krw = excluded.usd_krw,
          usd_krw_updated_at = case when portfolio.plans.usd_krw is distinct from excluded.usd_krw or portfolio.plans.usd_krw_mode is distinct from excluded.usd_krw_mode then now() else portfolio.plans.usd_krw_updated_at end,
          usd_krw_mode = excluded.usd_krw_mode, usd_krw_rate_date = excluded.usd_krw_rate_date,
-         tolerance_percent = excluded.tolerance_percent, include_fx_gains = excluded.include_fx_gains, updated_at = now()`,
+         tolerance_percent = excluded.tolerance_percent, include_fx_gains = excluded.include_fx_gains, tolerance_mode = excluded.tolerance_mode, relative_tolerance_percent = excluded.relative_tolerance_percent, updated_at = now()`,
       [
         userId,
         input.title,
@@ -309,6 +313,8 @@ export async function savePortfolio(userId: string, input: Portfolio) {
         input.usdKrwRateDate,
         input.tolerancePercent,
         input.includeFxGains ?? false,
+        input.toleranceMode ?? "percentage-points",
+        input.relativeTolerancePercent ?? 10,
       ],
     );
     const previousPrices = await client.query<{
@@ -494,7 +500,7 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
     await checkCashRevision(client, userId, input);
     const plan = await client.query<PlanRow & { bucket_ids: string[] }>(
       `select cash_revision, include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode,
-         usd_krw_rate_date::text, tolerance_percent,
+         usd_krw_rate_date::text, tolerance_percent, tolerance_mode, relative_tolerance_percent,
          array(select id from portfolio.buckets where user_id = $1) as bucket_ids
        from portfolio.plans where user_id = $1`,
       [userId],
@@ -588,6 +594,8 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
       usdKrwUpdatedAt: savedPlan.usd_krw_updated_at.toISOString(),
       usdKrwRateDate: savedPlan.usd_krw_rate_date,
       tolerancePercent: Number(savedPlan.tolerance_percent),
+      toleranceMode: savedPlan.tolerance_mode,
+      relativeTolerancePercent: Number(savedPlan.relative_tolerance_percent),
       cryptoAssets: input.cryptoAssets.map((asset) => {
         const previous = prices.get(asset.marketCode);
         return {

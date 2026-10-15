@@ -138,9 +138,26 @@ export function needsAdjustment(
   );
 }
 
+/** Relative target-value bands expressed as percentage points of the same total. */
+export function tolerancePoints(plan: Pick<Portfolio, "tolerancePercent" | "toleranceMode" | "relativeTolerancePercent">, targetPercent: number) {
+  return plan.toleranceMode === "relative"
+    ? targetPercent * (plan.relativeTolerancePercent ?? 10) / 100
+    : plan.tolerancePercent;
+}
+
+export function withinPortfolioTolerance(plan: Portfolio, targetPercent: number, actualPercent: number) {
+  return withinTolerance(targetPercent, actualPercent, tolerancePoints(plan, targetPercent));
+}
+
+export function needsPortfolioAdjustment(plan: Portfolio, targetPercent: number, value: number, actualPercent: number) {
+  return plan.toleranceMode === "relative"
+    ? !withinPortfolioTolerance(plan, targetPercent, actualPercent)
+    : needsAdjustment(targetPercent, value, actualPercent, plan.tolerancePercent);
+}
+
 /** Allocate whole shares jointly: tolerance floors first, target weights second. */
 export function allocatePortfolioBuys(
-  entries: { id: string; gap: number; unitKrw: number; empty: boolean }[],
+  entries: { id: string; gap: number; unitKrw: number; empty: boolean; toleranceKrw?: number }[],
   budget: number,
   toleranceKrw: number,
 ) {
@@ -148,7 +165,7 @@ export function allocatePortfolioBuys(
   const states = entries.map(entry => {
     const max = Math.max(0, Math.floor((entry.gap + epsilon) / entry.unitKrw));
     const minimum = Math.min(max, Math.max(entry.empty ? 1 : 0,
-      Math.ceil((Math.max(0, entry.gap - toleranceKrw) - epsilon) / entry.unitKrw)));
+      Math.ceil((Math.max(0, entry.gap - (entry.toleranceKrw ?? toleranceKrw)) - epsilon) / entry.unitKrw)));
     return { ...entry, max, minimum, shares: 0 };
   });
   let remaining = Math.max(0, budget);
@@ -211,16 +228,15 @@ export function rebalance(
     total > 0 ? ((values.get(bucket.id) ?? 0) / total) * 100 : 0;
   const withinRange = plan.buckets.every(
     (bucket) =>
-      !needsAdjustment(
-        bucket.targetPercent,
+      !needsPortfolioAdjustment(
+        plan, bucket.targetPercent,
         values.get(bucket.id) ?? 0,
         currentPct(bucket),
-        plan.tolerancePercent,
       ),
   );
   const impossibleWithoutSelling =
     mode === "add-only" &&
-    plan.tolerancePercent === 0 &&
+    (plan.toleranceMode === "relative" || plan.tolerancePercent === 0) &&
     plan.buckets.some(
       (bucket) =>
         bucket.id !== cashBucket?.id && bucket.targetPercent === 0 && (values.get(bucket.id) ?? 0) > 0,
@@ -241,11 +257,11 @@ export function rebalance(
               (bucket) =>
                 bucket.id !== cashBucket?.id && bucket.targetPercent === 0 &&
                 (values.get(bucket.id) ?? 0) > 0 &&
-                plan.tolerancePercent > 0,
+                tolerancePoints(plan, bucket.targetPercent) > 0,
             )
             .map(
               (bucket) =>
-                (values.get(bucket.id) ?? 0) / (plan.tolerancePercent / 100) -
+                (values.get(bucket.id) ?? 0) / (tolerancePoints(plan, bucket.targetPercent) / 100) -
                 total,
             ),
         )
@@ -258,8 +274,9 @@ export function rebalance(
   const targetTotal = total + cash;
   const cashCurrent = cashBucket ? values.get(cashBucket.id) ?? 0 : 0;
   const cashTarget = cashBucket ? targetTotal * cashBucket.targetPercent / 100 : 0;
-  const usedFromCash = ready ? Math.max(0, cashCurrent - cashTarget) : 0;
-  const reserveNeeded = ready ? Math.max(0, cashTarget - cashCurrent) : 0;
+  const keepRelativeBand = plan.toleranceMode === "relative" && withinRange && cash === 0;
+  const usedFromCash = ready && !keepRelativeBand ? Math.max(0, cashCurrent - cashTarget) : 0;
+  const reserveNeeded = ready && !keepRelativeBand ? Math.max(0, cashTarget - cashCurrent) : 0;
   const projectedHoldings = holdings.map((holding) => ({ ...holding }));
   const projectedAssignments = [...plan.assignments];
   const trades: Trade[] = [];
@@ -320,11 +337,10 @@ export function rebalance(
         const excess = current - (targetTotal * bucket.targetPercent) / 100;
         if (
           excess <= 0 ||
-          reserveNeeded <= cash && !needsAdjustment(
-            bucket.targetPercent,
+          reserveNeeded <= cash && !needsPortfolioAdjustment(
+            plan, bucket.targetPercent,
             current,
             targetTotal > 0 ? current / targetTotal * 100 : 0,
-            plan.tolerancePercent,
           )
         )
           continue;
@@ -462,9 +478,10 @@ export function rebalance(
       selectedBuys.map(({ bucket, gap, candidate }) => ({
         id: bucket.id, gap, unitKrw: candidate.unitKrw,
         empty: (values.get(bucket.id) ?? 0) === 0,
+        toleranceKrw: targetTotal * tolerancePoints(plan, bucket.targetPercent) / 100,
       })),
       available,
-      targetTotal * plan.tolerancePercent / 100,
+      0,
     );
     for (const { bucket, rule, candidate } of selectedBuys) {
       const shares = allocations.get(bucket.id) ?? 0;
@@ -534,7 +551,7 @@ export function rebalance(
     const bucket = plan.buckets.find((item) => item.id === rule.bucketId);
     const fundedPercent = targetTotal > 0 ? (values.get(rule.bucketId) ?? 0) / targetTotal * 100 : 0;
     candidate.reason = !ready ? "자산 배정·가격 확인을 마친 뒤 계산합니다."
-      : bucket && !needsAdjustment(bucket.targetPercent, values.get(bucket.id) ?? 0, fundedPercent, plan.tolerancePercent) ? "계산 기준 비중이 허용 오차 안에 있어 매수 대상이 아닙니다."
+      : bucket && !needsPortfolioAdjustment(plan, bucket.targetPercent, values.get(bucket.id) ?? 0, fundedPercent) ? "계산 기준 비중이 허용 오차 안에 있어 매수 대상이 아닙니다."
       : bucket && fundedPercent >= bucket.targetPercent ? "계산 기준 비중이 초과되어 추가 매수하지 않습니다."
       : trades.some((trade) => trade.side === "buy" && trade.bucketId === rule.bucketId) ? "앞선 우선 후보를 선택하여 이 후보는 사용하지 않았습니다."
       : "이 포트에는 생성된 매수 제안이 없습니다. 포트별 예산·우선 후보 안내를 확인하세요.";
@@ -581,8 +598,8 @@ export function rebalance(
       && !plan.rules.some(rule => rule.bucketId === bucket.id);
     const projectedPercent = projected.total > 0 ? projectedValue / projected.total * 100 : 0;
     const amountAdjustment: AmountAdjustment | null = ready && !impossibleWithoutSelling && directOnly && bucket.id !== cashBucket?.id ? {
-      direction: withinTolerance(bucket.targetPercent, projectedPercent, plan.tolerancePercent) ? "hold" : remainingGapKrw > 0 ? "increase" : "decrease",
-      amountKrw: withinTolerance(bucket.targetPercent, projectedPercent, plan.tolerancePercent) ? 0 : Math.abs(remainingGapKrw),
+      direction: withinPortfolioTolerance(plan, bucket.targetPercent, projectedPercent) ? "hold" : remainingGapKrw > 0 ? "increase" : "decrease",
+      amountKrw: withinPortfolioTolerance(plan, bucket.targetPercent, projectedPercent) ? 0 : Math.abs(remainingGapKrw),
       currentKrw: projectedValue,
       targetKrw: targetTotal * bucket.targetPercent / 100,
     } : null;
@@ -610,11 +627,10 @@ export function rebalance(
       advice = "목표 0% 자산이 있어 매수만으로 조정할 수 없습니다.";
     else if (!advice) {
       if (
-        !needsAdjustment(
-          bucket.targetPercent,
+        !needsPortfolioAdjustment(
+          plan, bucket.targetPercent,
           current,
           targetTotal > 0 ? (current / targetTotal) * 100 : 0,
-          plan.tolerancePercent,
         )
       )
         advice = "계산 기준 비중이 허용 오차 안에 있습니다.";

@@ -122,6 +122,8 @@ export type Portfolio = {
   usdKrwMode: "auto" | "manual";
   usdKrwRateDate: string | null;
   tolerancePercent: number;
+  toleranceMode?: "percentage-points" | "relative";
+  relativeTolerancePercent?: number;
   buckets: Bucket[];
   rules: Rule[];
   manualAssets: ManualAsset[];

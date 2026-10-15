@@ -54,6 +54,12 @@ function valid(input: Portfolio) {
     input.tolerancePercent > 30
   )
     return false;
+  if (input.toleranceMode !== undefined && !["percentage-points", "relative"].includes(input.toleranceMode)) return false;
+  if (input.relativeTolerancePercent !== undefined && (
+    typeof input.relativeTolerancePercent !== "number" ||
+    !Number.isFinite(input.relativeTolerancePercent) ||
+    input.relativeTolerancePercent < 0 || input.relativeTolerancePercent > 100
+  )) return false;
   if (
     !Array.isArray(input.buckets) ||
     input.buckets.length < 1 ||

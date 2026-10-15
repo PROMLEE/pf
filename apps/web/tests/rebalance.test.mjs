@@ -14,7 +14,7 @@ const dataUrl = (source) =>
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const modelUrl = dataUrl(await compile("../app/portfolio-model.ts"));
 const { portfolioValues } = await import(modelUrl);
-const { rebalance, allocatePortfolioBuys, withinTolerance } = await import(
+const { rebalance, allocatePortfolioBuys, withinTolerance, tolerancePoints, withinPortfolioTolerance } = await import(
   dataUrl(
     (await compile("../app/rebalance.ts")).replace(
       '"./portfolio-model"',
@@ -598,4 +598,66 @@ test("zero target cash can be fully invested even in add-only mode", () => {
   close(result.cashAllocation.projectedKrw, 0);
   close(result.buyBudget, 800);
   assertMatchesActual(result, p, rows);
+});
+
+
+test("relative target-value bands scale to each target and keep legacy percentage points", () => {
+  const p = plan([], [], {tolerancePercent: 2, toleranceMode: "relative", relativeTolerancePercent: 10});
+  assert.equal(tolerancePoints(p, 5), 0.5);
+  assert.equal(tolerancePoints(p, 20), 2);
+  assert.equal(withinPortfolioTolerance(p, 5, 4.5), true);
+  assert.equal(withinPortfolioTolerance(p, 5, 5.5), true);
+  assert.equal(withinPortfolioTolerance(p, 5, 5.5001), false);
+  assert.equal(withinPortfolioTolerance(p, 5, 6), false);
+  assert.equal(withinPortfolioTolerance({...p, toleranceMode: "percentage-points"}, 5, 6), true);
+  assert.equal(withinPortfolioTolerance({...p, toleranceMode: undefined}, 5, 6), true);
+});
+
+test("relative bands rebalance small portfolios that are inside the legacy band", () => {
+  const rows = [holding("a", "A", 60, 1), holding("b", "B", 940, 1)];
+  const p = plan([["a", "A"], ["b", "B"]], [rule("A", "A", 1), rule("B", "B", 1)], {
+    buckets: [{id:"A", name:"small", targetPercent:5, color:"#000"}, {id:"B", name:"large", targetPercent:95, color:"#fff"}],
+    tolerancePercent:2, relativeTolerancePercent:10,
+  });
+  assert.equal(rebalance(p, rows, "trade", 0, new Set()).trades.length, 0);
+  const relative = {...p, toleranceMode:"relative"};
+  const result = rebalance(relative, rows, "trade", 0, new Set());
+  assert.equal(result.trades.find(t=>t.side==="sell" && t.bucketId==="A").shares, 10);
+  assert.ok(result.items.every(i=>withinPortfolioTolerance(relative,i.bucket.targetPercent,i.projectedPercent)));
+  assertMatchesActual(result, relative, rows);
+  const funded = rebalance(relative, rows, "trade", 100, new Set());
+  assert.equal(funded.targetTotal, 1100);
+  assert.equal(funded.trades.some(t=>t.side==="sell" && t.bucketId==="A"), false);
+  assertMatchesActual(funded, relative, rows);
+});
+
+test("joint allocation prioritizes each portfolio's own monetary band", () => {
+  const result = allocatePortfolioBuys([
+    {id:"small",gap:100,unitKrw:10,empty:false,toleranceKrw:0},
+    {id:"large",gap:100,unitKrw:10,empty:false,toleranceKrw:100},
+  ],100,50);
+  assert.equal(result.get("small"),10);
+  assert.equal(result.get("large"),0);
+});
+
+test("relative zero-target portfolios require liquidation even with a positive relative tolerance", () => {
+  const rows = [holding("a","A",1,1),holding("b","B",999,1)];
+  const p = plan([["a","A"],["b","B"]],[rule("B","B",1)],{
+    tolerancePercent:2,toleranceMode:"relative",relativeTolerancePercent:10,
+    buckets:[{id:"A",name:"zero",targetPercent:0,color:"#000"},{id:"B",name:"all",targetPercent:100,color:"#fff"}],
+  });
+  assert.equal(withinPortfolioTolerance(p,0,0.1),false);
+  const result=rebalance(p,rows,"trade",0,new Set());
+  assert.equal(result.trades.find(t=>t.side==="sell").shares,1);
+  assertMatchesActual(result,p,rows);
+  assert.equal(rebalance(p,rows,"add-only",null,new Set()).trades.length,0);
+});
+
+
+test("relative cash band does not trigger trades when all portfolios are already within range", () => {
+  const {rows,p}=cashPlan(4.05,4.05,190,{toleranceMode:"relative",relativeTolerancePercent:10});
+  const result=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C"});
+  assert.equal(result.trades.length,0);
+  assert.equal(result.cashAllocation.projectedKrw,190);
+  assertMatchesActual(result,p,rows);
 });

@@ -41,7 +41,7 @@ import {
   type Rule,
 } from "./portfolio-model";
 import { historyPerformance, kstTime, dailyObservations, dailyPositionChanges } from "./history-performance";
-import { cashPortfolioBuckets, needsAdjustment, rebalance, symbolKey, withinTolerance } from "./rebalance";
+import { cashPortfolioBuckets, needsPortfolioAdjustment, rebalance, symbolKey, withinPortfolioTolerance, tolerancePoints } from "./rebalance";
 import styles from "./portfolio.module.css";
 
 type Candidate = {
@@ -138,6 +138,8 @@ function emptyPortfolio(): Portfolio {
     usdKrwMode: "auto",
     usdKrwRateDate: null,
     tolerancePercent: 5,
+    toleranceMode: "percentage-points",
+    relativeTolerancePercent: 10,
     buckets: [],
     rules: [],
     manualAssets: [],
@@ -1219,7 +1221,7 @@ export default function PortfolioBuilder({
       );
     const saved = portfolioCache.get(userId);
     const changedSections = ([
-      ["title", "포트 이름"], ["buckets", "목표 비중"], ["tolerancePercent", "허용 오차"],
+      ["title", "포트 이름"], ["buckets", "목표 비중"], ["tolerancePercent", "비중 허용 오차"], ["toleranceMode", "허용 오차 기준"], ["relativeTolerancePercent", "목표 금액 허용 오차"],
       ["rules", "매수 후보"], ["assignments", "자산 배정"], ["cryptoAssets", "가상자산"],
       ["manualAssets", "현금·직접 입력 자산"], ["usdKrw", "환율"], ["usdKrwMode", "환율 모드"], ["includeFxGains", "환율 손익 설정"],
     ] as const).filter(([key]) => JSON.stringify(saved?.[key]) !== JSON.stringify(draft[key])).map(([, label]) => label);
@@ -1233,6 +1235,8 @@ export default function PortfolioBuilder({
         usdKrwRateDate: draft.usdKrwRateDate,
         includeFxGains:draft.includeFxGains??false,
         tolerancePercent: draft.tolerancePercent,
+        toleranceMode: draft.toleranceMode ?? "percentage-points",
+        relativeTolerancePercent: draft.relativeTolerancePercent ?? 10,
         buckets: draft.buckets,
         rules: draft.rules,
         assignments: draft.assignments,
@@ -1244,6 +1248,8 @@ export default function PortfolioBuilder({
           usdKrwRateDate: saved?.usdKrwRateDate,
           includeFxGains:saved?.includeFxGains??false,
           tolerancePercent: saved?.tolerancePercent,
+          toleranceMode: saved?.toleranceMode ?? "percentage-points",
+          relativeTolerancePercent: saved?.relativeTolerancePercent ?? 10,
           buckets: saved?.buckets,
           rules: saved?.rules,
           assignments: saved?.assignments,
@@ -1459,8 +1465,8 @@ export default function PortfolioBuilder({
   // A portfolio within tolerance must still expose its result and selection.
   const actionItems = rebalanceReady ? advice.items : [];
   const inRangeCount = rebalanceReady
-    ? advice.items.filter(item => withinTolerance(
-        item.bucket.targetPercent, item.projectedPercent, draft?.tolerancePercent ?? 0,
+    ? advice.items.filter(item => withinPortfolioTolerance(
+        draft!, item.bucket.targetPercent, item.projectedPercent,
       )).length
     : 0;
   const targetTotal =
@@ -1481,11 +1487,10 @@ export default function PortfolioBuilder({
     draft?.buckets.find((bucket) => bucket.id === trendKey)?.color ?? "#4B72E8";
   const driftItems = advice.items
     .filter((item) =>
-      needsAdjustment(
-        item.bucket.targetPercent,
+      needsPortfolioAdjustment(
+        draft!, item.bucket.targetPercent,
         item.current,
         item.currentPercent,
-        draft?.tolerancePercent ?? 0,
       ),
     )
     .sort((a, b) => Math.abs(b.gapPercent) - Math.abs(a.gapPercent));
@@ -2069,32 +2074,34 @@ export default function PortfolioBuilder({
                 <Plus size={16} /> 포트 추가
               </button>
             </div>
-            <label className={styles.toleranceControl}>
-              <span>
+            <div className={styles.toleranceControl}>
+              <div className={styles.toleranceDescription}>
                 <strong>리밸런싱 허용 오차</strong>
-                <small>
-                  목표 비중과 현재 비중의 차이가 이 값을 넘으면 조정을
-                  추천합니다.
-                </small>
-              </span>
-              <span className={styles.toleranceInput}>
+                <label>
+                  <span>계산 기준</span>
+                  <select aria-label="리밸런싱 허용 오차 기준" value={draft.toleranceMode ?? "percentage-points"} onChange={event => change({...draft, toleranceMode: event.target.value as "percentage-points" | "relative"})}>
+                    <option value="percentage-points">전체 자산 비중 기준 (%p)</option>
+                    <option value="relative">각 포트 목표 금액 기준 (%)</option>
+                  </select>
+                </label>
+                <small>{draft.toleranceMode === "relative"
+                  ? "각 포트의 목표 금액 대비 오차입니다. 목표 1,000만 원에 ±10%라면 900만~1,100만 원을 허용합니다."
+                  : "전체 자산에서 차지하는 비중의 차이입니다. 목표 20%에 ±2%p라면 18~22%를 허용합니다."}</small>
+                <small>추가 투입금이 있으면 이를 포함한 총자산으로 목표 금액을 계산합니다.</small>
+              </div>
+              <label className={styles.toleranceInput}>
                 ±
                 <NumberInput
-                  min="0"
-                  max="30"
-                  step="0.1"
-                  value={draft.tolerancePercent}
-                  aria-label="리밸런싱 허용 오차 퍼센트포인트"
-                  onValueChange={(value) =>
-                    change({
-                      ...draft,
-                      tolerancePercent: Number(value),
-                    })
-                  }
+                  min="0" max={draft.toleranceMode === "relative" ? "100" : "30"} step="0.1"
+                  value={draft.toleranceMode === "relative" ? draft.relativeTolerancePercent ?? 10 : draft.tolerancePercent}
+                  aria-label={draft.toleranceMode === "relative" ? "목표 금액 대비 허용 오차 퍼센트" : "리밸런싱 허용 오차 퍼센트포인트"}
+                  onValueChange={value => change(draft.toleranceMode === "relative"
+                    ? {...draft, relativeTolerancePercent: Number(value)}
+                    : {...draft, tolerancePercent: Number(value)})}
                 />
-                %p
-              </span>
-            </label>
+                {draft.toleranceMode === "relative" ? "%" : "%p"}
+              </label>
+            </div>
             <button type="button" className={styles.ghost} onClick={() => onNavigate("preferences")}>
               환율·손익 설정 <ArrowRight size={15} />
             </button>
@@ -2785,7 +2792,7 @@ export default function PortfolioBuilder({
               </select>
             </div>
             <p className={styles.methodNote}>
-              허용 오차 ±{draft.tolerancePercent.toFixed(1)}%p
+              {draft.toleranceMode === "relative" ? `목표 금액 대비 ±${(draft.relativeTolerancePercent ?? 10).toFixed(1)}%` : `전체 비중 ±${draft.tolerancePercent.toFixed(1)}%p`}
               <button type="button" onClick={() => onNavigate("strategy")}>
                 기준 변경
               </button>
@@ -2977,7 +2984,7 @@ export default function PortfolioBuilder({
                       <th scope="row">{item.bucket.name}</th>
                       <td>{pct(item.bucket.targetPercent)}</td>
                       <td>{pct(item.projectedPercent)}</td>
-                      <td>{withinTolerance(item.bucket.targetPercent, item.projectedPercent, draft.tolerancePercent) ? "이내" : "범위 밖"}</td>
+                      <td>{withinPortfolioTolerance(draft, item.bucket.targetPercent, item.projectedPercent) ? "이내" : "범위 밖"}</td>
                     </tr>)}</tbody>
                   </table>
                 </details>
@@ -3013,7 +3020,7 @@ export default function PortfolioBuilder({
                                 ? "매수 제안"
                                 : action === "sell"
                                   ? "매도 제안"
-                                  : settlement ? "현금 조정" : item.unaffordableBuys.length > 0 ? "매수 보류" : "제안 없음"}
+                                  : settlement ? Math.abs(settlement.projectedKrw - settlement.currentKrw) < 1 ? "현금 유지" : "현금 조정" : item.unaffordableBuys.length > 0 ? "매수 보류" : "제안 없음"}
                             </span>
                             {item.bucket.name}
                           </strong>
@@ -3021,9 +3028,11 @@ export default function PortfolioBuilder({
                             {amount ? `현재 ${pct(item.currentPercent)} · 목표 ${pct(item.bucket.targetPercent)}` : `현재 ${pct(item.currentPercent)} → 제안 후 ${pct(item.projectedPercent)}`}
                           </small>
                           {!amount && <small className={styles.targetWeight}>
-                            목표 {pct(item.bucket.targetPercent)} · {withinTolerance(item.bucket.targetPercent, item.projectedPercent, draft.tolerancePercent)
+                            목표 {pct(item.bucket.targetPercent)} · {withinPortfolioTolerance(draft, item.bucket.targetPercent, item.projectedPercent)
                               ? "제안 후 허용 범위 이내"
-                              : `제안 후 ${item.projectedPercent < item.bucket.targetPercent ? "부족" : "초과"} ${Math.abs(item.projectedPercent - item.bucket.targetPercent).toFixed(1)}%p`}
+                              : draft.toleranceMode === "relative"
+                                ? `제안 후 ${item.remainingGapKrw > 0 ? "부족" : "초과"} ${fmt(Math.abs(item.remainingGapKrw))}`
+                                : `제안 후 ${item.projectedPercent < item.bucket.targetPercent ? "부족" : "초과"} ${Math.abs(item.projectedPercent - item.bucket.targetPercent).toFixed(1)}%p`}
                           </small>}
                           {bucketRules.length > 0 && item.fundedGapPercent > 0 && (
                             <label className={styles.proposalChoice}>
@@ -3089,6 +3098,7 @@ export default function PortfolioBuilder({
                         <div className={styles.tradeDetail}>
                           <details>
                             <summary>포트별 계산 상세</summary>
+                            <small>목표 금액 {fmt(advice.targetTotal * item.bucket.targetPercent / 100)} · 허용 금액 {fmt(Math.max(0, advice.targetTotal * (item.bucket.targetPercent - tolerancePoints(draft, item.bucket.targetPercent)) / 100))}~{fmt(advice.targetTotal * (item.bucket.targetPercent + tolerancePoints(draft, item.bucket.targetPercent)) / 100)}</small>
                             <small>현재 {pct(item.currentPercent)}{advice.newCash > 0 ? ` · 자금 추가 후 ${pct(item.fundedPercent)}` : ""} · 제안 반영 후 {pct(item.projectedPercent)}</small>
                           {!amount && advice.newCash > 0 && action === "add" && Math.round(item.projectedPercent * 10) < Math.round(item.currentPercent * 10) && (
                             <p className={styles.shareDilutionNote}>
