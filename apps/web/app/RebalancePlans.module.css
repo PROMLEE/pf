@@ -1,0 +1,385 @@
+.wrapper {
+  margin-bottom: 18px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.nav button,
+.actions button,
+.order button,
+.back,
+.history > button:not(.primary) {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.nav .selected {
+  color: var(--ink);
+  font-weight: 750;
+  background: var(--soft);
+  border-radius: 8px;
+}
+.nav .refresh {
+  margin-left: auto;
+  display: flex;
+}
+.start {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 0 18px;
+}
+.start > div {
+  display: grid;
+  gap: 6px;
+}
+.start small,
+.detail small,
+.meta,
+.fill small,
+.historyRow small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--action-fill, #087b83);
+  color: var(--action-ink, #fff);
+  font: inherit;
+  font-weight: 700;
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+.wrapper button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.detail {
+  padding: 4px 0 14px;
+}
+.detailHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.detail h2,
+.history h2 {
+  font-size: 18px;
+  margin: 0 0 6px;
+}
+.detail h3 {
+  font-size: 14px;
+  margin: 20px 0 4px;
+}
+.progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 5px;
+  border: 0;
+  border-radius: 5px;
+  overflow: hidden;
+  margin: 14px 0 10px;
+}
+.progress::-webkit-progress-bar {
+  background: var(--line);
+}
+.progress::-webkit-progress-value {
+  background: var(--blue);
+}
+.progress::-moz-progress-bar {
+  background: var(--blue);
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+}
+.item {
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+}
+.itemLine {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.security {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.security > strong {
+  overflow-wrap: anywhere;
+}
+.order {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+  justify-items: end;
+  max-width: 48%;
+}
+.order > strong {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.order button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--blue);
+  font-size: 13px;
+  padding: 8px 0 4px;
+}
+.buy {
+  color: var(--gain-up, #d24455);
+}
+.sell {
+  color: var(--gain-down, #356dc4);
+}
+.disclosure {
+  margin: 18px 0;
+  font-size: 13px;
+}
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--blue);
+  min-height: 32px;
+}
+.disclosure p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.disclosure table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.disclosure th,
+.disclosure td {
+  text-align: right;
+  padding: 10px 3px;
+  border-bottom: 1px solid var(--line);
+}
+.disclosure th:first-child {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.actions .primary {
+  background: var(--action-fill, #087b83);
+  color: var(--action-ink, #fff);
+}
+.actions .cancelRun {
+  color: var(--muted);
+  padding-left: 0;
+}
+.fill {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.fill > span {
+  display: grid;
+  gap: 4px;
+}
+.fill > span:last-child {
+  text-align: right;
+}
+.historyRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--line) !important;
+  padding: 16px 0 !important;
+}
+.historyRow > span {
+  display: grid;
+  gap: 4px;
+}
+.historyRow > span:first-child {
+  flex: 1;
+}
+.historyRow > span:nth-child(2) {
+  text-align: right;
+}
+.history .back {
+  padding-left: 0;
+  margin-bottom: 12px;
+}
+.error {
+  color: var(--gain-up, #c54352);
+  line-height: 1.6;
+  font-size: 14px;
+}
+.tradeForm {
+  background: var(--soft);
+  padding: 16px;
+  border-radius: 10px;
+  margin-top: 14px;
+  font-size: 14px;
+}
+.tradeForm p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.tradeForm fieldset {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.tradeForm label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  margin: 12px 0;
+  color: var(--ink);
+}
+.inputGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+.tradeForm input:not([type="checkbox"]),
+.tradeForm select {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  padding: 11px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.tradeForm .checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  width: fit-content;
+  cursor: pointer;
+}
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--action-fill, #087b83);
+  margin: 0;
+}
+.checkAmount {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-top: 10px;
+}
+.checkAmount strong {
+  text-align: right;
+}
+.tradeForm .actions {
+  margin-top: 12px;
+}
+@media (max-width: 600px) {
+  .start {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .start .primary {
+    width: 100%;
+  }
+  .detailHead {
+    font-size: 13px;
+  }
+  .detail h2,
+  .history h2 {
+    font-size: 17px;
+  }
+  .order {
+    max-width: 45%;
+  }
+  .itemLine > img {
+    width: 32px;
+    height: 32px;
+  }
+  .inputGrid {
+    gap: 0 10px;
+  }
+  .tradeForm {
+    padding: 13px;
+  }
+  .fill {
+    font-size: 13px;
+  }
+  .disclosure table {
+    font-size: 12px;
+  }
+}
+
+.cancelConfirm {
+  padding: 14px;
+  margin-top: 18px;
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.cancelConfirm p {
+  margin: 0;
+}
+
+.securityName {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.securityName:hover {
+  text-decoration: underline;
+}

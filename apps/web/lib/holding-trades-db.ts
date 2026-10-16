@@ -1,4 +1,6 @@
 import { db } from "./db";
+import { recordActiveRunStockFill } from "./rebalance-progress-db";
+import { captureRunOutcome } from "../app/rebalance-runs";
 import { recordSnapshot, listPortfolio } from "./portfolio-db";
 import { listHoldings } from "./holdings-db";
 import { nextStockBasis, nextCashFx } from "../app/fx-gains";
@@ -17,13 +19,10 @@ export async function applyHoldingTrade(
   const client = await db().connect();
   try {
     await client.query("begin");
-    const plan =
-      trade.cash || trade.expected.market === "US"
-        ? await client.query<{ usd_krw: string }>(
-            `select usd_krw from portfolio.plans where user_id = $1 for update`,
-            [userId],
-          )
-        : null;
+    const plan = await client.query<{ usd_krw: string }>(
+      `select usd_krw from portfolio.plans where user_id = $1 for update`,
+      [userId],
+    );
     if (trade.cash && !plan?.rows[0])
       throw new PositionTradeError("포트폴리오를 찾지 못했습니다.", 404);
     const result = await client.query<{
@@ -140,7 +139,11 @@ export async function applyHoldingTrade(
         currency: row.market === "US" ? "USD" : "KRW",
       };
     }
-    if (trade.cash) await client.query("update portfolio.plans set cash_revision=cash_revision+1 where user_id=$1",[userId]);
+    if (trade.cash)
+      await client.query(
+        "update portfolio.plans set cash_revision=cash_revision+1 where user_id=$1",
+        [userId],
+      );
     if (position.quantity === 0)
       await client.query(
         `delete from portfolio.holdings where user_id = $1 and id = $2`,
@@ -153,9 +156,23 @@ export async function applyHoldingTrade(
       );
     await recordSnapshot(userId, client);
     const holdings = await listHoldings(userId, client);
-    const portfolio = trade.cash ? await listPortfolio(userId, client) : null;
+    let portfolio = trade.cash ? await listPortfolio(userId, client) : null;
+    const progressRecorded = await recordActiveRunStockFill(
+      client,
+      userId,
+      id,
+      trade,
+      row.market as "KR" | "US",
+      row.market === "US" ? fxRate : Number(plan.rows[0]?.usd_krw ?? 1400),
+      async (snapshot) => {
+        portfolio = await listPortfolio(userId, client);
+        if (!portfolio)
+          throw new PositionTradeError("포트폴리오를 찾지 못했습니다.", 404);
+        return captureRunOutcome(snapshot, portfolio, holdings);
+      },
+    );
     await client.query("commit");
-    return { position, holdings, portfolio, cashChange };
+    return { position, holdings, portfolio, cashChange, progressRecorded };
   } catch (error) {
     await client.query("rollback");
     throw error;

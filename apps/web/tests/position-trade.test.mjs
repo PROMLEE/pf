@@ -141,6 +141,8 @@ const reset = () => {
 };
 let dbCode = await compile("../lib/holding-trades-db.ts");
 dbCode = dbCode
+  .replace(/import \{ recordActiveRunStockFill \} from "\.\/rebalance-progress-db";/, 'const recordActiveRunStockFill=async()=>false;')
+  .replace(/import \{ captureRunOutcome \} from "\.\.\/app\/rebalance-runs";/, 'const captureRunOutcome=()=>({});')
   .replace(
     /import \{ db \} from "\.\/db";/,
     `const client={query:async(sql,args)=>{const s=globalThis.__pfTradeTest;s.calls.push({sql,args});if(sql==='begin'){s.backup={...s.row};s.cashBackup={...s.cash};}if(sql==='rollback'){s.row=s.backup;s.cash=s.cashBackup;}if(sql.startsWith('select usd_krw'))return {rows:[{usd_krw:'1400'}]};if(sql.startsWith('select name, value_krw'))return {rows:s.cashMissing?[]:[s.cash]};if(sql.startsWith('update portfolio.manual_assets'))s.cash={...s.cash,value_krw:String(args[2]),value_usd:args[3]===null?null:String(args[3]),average_fx_rate:args[4]===null?null:String(args[4])};if(sql.startsWith('select quantity'))return {rows:s.missing?[]:[s.row]};if(sql.startsWith('update portfolio.holdings'))s.row={...s.row,quantity:String(args[2]),average_cost:args[3]===null?null:String(args[3]),average_cost_krw:args[4]===null?null:String(args[4]),revision:'124'};if(sql.startsWith('delete from'))s.row=null;return {rows:[]};},release(){}};const db=()=>({connect:async()=>client});`,

@@ -1,5 +1,6 @@
 "use client";
 import PushSettings from "./PushSettings";
+import RebalancePlans from "./RebalancePlans";
 import type { MarketSessions } from "./market-sessions";
 import CashTransfers from "./CashTransfers";
 import type {BrokerageAccount} from "./accounts-model";
@@ -657,6 +658,8 @@ export default function PortfolioBuilder({
   const [dirty, setDirty] = useState(false);
   const [detailDirty, setDetailDirty] = useState(false);
   const [transferDirty, setTransferDirty] = useState(false);
+  const [runDirty, setRunDirty] = useState(false);
+  const [showRunPreview, setShowRunPreview] = useState(false);
   const [cashAccounts, setCashAccounts] = useState<BrokerageAccount[]>([]);
   const [manualAccountId, setManualAccountId] = useState("");
   useEffect(()=>{if(screen!=="edit")return;let live=true;void fetch("/api/accounts",{cache:"no-store"}).then(async response=>{if(!response.ok)throw Error();const data=await response.json();if(live)setCashAccounts(data.accounts);}).catch(()=>{if(live)onNotice("계좌 목록을 불러오지 못했습니다. 새로고침해서 다시 확인해 주세요.");});return()=>{live=false;};},[screen,userId,onNotice]);
@@ -719,7 +722,7 @@ export default function PortfolioBuilder({
   const dailyFxRate=draft?.usdKrwMode === "auto" && previousFx?.rateDate === draft?.usdKrwRateDate?previousFx?.rate??null:null;
   const [marketSession, setMarketSession] = useState<MarketSessions | null>(null);
   useEffect(() => {
-    if (screen !== "rebalance") return;
+    if (screen !== "rebalance" || !showRunPreview) return;
     let active = true;
     let pending = false;
     let controller: AbortController | null = null;
@@ -742,7 +745,7 @@ export default function PortfolioBuilder({
     const onVisible = () => { if (document.visibilityState === "visible") { setMarketSession(null); void refreshSession(); } };
     document.addEventListener("visibilitychange", onVisible);
     return () => { active=false; controller?.abort(); window.clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
-  }, [screen,userId]);
+  }, [screen,userId,showRunPreview]);
   const [cashBucketChoice, setCashBucketChoice] = useState<string | null>(null);
   const [cashInput, setCashInput] = useState("");
   const [budgetMode, setBudgetMode] = useState<"input" | "theoretical">(
@@ -776,7 +779,7 @@ export default function PortfolioBuilder({
     if (screen !== "history") { setFlowAmount(""); setFlowNote(""); setFlowTime(""); setEditingFlowId(null); }
   }, [screen]);
   const flowDirty = Boolean(flowAmount || flowNote || flowTime || editingFlowId);
-  useEffect(() => onDirtyChange(dirty || detailDirty || flowDirty || transferDirty), [dirty, detailDirty, flowDirty, transferDirty, onDirtyChange]);
+  useEffect(() => onDirtyChange(dirty || detailDirty || flowDirty || transferDirty || runDirty), [dirty, detailDirty, flowDirty, transferDirty, runDirty, onDirtyChange]);
   function editFlow(flow: CashFlow) {
     setEditingFlowId(flow.id); setFlowDate(flow.date); setFlowAmount(String(Math.abs(flow.amountKrw)));
     setFlowKind(flow.amountKrw > 0 ? "deposit" : "withdrawal"); setFlowNote(flow.note); setFlowTime(flow.occurredAt ? kstTime(flow.occurredAt, true) : "");
@@ -2954,7 +2957,16 @@ export default function PortfolioBuilder({
           </button>
         </div>
       )}
-      {screen === "rebalance" && (
+      {screen === "rebalance" && <RebalancePlans
+        userId={userId} portfolio={draft} holdings={holdings} disabled={dirty||saving}
+        canStart={rebalanceReady&&(advice.trades.length+advice.cryptoTrades.length)>0}
+        config={{mode:rebalanceMode,newCash:rebalanceMode === "add-only"&&budgetMode === "theoretical"?null:cashInput.trim()&&Number.isFinite(Number(cashInput))?Math.min(1e15,Math.max(0,Number(cashInput))):0,
+          cashBucketId,preferredMarket:marketSession?.preferredMarket??null,candidatePolicy:marketSession?.preferredMarket?"fallback":"priority",excludedHoldingIds,excludedBuySymbols,buyHoldingIds,buyRuleIds,sellSymbols,cryptoAssetIds}}
+        onPreviewChange={setShowRunPreview} onDirty={setRunDirty} onSelectAsset={onSelectAsset}
+        onNewPlan={()=>{setCashInput("");setBuyRuleIds({});setSellSymbols({});setCryptoAssetIds({});}}
+        onSaved={(data,message)=>{onHoldings(withPreviousQuotes(data.holdings,holdings));setDraft(data.portfolio);portfolioCache.set(userId,data.portfolio);onNotice(message);}}
+      />}
+      {screen === "rebalance" && showRunPreview && (
         <>
           <section className={styles.panel}>
             <div className={styles.panelHead}>
@@ -3285,7 +3297,7 @@ export default function PortfolioBuilder({
           </section>
         </>
       )}
-      {screen === "rebalance" && (
+      {screen === "rebalance" && showRunPreview && (
         <>
           <details
             className={`${styles.panel} ${styles.collapsible} ${styles.candidateSection}`}

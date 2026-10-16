@@ -202,11 +202,13 @@ export default function HoldingTradeEditor({
         throw new Error(result.message || "거래를 반영하지 못했습니다.");
       if (result.portfolio && selectedCash)
         publishTradePortfolio(result.portfolio, selectedCash.id);
+      window.dispatchEvent(new Event("pf-rebalance-run-updated"));
       onSaved(
         result.holdings,
         (result.position.quantity === 0
           ? `${base.name} 전량 매도 반영 완료`
           : `${base.name} ${side === "buy" ? "추가 매수" : "매도"} 반영 완료 · ${result.position.quantity.toLocaleString()}주 · 평균 매입단가 ${money(result.position.averageCost)}`) +
+          (result.progressRecorded ? " · 진행 중인 리밸런싱 계획에 반영" : "") +
           (result.cashChange
             ? ` · ${result.cashChange.name} 잔고 ${money(result.cashChange.balance)}`
             : ""),
