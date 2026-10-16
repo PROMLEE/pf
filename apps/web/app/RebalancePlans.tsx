@@ -697,6 +697,10 @@ export default function RebalancePlans({
         if (live) {
           activeRunId.current = data.active?.id;
           setListing(data);
+          if (!data.active && data.history[0]) {
+            setSelected(data.history[0]);
+            setTab("history");
+          }
           setLoading(false);
         }
       })
