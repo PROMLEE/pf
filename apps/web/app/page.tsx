@@ -27,6 +27,7 @@ import {
   FileUp,
   LayoutDashboard,
   Menu,
+  Megaphone,
   Moon,
   Pencil,
   PieChart,
@@ -73,16 +74,19 @@ type View =
   | "detail"
   | "settings"
   | "preferences"
-  | "guide";
+  | "guide"
+  | "notices";
 const VIEWS: readonly View[] = [
   "portfolio", "holdings", "accounts", "edit", "strategy", "composition", "allocation",
-  "rebalance", "history", "import", "more", "detail", "settings", "preferences", "guide",
+  "rebalance", "history", "import", "more", "detail", "settings", "preferences", "guide", "notices",
 ];
 
-function screenUrl(next: View, asset: AssetSelection | null, source: string) {
+function screenUrl(next: View, asset: AssetSelection | null, source: string, noticeId: string | null = null) {
   const url = new URL(window.location.href);
   if (next === "portfolio") url.searchParams.delete("view");
   else url.searchParams.set("view", next);
+  if (next === "notices" && noticeId) url.searchParams.set("notice", noticeId);
+  else url.searchParams.delete("notice");
   for (const key of ["asset", "kind", "source"]) url.searchParams.delete(key);
   if (next === "detail" && asset) {
     url.searchParams.set("asset", asset.id);
@@ -131,6 +135,7 @@ export default function PortfolioPage() {
   const { data: session, status: authStatus } = useSession();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [view, setView] = useState<View>("portfolio");
+  const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
   const [assetSort, setAssetSort] = useState<AssetSort>("value-desc");
   useEffect(() => {
     try {
@@ -177,6 +182,9 @@ export default function PortfolioPage() {
       const params = new URLSearchParams(window.location.search);
       const requested = params.get("view") as View;
       let next: View = VIEWS.includes(requested) ? requested : "portfolio";
+      const noticeId = params.get("notice");
+      if (noticeId && (!requested || requested === "notices")) next = "notices";
+      setSelectedNoticeId(next === "notices" ? noticeId : null);
       const id = params.get("asset");
       const kind = params.get("kind");
       const asset: AssetSelection | null = id && (kind === "stock" || kind === "crypto" || kind === "manual" || kind === "candidate")
@@ -409,7 +417,7 @@ export default function PortfolioPage() {
     [holdings, filter, search, assetSort,fxEnabled,fxSettings],
   );
 
-  function go(next: View, asset = selectedAsset, source = detailSource) {
+  function go(next: View, asset = selectedAsset, source = detailSource, noticeId: string | null = null) {
     if (
       unsavedChanges &&
       next !== view &&
@@ -422,13 +430,14 @@ export default function PortfolioPage() {
       setEditingHoldingId(null);
     }
     setView(next);
-    const url = screenUrl(next, asset, source);
+    setSelectedNoticeId(next === "notices" ? noticeId : null);
+    const url = screenUrl(next, asset, source, noticeId);
     if (url !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
       window.history.pushState(null, "", url);
     }
     navigationState.current.url = window.location.href;
     if (next !== view) navigationState.current.dirty = false;
-    if (next !== view) window.scrollTo({ top: 0, behavior: "instant" });
+    if (next !== view || (next === "notices" && noticeId !== selectedNoticeId)) window.scrollTo({ top: 0, behavior: "instant" });
     setNotice("");
   }
 
@@ -1098,13 +1107,14 @@ export default function PortfolioPage() {
     { id: "import" as View, label: "캡처 가져오기", Icon: Camera },
     { id: "preferences" as View, label: "설정", Icon: Settings2 },
     { id: "settings" as View, label: "계정", Icon: Settings2 },
+    { id: "notices" as View, label: "공지사항", Icon: Megaphone },
     { id: "guide" as View, label: "사용 가이드", Icon: CircleHelp },
   ];
   const navLabel = view === "more" ? "전체 메뉴" : view === "detail" ? "자산 상세" : nav.find((item) => item.id === view)?.label;
   const menuSections = [
     { label: "포트폴리오", ids: ["strategy", "composition", "rebalance"] },
     { label: "자산 관리", ids: ["accounts", "holdings", "edit", "allocation", "import"] },
-    { label: "기록과 설정", ids: ["history", "preferences", "settings", "guide"] },
+    { label: "기록과 설정", ids: ["history", "preferences", "settings", "notices", "guide"] },
   ];
   const menuDescriptions: Partial<Record<View, string>> = {
     strategy: "목표 비중과 허용 오차 설정",
@@ -1119,6 +1129,7 @@ export default function PortfolioPage() {
     preferences: "알림·환율·손익 표시·포트폴리오 이름",
     settings: "로그인·화면 설정",
     guide: "처음 시작하는 순서와 기능 설명",
+    notices: "업데이트와 서비스 소식",
   };
 
   return (
@@ -1214,7 +1225,7 @@ export default function PortfolioPage() {
           </div>
         </header>
         <main className={styles.content}>
-          <ServiceNotices onAdminChange={setOperator} />
+          <ServiceNotices key={session.user?.appUserId ?? "account"} userId={session.user?.appUserId ?? "account"} page={view === "notices"} selectedId={selectedNoticeId} onOpen={id => go("notices", selectedAsset, detailSource, id)} onAdminChange={setOperator} />
           {view === "more" && operator && <Link href="/admin" style={{display:"block",padding:"16px 0",color:"var(--blue)"}}>관리자 전용 · 운영 관리 ↗</Link>}
           {view === "accounts" && <AccountsManager onCashManage={()=>go("edit")} userId={session.user?.appUserId ?? ""} holdings={holdings} onHoldings={(rows)=>{setHoldings(rows);setQuoteVersion(version=>version+1);}} onNotice={setNotice} onDirty={setPortfolioDirty} onOpenAsset={row=>openAsset({id:`holding:${row.id}`,kind:"stock"},"accounts")} onRefreshQuotes={()=>void refreshQuotes(true)} />}
           {view === "guide" && <UserGuide onNavigate={go} />}

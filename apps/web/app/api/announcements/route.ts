@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const target = new URL(request.url).searchParams.get("notice") ?? "";
     const [result, admin] = await Promise.all([
       db().query(
-        `select id,title,body,important,created_at from portfolio.announcements where status='published' and (starts_at is null or starts_at<=now()) and (ends_at is null or ends_at>now()) order by (id::text=$1) desc,important desc,created_at desc limit 50`,
+        `select id,title,body,important,created_at from portfolio.announcements where status='published' and (starts_at is null or starts_at<=now()) and (ends_at is null or ends_at>now()) order by (id::text=$1) desc,created_at desc,id desc limit 50`,
         [target.slice(0, 80)],
       ),
       isAdmin(user),
