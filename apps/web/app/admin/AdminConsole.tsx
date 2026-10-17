@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { Announcement } from "../../lib/announcements";
 import styles from "./admin.module.css";
@@ -66,6 +67,7 @@ export default function AdminConsole() {
   const [editing, setEditing] = useState<Announcement | null>(null),
     [form, setForm] = useState(empty),
     [open, setOpen] = useState(false),
+    [editorExpanded, setEditorExpanded] = useState(true),
     [dirty, setDirty] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,6 +117,7 @@ export default function AdminConsole() {
         : empty,
     );
     setOpen(true);
+    setEditorExpanded(true);
     setDirty(false);
     setNotice("");
   }
@@ -242,11 +245,26 @@ export default function AdminConsole() {
                 </div>
                 {open && (
                   <form className={styles.editor} onSubmit={save}>
-                    <fieldset disabled={saving}>
-                      <div className={styles.sectionHead}>
+                    <div className={styles.sectionHead}>
+                      <div>
                         <h3>{editing ? "공지 수정" : "새 공지"}</h3>
-                        <span>{dirty ? "미저장 변경 있음" : "작성 중"}</span>
+                        <small>{dirty ? "미저장 변경 있음" : "작성 중"}</small>
                       </div>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        aria-expanded={editorExpanded}
+                        aria-controls="announcement-editor-fields"
+                        onClick={() => setEditorExpanded((value) => !value)}
+                      >
+                        {editorExpanded ? "작성 영역 접기" : "작성 이어하기"}
+                      </button>
+                    </div>
+                    <fieldset
+                      id="announcement-editor-fields"
+                      hidden={!editorExpanded}
+                      disabled={saving || !editorExpanded}
+                    >
                       <label>
                         제목
                         <input
@@ -336,7 +354,7 @@ export default function AdminConsole() {
                             update({ ...form, important: e.target.checked })
                           }
                         />
-                        중요 공지 · 목록 상단 표시
+                        중요 공지 · 중요 표시
                       </label>
                       <label className={styles.check}>
                         <input
@@ -384,28 +402,42 @@ export default function AdminConsole() {
                   {data.announcements.length ? (
                     data.announcements.map((a) => (
                       <article key={a.id}>
-                        <div>
-                          <span className={styles.badge}>{stateLabel(a)}</span>
-                          {a.important && (
-                            <span className={styles.badge}>중요</span>
-                          )}
-                          <h3>{a.title}</h3>
-                          {a.push_requested && (
+                        <details className={styles.noticeDetails}>
+                          <summary aria-label={`${a.title} 공지 내용`}>
+                            <div>
+                              <span className={styles.badge}>
+                                {stateLabel(a)}
+                              </span>
+                              {a.important && (
+                                <span className={styles.badge}>중요</span>
+                              )}
+                              <h3>{a.title}</h3>
+                              <small>수정 {date(a.updated_at)}</small>
+                            </div>
+                            <ChevronDown size={18} aria-hidden="true" />
+                          </summary>
+                          <div className={styles.noticeBody}>
+                            {a.push_requested && (
+                              <small>
+                                알림 요청됨 · 발송 성공 {a.push_sent ?? 0}건
+                                {a.push_failed
+                                  ? ` · 실패 ${a.push_failed}건`
+                                  : ""}
+                              </small>
+                            )}
+                            <p>{a.body}</p>
                             <small>
-                              알림 요청됨 · 발송 성공 {a.push_sent ?? 0}건
-                              {a.push_failed
-                                ? ` · 실패 ${a.push_failed}건`
-                                : ""}
+                              수정 {date(a.updated_at)}
+                              {(a.starts_at || a.ends_at) &&
+                                ` · 게시 기간 ${date(a.starts_at)} ~ ${date(a.ends_at)}`}
                             </small>
-                          )}
-                          <p>{a.body}</p>
-                          <small>
-                            수정 {date(a.updated_at)}
-                            {(a.starts_at || a.ends_at) &&
-                              ` · 게시 기간 ${date(a.starts_at)} ~ ${date(a.ends_at)}`}
-                          </small>
-                        </div>
-                        <button disabled={saving} onClick={() => start(a)}>
+                          </div>
+                        </details>
+                        <button
+                          disabled={saving}
+                          aria-label={`${a.title} 수정`}
+                          onClick={() => start(a)}
+                        >
                           수정
                         </button>
                       </article>
