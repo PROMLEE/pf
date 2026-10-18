@@ -4,10 +4,12 @@ import {
   startRebalanceRun,
   cancelRebalanceRun,
   executeRebalanceItem,
+  replaceRebalanceItem,
 } from "../../../lib/rebalance-runs-db";
 import {
   validRunConfig,
   validRunExecution,
+  validRunReplacement,
   isRunId,
   RunError,
 } from "../../rebalance-runs";
@@ -81,6 +83,10 @@ export async function POST(request: Request) {
       await cancelRebalanceRun(userId, body.id, body.revision);
       return Response.json({ ok: true });
     }
+    if (body.action === "replace" && validRunReplacement(body.replacement))
+      return Response.json({
+        run: await replaceRebalanceItem(userId, body.replacement),
+      });
     if (body.action === "execute" && validRunExecution(body.execution))
       return Response.json(await executeRebalanceItem(userId, body.execution));
     throw new RunError("계획·거래 입력을 확인하세요.");

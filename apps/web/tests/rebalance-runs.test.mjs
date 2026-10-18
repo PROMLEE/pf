@@ -32,6 +32,11 @@ const {
   validRunConfig,
   validRunExecution,
   calculateRunPosition,
+  previewRunReplacement,
+  replaceRunItem,
+  runReplacementChoices,
+  runPortfolioOverview,
+  validRunReplacement,
 } = await import(runs);
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const config = {
@@ -251,7 +256,7 @@ api = api
   )
   .replace(
     /import \{[^;]+\} from "\.\.\/\.\.\/\.\.\/lib\/rebalance-runs-db";/,
-    `const listRebalanceRuns=async(...args)=>{globalThis.__runApiTest.calls.push(['list',...args]);return {active:null,history:[],nextOffset:null};};const startRebalanceRun=async(...args)=>{globalThis.__runApiTest.calls.push(['start',...args]);return {};};const cancelRebalanceRun=async(...args)=>{globalThis.__runApiTest.calls.push(['cancel',...args]);};const executeRebalanceItem=async(...args)=>{globalThis.__runApiTest.calls.push(['execute',...args]);return {};};`,
+    `const listRebalanceRuns=async(...args)=>{globalThis.__runApiTest.calls.push(['list',...args]);return {active:null,history:[],nextOffset:null};};const startRebalanceRun=async(...args)=>{globalThis.__runApiTest.calls.push(['start',...args]);return {};};const cancelRebalanceRun=async(...args)=>{globalThis.__runApiTest.calls.push(['cancel',...args]);};const replaceRebalanceItem=async(...args)=>{globalThis.__runApiTest.calls.push(['replace',...args]);return {};};const executeRebalanceItem=async(...args)=>{globalThis.__runApiTest.calls.push(['execute',...args]);return {};};`,
   )
   .replace('"../../rebalance-runs"', JSON.stringify(runs))
   .replace('"../../position-trade"', JSON.stringify(trade));
@@ -312,4 +317,291 @@ test("completion detects an account move or crypto allocation change against fro
       .configurationChanged,
     true,
   );
+});
+
+const activeRun = (snap = snapshot(), fills = []) => ({
+  id: id(80),
+  status: "active",
+  revision: 0,
+  snapshot: snap,
+  fills,
+  createdAt: "2026-10-19T00:00:00Z",
+  endedAt: null,
+  outcome: null,
+});
+const replacementInput = (run, item, selection, p = plan, h = [holding]) => {
+  const preview = previewRunReplacement(run, item.id, selection, p, h);
+  return {
+    changeId: id(81),
+    runId: run.id,
+    revision: run.revision,
+    itemId: item.id,
+    selection,
+    expectedQuantity: preview.to.quantity,
+    expectedPrice: preview.to.unitPrice,
+  };
+};
+test("changing a partially bought security keeps executions, untouched portfolios and remaining budget", () => {
+  const snap = snapshot(),
+    buy = snap.items.find((i) => i.side === "buy");
+  const run = activeRun(snap, [fill(buy.id, 10)]);
+  const p = structuredClone(plan);
+  p.rules.push({
+    ...p.rules[0],
+    id: id(50),
+    name: "다른 ETF",
+    symbol: "000050",
+    quotedPrice: 300,
+  });
+  const request = replacementInput(run, buy, `rule:${id(50)}`, p);
+  const revised = replaceRunItem(
+    run,
+    request,
+    p,
+    [holding],
+    id(82),
+    "2026-10-19T01:00:00Z",
+  );
+  const retained = revised.items.find((i) => i.id === buy.id);
+  assert.equal(retained.quantity, 10);
+  assert.equal(runItemProgress(retained, run.fills).done, true);
+  const next = revised.items.find((i) => i.id === id(82));
+  assert.equal(next.quantity, Math.floor(((buy.quantity - 10) * 100) / 300));
+  assert.ok(next.amountKrw <= (buy.quantity - 10) * 100);
+  assert.deepEqual(
+    revised.items.filter((i) => i.bucketId !== buy.bucketId),
+    snap.items.filter((i) => i.bucketId !== buy.bucketId),
+  );
+  assert.deepEqual(revised.before, snap.before);
+  assert.deepEqual(revised.config, snap.config);
+  assert.equal(revised.changes[0].from.quantity, buy.quantity);
+  assert.equal(revised.changes[0].executedQuantity, 10);
+  assert.equal(snap.changes, undefined);
+});
+test("replacement quantities use frozen FX and include only the remaining original plan budget", () => {
+  const run = activeRun(),
+    buy = run.snapshot.items.find((i) => i.side === "buy");
+  const p = structuredClone(plan);
+  p.usdKrw = 2000;
+  p.rules.push({
+    ...p.rules[0],
+    id: id(50),
+    market: "US",
+    symbol: "MSFT",
+    quotedPrice: 1,
+  });
+  const preview = previewRunReplacement(run, buy.id, `rule:${id(50)}`, p, [
+    holding,
+  ]);
+  assert.equal(preview.to.quantity, Math.floor(buy.amountKrw / 1400));
+  assert.equal(preview.to.amountKrw, preview.to.quantity * 1400);
+  const req = replacementInput(run, buy, `rule:${id(50)}`, p);
+  assert.throws(
+    () =>
+      replaceRunItem(
+        run,
+        { ...req, expectedQuantity: req.expectedQuantity + 1 },
+        p,
+        [holding],
+        id(82),
+        "now",
+      ),
+    /시세나/,
+  );
+});
+test("replacement excludes outside portfolios, excluded securities and unaffordable candidates", () => {
+  const run = activeRun(),
+    buy = run.snapshot.items.find((i) => i.side === "buy");
+  assert.throws(
+    () =>
+      previewRunReplacement(run, buy.id, `holding:${holding.id}`, plan, [
+        holding,
+      ]),
+    /같은 포트/,
+  );
+  run.snapshot.config.excludedBuySymbols = ["KR:005930"];
+  assert.equal(runReplacementChoices(run, buy, plan, [holding]).length, 0);
+  const p = structuredClone(plan);
+  p.rules[0].quotedPrice = 1e9;
+  run.snapshot.config.excludedBuySymbols = [];
+  assert.throws(
+    () => previewRunReplacement(run, buy.id, `rule:${id(3)}`, p, [holding]),
+    /수량이 없습니다/,
+  );
+  run.fills = [fill(buy.id, buy.quantity)];
+  assert.throws(
+    () => previewRunReplacement(run, buy.id, `rule:${id(3)}`, plan, [holding]),
+    /완료/,
+  );
+  assert.equal(
+    validRunReplacement({
+      changeId: id(81),
+      runId: run.id,
+      revision: 0,
+      itemId: buy.id,
+      selection: "rule:foreign",
+      expectedQuantity: 1,
+      expectedPrice: 100,
+    }),
+    false,
+  );
+});
+test("sell replacement caps available shares and reserves other pending sells", () => {
+  const run = activeRun(),
+    sell = run.snapshot.items.find((i) => i.side === "sell");
+  const other = { ...holding, id: id(51), quantity: 7, currentPrice: 200 };
+  const p = structuredClone(plan);
+  p.assignments.push({
+    holdingId: other.id,
+    bucketId: sell.bucketId,
+    source: "manual",
+  });
+  run.snapshot.items.push({
+    ...sell,
+    id: id(52),
+    holdingId: other.id,
+    quantity: 2,
+    amountKrw: 400,
+  });
+  const preview = previewRunReplacement(
+    run,
+    sell.id,
+    `holding:${other.id}`,
+    p,
+    [holding, other],
+  );
+  assert.equal(preview.to.quantity, 5);
+  assert.equal(preview.to.side, "sell");
+  assert.ok(preview.fundingShortfall > 0);
+  const request = replacementInput(run, sell, `holding:${other.id}`, p, [
+    holding,
+    other,
+  ]);
+  assert.throws(
+    () => replaceRunItem(run, request, p, [holding, other], id(82), "now"),
+    /예산을 충당/,
+  );
+  run.snapshot.config.excludedHoldingIds = [other.id];
+  assert.throws(
+    () =>
+      previewRunReplacement(run, sell.id, `holding:${other.id}`, p, [
+        holding,
+        other,
+      ]),
+    /같은 포트/,
+  );
+});
+test("crypto replacement uses eight decimals and changes in trade value offset the cash projection", () => {
+  const run = activeRun(),
+    buy = run.snapshot.items.find((i) => i.side === "buy");
+  const p = structuredClone(plan);
+  p.cryptoAssets = [
+    {
+      id: id(53),
+      bucketId: buy.bucketId,
+      marketCode: "KRW-BTC",
+      name: "비트코인",
+      quantity: 0,
+      quotedPriceKrw: 110000003,
+    },
+  ];
+  run.snapshot.config.cashBucketId = run.snapshot.before[0].id;
+  const req = replacementInput(run, buy, `crypto:${id(53)}`, p);
+  const next = replaceRunItem(run, req, p, [holding], id(82), "now");
+  const coin = next.items.find((i) => i.id === id(82));
+  assert.equal(
+    coin.quantity,
+    Math.floor((buy.amountKrw / 110000003) * 1e8 + 1e-7) / 1e8,
+  );
+  const oldTotal = run.snapshot.projected.reduce((s, b) => s + b.value, 0);
+  assert.ok(
+    Math.abs(next.projected.reduce((s, b) => s + b.value, 0) - oldTotal) < 1e-7,
+  );
+});
+test("other portfolio guidance preserves completed status even if live weights drift", () => {
+  const run = activeRun();
+  const sell = run.snapshot.items.find((i) => i.side === "sell");
+  run.fills = [fill(sell.id, sell.quantity)];
+  const overview = runPortfolioOverview(run, plan, [holding]);
+  assert.equal(overview.find((b) => b.id === sell.bucketId).pending, false);
+  assert.match(
+    overview.find((b) => b.id === sell.bucketId).message,
+    /완료.*추가 제안 없음/,
+  );
+  assert.ok(
+    overview.every(
+      (b) => Number.isFinite(b.current) && Number.isFinite(b.projected),
+    ),
+  );
+});
+test("replacement API uses the session owner and rejects malformed or cross-origin edits", async () => {
+  state.user = "owner";
+  state.calls = [];
+  const run = activeRun(),
+    buy = run.snapshot.items.find((i) => i.side === "buy");
+  const replacement = replacementInput(run, buy, `rule:${id(3)}`);
+  assert.equal(
+    (
+      await route.POST(
+        request({ action: "replace", replacement, userId: "foreign" }),
+      )
+    ).status,
+    200,
+  );
+  assert.equal(state.calls.at(-1)[0], "replace");
+  assert.equal(state.calls.at(-1)[1], "owner");
+  assert.equal(
+    (
+      await route.POST(
+        request({
+          action: "replace",
+          replacement: { ...replacement, expectedPrice: -1 },
+        }),
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await route.POST(
+        request({ action: "replace", replacement }, "https://attacker.example"),
+      )
+    ).status,
+    403,
+  );
+});
+
+test("repeated replacements retain the original unspent budget instead of shrinking it at each switch", () => {
+  const run = activeRun(),
+    buy = run.snapshot.items.find((i) => i.side === "buy");
+  const p = structuredClone(plan);
+  p.rules.push({
+    ...p.rules[0],
+    id: id(50),
+    symbol: "000050",
+    quotedPrice: 300,
+  });
+  const first = replacementInput(run, buy, `rule:${id(50)}`, p);
+  const next = replaceRunItem(run, first, p, [holding], id(82), "first");
+  const revised = { ...run, snapshot: next, revision: 1 };
+  const alternative = next.items.find((i) => i.id === id(82));
+  const back = previewRunReplacement(
+    revised,
+    alternative.id,
+    `rule:${id(3)}`,
+    p,
+    [holding],
+  );
+  assert.equal(back.budget, buy.amountKrw);
+  assert.equal(back.to.quantity, buy.quantity);
+  assert.equal(back.fundingShortfall, 0);
+  const partial = { ...revised, fills: [fill(alternative.id, 1)] };
+  const afterFill = previewRunReplacement(
+    partial,
+    alternative.id,
+    `rule:${id(3)}`,
+    p,
+    [holding],
+  );
+  assert.equal(afterFill.budget, buy.amountKrw - 300);
 });

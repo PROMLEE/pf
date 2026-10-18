@@ -39,6 +39,7 @@ export type RunItem = {
   unitPrice: number;
   currency: "KRW" | "USD";
   amountKrw: number;
+  budgetKrw?: number;
 };
 export type RunWeights = {
   id: string;
@@ -60,6 +61,7 @@ export type RunSnapshot = {
   before: RunWeights[];
   projected: RunWeights[];
   items: RunItem[];
+  changes?: RunChange[];
 };
 export type RunFill = {
   id: string;
@@ -378,4 +380,358 @@ export function calculateRunPosition(
   )
     throw new RunError("변경 후 보유 정보가 입력 범위를 초과합니다.");
   return { quantity, averageCost };
+}
+
+export type RunChange = {
+  id: string;
+  createdAt: string;
+  from: RunItem;
+  to: RunItem;
+  executedQuantity: number;
+  selection: string;
+};
+export type RunReplacement = {
+  changeId: string;
+  runId: string;
+  revision: number;
+  itemId: string;
+  selection: string;
+  expectedQuantity: number;
+  expectedPrice: number;
+};
+export function validRunReplacement(value: unknown): value is RunReplacement {
+  if (!value || typeof value !== "object") return false;
+  const v = value as RunReplacement;
+  return (
+    isRunId(v.changeId) &&
+    isRunId(v.runId) &&
+    isRunId(v.itemId) &&
+    finite(v.expectedQuantity, 1e-8, 1e11) &&
+    finite(v.expectedPrice, 1e-8, 1e11) &&
+    Number.isSafeInteger(v.revision) &&
+    v.revision >= 0 &&
+    typeof v.selection === "string" &&
+    /^(holding|rule|crypto):[0-9a-f-]{36}$/i.test(v.selection) &&
+    isRunId(v.selection.split(":")[1])
+  );
+}
+export type RunChoice = {
+  key: string;
+  label: string;
+  item: RunItem;
+  available: number;
+};
+/** Choices come only from the owner's current holdings, registered candidates and coins. */
+export function runReplacementChoices(
+  run: RebalanceRun,
+  item: RunItem,
+  plan: Portfolio,
+  holdings: Holding[],
+): RunChoice[] {
+  if (!plan.buckets.some((b) => b.id === item.bucketId)) return [];
+  const base = {
+    bucketId: item.bucketId,
+    bucketName: item.bucketName,
+    side: item.side,
+    id: "",
+  };
+  const choices: RunChoice[] = [];
+  const reserved = (holdingId: string | null, assetId: string | null) =>
+    run.snapshot.items
+      .filter(
+        (i) =>
+          i.id !== item.id &&
+          i.side === "sell" &&
+          (holdingId
+            ? i.holdingId === holdingId ||
+              run.fills.some(
+                (f) => f.itemId === i.id && f.holdingId === holdingId,
+              )
+            : i.assetId === assetId),
+      )
+      .reduce((n, i) => n + runItemProgress(i, run.fills).remaining, 0);
+  for (const h of holdings) {
+    if (holdingBucketId(plan, h) !== item.bucketId || !h.accountId || !h.symbol)
+      continue;
+    if (
+      item.side === "sell" &&
+      run.snapshot.config.excludedHoldingIds.includes(h.id)
+    )
+      continue;
+    if (
+      item.side === "buy" &&
+      run.snapshot.config.excludedBuySymbols.includes(`${h.market}:${h.symbol}`)
+    )
+      continue;
+    const price = h.currentPrice ?? h.capturedPrice;
+    if (!price || !Number.isFinite(price) || price <= 0) continue;
+    choices.push({
+      key: `holding:${h.id}`,
+      label: `${h.name} · ${h.broker} ${h.account}`,
+      available: Math.max(0, h.quantity - reserved(h.id, null)),
+      item: {
+        ...base,
+        kind: "stock",
+        name: h.name,
+        symbol: h.symbol,
+        market: h.market,
+        holdingId: h.id,
+        assetId: null,
+        accountId: h.accountId,
+        account: h.account,
+        broker: h.broker,
+        exchange: h.exchange ?? null,
+        unitPrice: price,
+        quantity: 0,
+        currency: h.market === "US" ? "USD" : "KRW",
+        amountKrw: 0,
+      },
+    });
+  }
+  if (item.side === "buy")
+    for (const r of plan.rules) {
+      if (
+        r.bucketId !== item.bucketId ||
+        run.snapshot.config.excludedBuySymbols.includes(
+          `${r.market}:${r.symbol}`,
+        )
+      )
+        continue;
+      const price = r.quotedPrice ?? r.manualPrice;
+      if (!price || !Number.isFinite(price) || price <= 0) continue;
+      choices.push({
+        key: `rule:${r.id}`,
+        label: `${r.name} · 매수 후보 / 거래 계좌 선택`,
+        available: Infinity,
+        item: {
+          ...base,
+          kind: "stock",
+          name: r.name,
+          symbol: r.symbol,
+          market: r.market,
+          holdingId: null,
+          assetId: null,
+          accountId: null,
+          account: null,
+          broker: null,
+          exchange: r.exchange,
+          unitPrice: price,
+          quantity: 0,
+          currency: r.market === "US" ? "USD" : "KRW",
+          amountKrw: 0,
+        },
+      });
+    }
+  for (const c of plan.cryptoAssets) {
+    if (
+      c.bucketId !== item.bucketId ||
+      !c.quotedPriceKrw ||
+      !Number.isFinite(c.quotedPriceKrw) ||
+      c.quotedPriceKrw <= 0
+    )
+      continue;
+    choices.push({
+      key: `crypto:${c.id}`,
+      label: `${c.name} · 가상자산`,
+      available: Math.max(0, c.quantity - reserved(null, c.id)),
+      item: {
+        ...base,
+        kind: "crypto",
+        name: c.name,
+        symbol: c.marketCode,
+        market: "KR",
+        holdingId: null,
+        assetId: c.id,
+        accountId: null,
+        account: null,
+        broker: null,
+        exchange: null,
+        unitPrice: c.quotedPriceKrw,
+        quantity: 0,
+        currency: "KRW",
+        amountKrw: 0,
+      },
+    });
+  }
+  return choices.filter((c) => item.side === "buy" || c.available > 0);
+}
+export function previewRunReplacement(
+  run: RebalanceRun,
+  itemId: string,
+  selection: string,
+  plan: Portfolio,
+  holdings: Holding[],
+) {
+  if (run.status !== "active")
+    throw new RunError("진행 중인 계획에서만 변경할 수 있습니다.", 409);
+  const from = run.snapshot.items.find((i) => i.id === itemId);
+  if (!from) throw new RunError("변경할 거래를 찾지 못했습니다.", 404);
+  const progress = runItemProgress(from, run.fills);
+  if (progress.done)
+    throw new RunError("완료한 거래는 변경할 수 없습니다.", 409);
+  const choice = runReplacementChoices(run, from, plan, holdings).find(
+    (c) => c.key === selection,
+  );
+  if (!choice)
+    throw new RunError("같은 포트의 보유 종목 또는 매수 후보를 선택해 주세요.");
+  const oldRemaining = (from.amountKrw * progress.remaining) / from.quantity;
+  const budget = Math.max(
+    0,
+    (from.budgetKrw ?? from.amountKrw) -
+      (from.amountKrw * progress.executed) / from.quantity,
+  );
+  const unitKrw =
+    choice.item.unitPrice *
+    (choice.item.currency === "USD" ? run.snapshot.usdKrw : 1);
+  const scale = choice.item.kind === "crypto" ? 1e8 : 1;
+  const quantity =
+    Math.floor(
+      Math.min(
+        budget / unitKrw,
+        from.side === "sell" ? choice.available : Infinity,
+      ) *
+        scale +
+        1e-7,
+    ) / scale;
+  if (!(quantity > 0) || quantity > 1e11)
+    throw new RunError(
+      "남은 계획 금액으로 거래할 수 있는 수량이 없습니다. 다른 종목을 선택하세요.",
+    );
+  const to = {
+    ...choice.item,
+    quantity,
+    amountKrw: quantity * unitKrw,
+    budgetKrw: budget,
+  };
+  const unused = Math.max(0, budget - to.amountKrw);
+  const cashProjection = run.snapshot.projected.find(
+    (b) => b.id === run.snapshot.config.cashBucketId,
+  );
+  const availableCash = Math.max(
+    0,
+    cashProjection?.value ??
+      run.snapshot.targetTotal -
+        run.snapshot.projected.reduce((n, b) => n + b.value, 0),
+  );
+  return {
+    from,
+    to,
+    budget,
+    executedQuantity: progress.executed,
+    unused,
+    fundingShortfall: Math.max(
+      0,
+      (from.side === "sell"
+        ? oldRemaining - to.amountKrw
+        : to.amountKrw - oldRemaining) - availableCash,
+    ),
+  };
+}
+export function replaceRunItem(
+  run: RebalanceRun,
+  input: RunReplacement,
+  plan: Portfolio,
+  holdings: Holding[],
+  newItemId: string,
+  createdAt: string,
+): RunSnapshot {
+  if ((run.snapshot.changes?.length ?? 0) >= 100)
+    throw new RunError("한 계획에서 종목 변경은 100회까지 지원합니다.");
+  const { from, to, executedQuantity, fundingShortfall } =
+    previewRunReplacement(run, input.itemId, input.selection, plan, holdings);
+  if (fundingShortfall > 1e-6)
+    throw new RunError(
+      "변경 후 다른 매수 계획의 예산을 충당할 수 없습니다. 다른 종목을 선택하거나 새 계획으로 조정하세요.",
+    );
+  if (
+    Math.abs(to.quantity - input.expectedQuantity) > 1e-10 ||
+    to.unitPrice !== input.expectedPrice
+  )
+    throw new RunError(
+      "시세나 보유 수량이 변경되었습니다. 새로고침 후 변경 수량을 다시 확인하세요.",
+      409,
+    );
+  to.id = newItemId;
+  const retained =
+    executedQuantity > 0
+      ? [
+          {
+            ...from,
+            quantity: executedQuantity,
+            amountKrw: (from.amountKrw * executedQuantity) / from.quantity,
+            budgetKrw: (from.amountKrw * executedQuantity) / from.quantity,
+          },
+        ]
+      : [];
+  const items = run.snapshot.items.flatMap((i) =>
+    i.id === from.id ? [...retained, to] : [i],
+  );
+  if (items.length > 500)
+    throw new RunError("한 계획은 거래 500건까지 지원합니다.");
+  const oldRemaining =
+    (from.amountKrw * (from.quantity - executedQuantity)) / from.quantity;
+  const delta = (to.amountKrw - oldRemaining) * (from.side === "buy" ? 1 : -1);
+  const projected = run.snapshot.projected.map((b) => {
+    const value =
+      b.value +
+      (b.id === from.bucketId ? delta : 0) -
+      (b.id === run.snapshot.config.cashBucketId ? delta : 0);
+    return {
+      ...b,
+      value,
+      percent:
+        run.snapshot.targetTotal > 0
+          ? (value / run.snapshot.targetTotal) * 100
+          : 0,
+    };
+  });
+  return {
+    ...run.snapshot,
+    items,
+    projected,
+    changes: [
+      ...(run.snapshot.changes ?? []),
+      {
+        id: input.changeId,
+        createdAt,
+        from,
+        to,
+        executedQuantity,
+        selection: input.selection,
+      },
+    ],
+  };
+}
+export function runPortfolioOverview(
+  run: RebalanceRun,
+  plan: Portfolio,
+  holdings: Holding[],
+) {
+  const actual = portfolioValues(plan, holdings);
+  return run.snapshot.before.map((b) => {
+    const items = run.snapshot.items.filter((i) => i.bucketId === b.id);
+    const pending = items.some((i) => !runItemProgress(i, run.fills).done);
+    const current =
+      actual.total > 0
+        ? ((actual.values.get(b.id) ?? 0) / actual.total) * 100
+        : 0;
+    const projected =
+      run.snapshot.projected.find((p) => p.id === b.id)?.percent ?? b.percent;
+    const tolerance =
+      run.snapshot.toleranceMode === "relative"
+        ? (b.targetPercent * run.snapshot.tolerance) / 100
+        : run.snapshot.tolerance;
+    const within = Math.abs(projected - b.targetPercent) <= tolerance + 1e-9;
+    const cash = b.id === run.snapshot.config.cashBucketId;
+    const message = pending
+      ? "남은 거래 진행 중"
+      : items.length
+        ? "거래 반영 완료 · 추가 제안 없음"
+        : cash
+          ? "다른 포트의 매수·매도 후 현금 잔액으로 조정"
+          : within
+            ? "계획 예상 비중이 허용 범위 안 · 거래 없음"
+            : "이번 계획에 거래 없음 · 후보·거래 제외 설정 확인";
+    return { ...b, current, projected, pending, within, message };
+  });
 }

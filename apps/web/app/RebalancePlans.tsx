@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Plus, RefreshCw } from "lucide-react";
 import AssetIcon from "./AssetIcon";
+import RunReplacementForm from "./RunReplacementForm";
 import NumberInput from "./NumberInput";
 import type { Holding } from "./holdings";
 import type { AssetSelection } from "./PortfolioBuilder";
@@ -9,6 +10,7 @@ import type { Portfolio } from "./portfolio-model";
 import type { BrokerageAccount } from "./accounts-model";
 import {
   runItemProgress,
+  runPortfolioOverview,
   type RebalanceRun,
   type RunConfig,
   type RunItem,
@@ -341,6 +343,7 @@ function RunDetail({
   onDirty,
   disabled,
   onSelectAsset,
+  onChangeRun,
 }: {
   run: RebalanceRun;
   portfolio: Portfolio;
@@ -350,8 +353,12 @@ function RunDetail({
   onDirty: (v: boolean) => void;
   disabled: boolean;
   onSelectAsset: (asset: AssetSelection) => void;
+  onChangeRun: (run: RebalanceRun) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  const [changing, setChanging] = useState<string | null>(null);
+  const locked = editing !== null || changing !== null;
+  const overview = runPortfolioOverview(run, portfolio, holdings);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const pending = run.snapshot.items
     .filter((i) => !runItemProgress(i, run.fills).done)
@@ -361,6 +368,7 @@ function RunDetail({
   );
   const renderItem = (item: RunItem) => {
     const progress = runItemProgress(item, run.fills);
+    const bucket = overview.find((b) => b.id === item.bucketId);
     const unit = item.kind === "stock" ? "주" : item.symbol.replace("KRW-", "");
     const currentHolding =
       holdings.find((h) => h.id === item.holdingId) ??
@@ -400,7 +408,7 @@ function RunDetail({
               <button
                 type="button"
                 className={styles.securityName}
-                disabled={disabled || editing !== null}
+                disabled={disabled || locked}
                 aria-label={`${item.name} 자산 상세`}
                 onClick={() => onSelectAsset(asset)}
               >
@@ -413,6 +421,13 @@ function RunDetail({
               {item.bucketName}
               {item.account ? ` · ${item.account}` : ""}
             </small>
+            {run.status === "active" && bucket && (
+              <small>
+                현재 {bucket.current.toFixed(2)}% → 계획 후{" "}
+                {bucket.projected.toFixed(2)}% · 목표{" "}
+                {bucket.targetPercent.toFixed(2)}%
+              </small>
+            )}
             <small>
               계획 {quantity(item.quantity)}
               {unit}
@@ -437,15 +452,46 @@ function RunDetail({
             {run.status === "active" && !progress.done && (
               <button
                 type="button"
-                disabled={disabled || editing !== null}
-                onClick={() => setEditing(item.id)}
+                disabled={disabled || locked}
+                onClick={() => {
+                  setConfirmCancel(false);
+                  setEditing(item.id);
+                }}
                 aria-label={`${item.bucketName} ${item.name} ${item.side === "buy" ? "매수" : "매도"} 거래 입력`}
               >
                 거래 입력 <ArrowRight size={13} />
               </button>
             )}
+            {run.status === "active" && !progress.done && (
+              <button
+                type="button"
+                className={styles.changeSecurity}
+                disabled={disabled || locked}
+                onClick={() => {
+                  setConfirmCancel(false);
+                  setChanging(item.id);
+                }}
+                aria-label={`${item.bucketName} ${item.name} 종목 변경`}
+              >
+                종목 변경
+              </button>
+            )}
           </div>
         </div>
+        {changing === item.id && (
+          <RunReplacementForm
+            run={run}
+            item={item}
+            portfolio={portfolio}
+            holdings={holdings}
+            onDirty={onDirty}
+            onCancel={() => setChanging(null)}
+            onSaved={(next) => {
+              setChanging(null);
+              onChangeRun(next);
+            }}
+          />
+        )}
         {editing === item.id && (
           <RunTradeForm
             key={item.id}
@@ -508,6 +554,31 @@ function RunDetail({
           {completed.map(renderItem)}
         </details>
       )}
+      {run.status === "active" && (
+        <section className={styles.otherPortfolios} aria-label="다른 포트 안내">
+          <h3>다른 포트</h3>
+          {overview
+            .filter((b) => !b.pending)
+            .map((b) => (
+              <div key={b.id} className={styles.portfolioGuide}>
+                <strong>
+                  <i style={{ background: b.color }} />
+                  {b.name}
+                </strong>
+                <span>
+                  현재 {b.current.toFixed(2)}% · 목표{" "}
+                  {b.targetPercent.toFixed(2)}%
+                </span>
+                <small>
+                  계획 예상 {b.projected.toFixed(2)}% · {b.message}
+                </small>
+              </div>
+            ))}
+          {overview.every((b) => b.pending) && (
+            <p>모든 포트의 남은 거래가 위에 표시되어 있습니다.</p>
+          )}
+        </section>
+      )}
       <details className={styles.disclosure}>
         <summary>
           {run.outcome ? "최종 결과 · 목표 비중 비교" : "확정 당시 예상 비중"}{" "}
@@ -558,6 +629,33 @@ function RunDetail({
           </tbody>
         </table>
       </details>
+      {Boolean(run.snapshot.changes?.length) && (
+        <details className={styles.disclosure}>
+          <summary>
+            종목 변경 이력 {run.snapshot.changes!.length}건{" "}
+            <ChevronDown size={14} />
+          </summary>
+          {run.snapshot.changes!.map((change) => (
+            <div key={change.id} className={styles.changeHistory}>
+              <strong>
+                {change.from.bucketName} ·{" "}
+                {change.from.side === "buy" ? "매수" : "매도"}
+              </strong>
+              <span>
+                {change.from.name} → {change.to.name}{" "}
+                {quantity(change.to.quantity)}
+                {change.to.kind === "stock" ? "주" : "개"}
+              </span>
+              <small>
+                {date(change.createdAt)}
+                {change.executedQuantity > 0
+                  ? ` · 이전 종목 ${quantity(change.executedQuantity)} 반영 내역 유지`
+                  : ""}
+              </small>
+            </div>
+          ))}
+        </details>
+      )}
       <details className={styles.disclosure}>
         <summary>
           실행 내역 {run.fills.length}건 <ChevronDown size={14} />
@@ -599,7 +697,7 @@ function RunDetail({
             <button
               type="button"
               className={styles.primary}
-              disabled={disabled}
+              disabled={disabled || locked}
               onClick={onCancelRun}
             >
               계획 중단 확인
@@ -619,7 +717,7 @@ function RunDetail({
           <button
             type="button"
             className={styles.cancelRun}
-            disabled={disabled || editing !== null}
+            disabled={disabled || locked}
             onClick={() => setConfirmCancel(true)}
           >
             계획 중단
@@ -834,6 +932,9 @@ export default function RebalancePlans({
             onDirty={setFormDirty}
             disabled={busy || disabled}
             onCancelRun={cancel}
+            onChangeRun={(next) =>
+              setListing((current) => ({ ...current, active: next }))
+            }
             onSelectAsset={onSelectAsset}
           />
         ) : (
@@ -873,6 +974,7 @@ export default function RebalancePlans({
                 onDirty={setFormDirty}
                 disabled
                 onCancelRun={() => {}}
+                onChangeRun={() => {}}
                 onSelectAsset={onSelectAsset}
               />
               <button

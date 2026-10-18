@@ -383,3 +383,62 @@
 .securityName:hover {
   text-decoration: underline;
 }
+
+.order .changeSecurity {
+  color: var(--muted);
+  font-size: 12px;
+  padding-top: 4px;
+}
+.replacementPreview {
+  display: grid;
+  gap: 9px;
+  padding: 12px 0;
+}
+.replacementPreview > span {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  font-size: 14px;
+}
+.replacementPreview strong {
+  margin-left: auto;
+}
+.otherPortfolios {
+  margin-top: 28px;
+}
+.portfolioGuide {
+  display: grid;
+  gap: 6px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.portfolioGuide strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+.portfolioGuide i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.portfolioGuide span,
+.portfolioGuide small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.changeHistory {
+  display: grid;
+  gap: 7px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.changeHistory small {
+  color: var(--muted);
+  font-size: 13px;
+}

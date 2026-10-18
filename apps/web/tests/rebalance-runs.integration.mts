@@ -10,10 +10,12 @@ import {
   listRebalanceRuns,
   executeRebalanceItem,
   cancelRebalanceRun,
+  replaceRebalanceItem,
 } from "../lib/rebalance-runs-db";
 import { applyHoldingTrade } from "../lib/holding-trades-db";
 import {
   runItemProgress,
+  previewRunReplacement,
   type RunConfig,
   type RunExecution,
   type RunItem,
@@ -269,11 +271,93 @@ try {
   assert.ok(
     run.snapshot.items.every((i) => runItemProgress(i, run.fills).done),
   );
-  const next = await startRebalanceRun(userId, randomUUID(), {
+  let next = await startRebalanceRun(userId, randomUUID(), {
     ...config,
     mode: "add-only",
     newCash: 3000000,
   });
+  const switchItem = next.snapshot.items.find(
+    (i) => i.side === "buy" && i.quantity >= 2,
+  )!;
+  assert.ok(switchItem, "QA needs a replaceable buy");
+  await executeRebalanceItem(userId, {
+    ...(await input(switchItem, 1)),
+    runId: next.id,
+    revision: next.revision,
+  });
+  next = (await listRebalanceRuns(userId)).active!;
+  const altRuleId = randomUUID();
+  await client.query(
+    `insert into portfolio.rules(id,user_id,bucket_id,market,symbol,name,manual_price,position) values($1,$2,$3,'KR','099999','QA replacement',100,999)`,
+    [altRuleId, userId, switchItem.bucketId],
+  );
+  const currentPlan = (await listPortfolio(userId))!;
+  const currentHoldings = await listHoldings(userId);
+  const preview = previewRunReplacement(
+    next,
+    switchItem.id,
+    `rule:${altRuleId}`,
+    currentPlan,
+    currentHoldings,
+  );
+  const edit = {
+    changeId: randomUUID(),
+    runId: next.id,
+    revision: next.revision,
+    itemId: switchItem.id,
+    selection: `rule:${altRuleId}`,
+    expectedQuantity: preview.to.quantity,
+    expectedPrice: preview.to.unitPrice,
+  };
+  const beforeReplace = JSON.stringify(currentHoldings);
+  const unaffected = next.snapshot.items.filter(
+    (i) => i.bucketId !== switchItem.bucketId,
+  );
+  const oldRevision = next.revision;
+  next = await replaceRebalanceItem(userId, edit);
+  assert.equal(JSON.stringify(await listHoldings(userId)), beforeReplace);
+  assert.equal(next.revision, oldRevision + 1);
+  assert.equal(next.snapshot.changes!.length, 1);
+  assert.equal(next.snapshot.changes![0].to.budgetKrw, preview.budget);
+  assert.deepEqual(
+    next.snapshot.items.filter((i) => i.bucketId !== switchItem.bucketId),
+    unaffected,
+  );
+  assert.equal(
+    runItemProgress(
+      next.snapshot.items.find((i) => i.id === switchItem.id)!,
+      next.fills,
+    ).done,
+    true,
+  );
+  const retried = await replaceRebalanceItem(userId, edit);
+  assert.equal(retried.revision, next.revision);
+  assert.equal(retried.snapshot.changes!.length, 1);
+  await assert.rejects(
+    () =>
+      replaceRebalanceItem(userId, {
+        ...edit,
+        selection: `rule:${randomUUID()}`,
+      }),
+    /이미 사용/,
+  );
+  await assert.rejects(
+    () => replaceRebalanceItem(userId, { ...edit, changeId: randomUUID() }),
+    /계획이 변경/,
+  );
+  await assert.rejects(
+    () => replaceRebalanceItem("not-the-owner", edit),
+    /먼저 만들어/,
+  );
+  const replacement = next.snapshot.changes![0].to;
+  const replacedInput = {
+    ...(await input(replacement, 1)),
+    runId: next.id,
+    revision: next.revision,
+  };
+  await executeRebalanceItem(userId, replacedInput);
+  next = (await listRebalanceRuns(userId)).active!;
+  assert.equal(runItemProgress(replacement, next.fills).executed, 1);
   const beforeCancel = JSON.stringify(await listHoldings(userId));
   await cancelRebalanceRun(userId, next.id, next.revision);
   assert.equal(JSON.stringify(await listHoldings(userId)), beforeCancel);
@@ -283,7 +367,7 @@ try {
     ),
   );
   console.log(
-    "DB integration passed: frozen plan, partial/normal fills, duplicate protection, owner isolation, cash rollback, new holding, fractional crypto, completion and cancellation.",
+    "DB integration passed: frozen plan, partial/normal fills, duplicate protection, owner isolation, cash rollback, new holding, fractional crypto, completion, partial replacement, unchanged holdings, revision/owner checks, replacement execution and cancellation.",
   );
 } finally {
   await client.query("rollback");

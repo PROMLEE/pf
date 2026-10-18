@@ -14,6 +14,8 @@ import { nextStockBasis, nextCashFx } from "../app/fx-gains";
 import { holdingBucketId } from "../app/portfolio-model";
 import {
   freezeRunSnapshot,
+  replaceRunItem,
+  type RunReplacement,
   captureRunOutcome,
   runItemProgress,
   calculateRunPosition,
@@ -432,6 +434,65 @@ export async function executeRebalanceItem(
     };
     await client.query("commit");
     return final;
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export async function replaceRebalanceItem(
+  userId: string,
+  input: RunReplacement,
+) {
+  const client = await db().connect();
+  try {
+    await client.query("begin");
+    await lockOwner(client, userId);
+    const result = await client.query<RunRow>(
+      `select * from portfolio.rebalance_runs where user_id=$1 and id=$2 for update`,
+      [userId, input.runId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new RunError("계획을 찾지 못했습니다.", 404);
+    const prior = row.snapshot.changes?.find((c) => c.id === input.changeId);
+    if (prior) {
+      if (
+        prior.from.id !== input.itemId ||
+        prior.selection !== input.selection ||
+        prior.to.quantity !== input.expectedQuantity ||
+        prior.to.unitPrice !== input.expectedPrice
+      )
+        throw new RunError("이미 사용한 변경 요청입니다.", 409);
+      const run = await runFromRow(client, userId, row);
+      await client.query("commit");
+      return run;
+    }
+    if (row.status !== "active" || row.revision !== input.revision)
+      throw new RunError(
+        "계획이 변경되었습니다. 새로고침 후 다시 선택하세요.",
+        409,
+      );
+    const run = await runFromRow(client, userId, row);
+    const plan = await listPortfolio(userId, client);
+    if (!plan) throw new RunError("포트폴리오를 찾지 못했습니다.", 404);
+    const holdings = await listHoldings(userId, client);
+    const snapshot = replaceRunItem(
+      run,
+      input,
+      plan,
+      holdings,
+      randomUUID(),
+      new Date().toISOString(),
+    );
+    const updated = await client.query<RunRow>(
+      `update portfolio.rebalance_runs set snapshot=$3,revision=revision+1 where user_id=$1 and id=$2 returning *`,
+      [userId, input.runId, JSON.stringify(snapshot)],
+    );
+    const saved = await runFromRow(client, userId, updated.rows[0]);
+    await client.query("commit");
+    return saved;
   } catch (e) {
     await client.query("rollback");
     throw e;
