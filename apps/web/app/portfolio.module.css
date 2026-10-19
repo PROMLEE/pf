@@ -1895,23 +1895,42 @@
   }
 }
 
+.calculationAmounts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin: 16px 0 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.calculationAmounts dt { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.calculationAmounts dd { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 0; color: var(--ink); font-size: 17px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
+.calculationAmounts dd span { color: var(--muted); font-size: 13px; font-weight: 400; }
+.calculationAmounts .calculationProjected dd { color: var(--blue); }
 .calculationRows {
   display: grid;
-  gap: 9px;
+  gap: 10px;
   margin: 14px 0;
-  max-width: 420px;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
   font-variant-numeric: tabular-nums;
 }
 .calculationRows > div {
   display: grid;
-  grid-template-columns: minmax(100px, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(100px, 1fr) minmax(0, 1.5fr);
   gap: 12px;
   align-items: baseline;
 }
 .calculationRows dt { color: var(--muted); }
 .calculationRows dd { margin: 0; text-align: right; color: var(--ink); overflow-wrap: anywhere; }
+.calculationRows .calculationGap dd { font-weight: 600; }
+.calculationRangeEnd { display: inline-block; margin-left: 5px; }
+@media (max-width: 760px) {
+  .calculationAmounts { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .calculationAmounts > div { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 1.5fr); gap: 12px; align-items: baseline; }
+  .calculationAmounts dd { margin: 0; text-align: right; font-size: 16px; gap: 0; }
+}
 .calculationExplanation { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 12px 0; }
 
 .rebalanceOverview {

@@ -3233,14 +3233,27 @@ export default function PortfolioBuilder({
                         <div className={styles.tradeDetail}>
                           <details>
                             <summary>포트별 계산 상세</summary>
+                            <dl className={styles.calculationAmounts}>
+                              <div>
+                                <dt>현재 평가금액</dt>
+                                <dd>{fmt(item.current)}<span>{pct(item.currentPercent)}</span></dd>
+                              </div>
+                              <div>
+                                <dt>목표 금액</dt>
+                                <dd>{fmt(advice.targetTotal * item.bucket.targetPercent / 100)}<span>{pct(item.bucket.targetPercent)}</span></dd>
+                              </div>
+                              <div className={styles.calculationProjected}>
+                                <dt>제안 반영 후 예상</dt>
+                                <dd>{fmt(item.projectedValue)}<span>{pct(item.projectedPercent)}</span></dd>
+                              </div>
+                            </dl>
                             <dl className={styles.calculationRows}>
-                              <div><dt>목표 금액</dt><dd>{fmt(advice.targetTotal * item.bucket.targetPercent / 100)}</dd></div>
-                              <div><dt>허용 하한</dt><dd>{fmt(Math.max(0, advice.targetTotal * (item.bucket.targetPercent - tolerancePoints(draft, item.bucket.targetPercent)) / 100))}</dd></div>
-                              <div><dt>허용 상한</dt><dd>{fmt(advice.targetTotal * (item.bucket.targetPercent + tolerancePoints(draft, item.bucket.targetPercent)) / 100)}</dd></div>
-                              <div><dt>현재 비중</dt><dd>{pct(item.currentPercent)}</dd></div>
-                              {advice.newCash > 0 && <div><dt>자금 추가 후</dt><dd>{pct(item.fundedPercent)}</dd></div>}
-                              <div><dt>제안 반영 후</dt><dd>{pct(item.projectedPercent)}</dd></div>
-                              {Math.abs(item.remainingGapKrw) >= 1 && <div><dt>목표 대비 {item.remainingGapKrw > 0 ? "부족" : "초과"}</dt><dd>{fmt(Math.abs(item.remainingGapKrw))}</dd></div>}
+                              <div className={styles.calculationGap}>
+                                <dt>제안 후 목표 대비</dt>
+                                <dd>{Math.abs(item.remainingGapKrw) < 1 ? "목표 도달" : `${fmt(Math.abs(item.remainingGapKrw))} ${item.remainingGapKrw > 0 ? "부족" : "초과"}`}</dd>
+                              </div>
+                              <div><dt>허용 금액 범위</dt><dd>{fmt(Math.max(0, advice.targetTotal * (item.bucket.targetPercent - tolerancePoints(draft, item.bucket.targetPercent)) / 100))}<span className={styles.calculationRangeEnd}>~ {fmt(advice.targetTotal * (item.bucket.targetPercent + tolerancePoints(draft, item.bucket.targetPercent)) / 100)}</span></dd></div>
+                              {advice.newCash > 0 && <div><dt>자금 추가 직후 비중</dt><dd>{pct(item.fundedPercent)}</dd></div>}
                             </dl>
                           {!amount && advice.newCash > 0 && action === "add" && Math.round(item.projectedPercent * 10) < Math.round(item.currentPercent * 10) && (
                             <p className={styles.shareDilutionNote}>
