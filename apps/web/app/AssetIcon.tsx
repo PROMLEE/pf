@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Market } from "./holdings";
 import styles from "./AssetIcon.module.css";
 
@@ -35,7 +35,7 @@ function imageUrls({ kind, name, symbol = "", market, exchange }: Props) {
     candidates.push(
       `${imageBase}${encodeURIComponent(`${stem}.${other}`)}.png`,
     );
-    return candidates;
+    return [...new Set(candidates)];
   }
   return [`${imageBase}${encodeURIComponent(code)}.png`];
 }
@@ -51,18 +51,52 @@ function fallbackText(kind: Props["kind"], symbol: string, name: string) {
 }
 
 export default function AssetIcon(props: Props) {
-  const { kind, name, symbol = "" } = props;
   const urls = imageUrls(props);
-  const identity = `${kind}:${props.market ?? ""}:${props.exchange ?? ""}:${symbol}:${name}`;
-  const [image, setImage] = useState({ identity, index: 0, loaded: false });
+  // Names can change after symbol lookup without changing the actual image.
+  // Reset only when the resource list changes, never after a completed load.
+  return (
+    <AssetImage
+      key={`${props.kind}:${JSON.stringify(urls)}`}
+      {...props}
+      urls={urls}
+    />
+  );
+}
 
-  useEffect(() => {
-    setImage({ identity, index: 0, loaded: false });
-  }, [identity]);
-
-  const index = image.identity === identity ? image.index : 0;
-  const loaded = image.identity === identity && image.loaded;
+function AssetImage({
+  kind,
+  name,
+  symbol = "",
+  urls,
+}: Props & { urls: string[] }) {
+  const [image, setImage] = useState({ index: 0, loaded: false, attempt: 0 });
+  const { index, loaded, attempt } = image;
   const url = urls[index];
+  const markLoaded = useCallback(() => {
+    setImage((current) =>
+      current.index === index && current.attempt === attempt && !current.loaded
+        ? { ...current, loaded: true }
+        : current,
+    );
+  }, [index, attempt]);
+  const imageRef = useCallback(
+    (node: HTMLImageElement | null) => {
+      // A warm-cache image may already be complete before React receives load.
+      if (node?.complete && node.naturalWidth > 0) markLoaded();
+    },
+    [markLoaded],
+  );
+  useEffect(() => {
+    if (url || !urls.length || attempt > 0) return;
+    const timer = window.setTimeout(() => {
+      setImage((current) =>
+        current.index === index && current.attempt === attempt
+          ? { index: 0, loaded: false, attempt: 1 }
+          : current,
+      );
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [url, urls.length, index, attempt]);
   return (
     <span
       aria-hidden="true"
@@ -76,14 +110,19 @@ export default function AssetIcon(props: Props) {
       {url && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          key={url}
+          key={`${url}:${attempt}`}
+          ref={imageRef}
           src={url}
           alt=""
           loading="lazy"
           className={loaded ? styles.visibleImage : styles.pendingImage}
-          onLoad={() => setImage({ identity, index, loaded: true })}
+          onLoad={markLoaded}
           onError={() =>
-            setImage({ identity, index: index + 1, loaded: false })
+            setImage((current) =>
+              current.index === index && current.attempt === attempt
+                ? { ...current, index: index + 1, loaded: false }
+                : current,
+            )
           }
         />
       )}
