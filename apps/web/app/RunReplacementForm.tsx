@@ -136,6 +136,12 @@ export default function RunReplacementForm({
             후보를 등록한 뒤 다시 확인하세요.
           </p>
         )}
+        {preview?.to.kind === "stock" && !preview.to.holdingId && (
+          <small>
+            이 포트의 보유 항목이 없는 종목입니다. 실제 매수 후 거래 입력에서
+            계좌를 선택합니다.
+          </small>
+        )}
         {preview && (
           <div className={styles.replacementPreview}>
             <span>

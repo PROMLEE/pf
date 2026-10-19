@@ -605,3 +605,40 @@ test("repeated replacements retain the original unspent budget instead of shrink
   );
   assert.equal(afterFill.budget, buy.amountKrw - 300);
 });
+
+test("replacement choices show owned accounts once, reuse candidate prices, and mark only unowned codes as new", () => {
+  const run = activeRun(),
+    buy = run.snapshot.items.find((i) => i.side === "buy");
+  const p = structuredClone(plan);
+  const h1 = {
+    ...holding,
+    id: id(60),
+    symbol: "005930",
+    name: "삼성전자",
+    currentPrice: null,
+    capturedPrice: null,
+  };
+  const h2 = { ...h1, id: id(61), accountId: id(62), account: "ISA" };
+  p.assignments.push(
+    { holdingId: h1.id, bucketId: buy.bucketId, source: "manual" },
+    { holdingId: h2.id, bucketId: buy.bucketId, source: "manual" },
+  );
+  p.rules.push({
+    ...p.rules[0],
+    id: id(63),
+    symbol: "000050",
+    name: "미보유 ETF",
+  });
+  const choices = runReplacementChoices(run, buy, p, [holding, h1, h2]);
+  assert.equal(choices.filter((c) => c.item.symbol === "005930").length, 2);
+  assert.ok(!choices.some((c) => c.key === `rule:${id(3)}`));
+  assert.ok(
+    choices
+      .filter((c) => c.item.symbol === "005930")
+      .every((c) => c.item.unitPrice === 100 && c.item.holdingId),
+  );
+  assert.match(
+    choices.find((c) => c.key === `rule:${id(63)}`).label,
+    /신규 종목/,
+  );
+});

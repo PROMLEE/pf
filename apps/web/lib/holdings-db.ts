@@ -53,7 +53,7 @@ function fromRow(row: Row): Holding {
 
 async function select(client: Pick<PoolClient, "query">, userId: string) {
   const result = await client.query<Row>(
-    `select id, xmin::text as revision, broker, account_label, account_id, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, average_cost_krw, captured_at, current_price, quote_label, quote_checked_at
+    `select id, position_revision::text as revision, broker, account_label, account_id, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, average_cost_krw, captured_at, current_price, quote_label, quote_checked_at
      from portfolio.holdings where user_id = $1 order by created_at desc, name asc`,
     [userId],
   );

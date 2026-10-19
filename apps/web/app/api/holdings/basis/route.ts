@@ -49,7 +49,7 @@ export async function PATCH(request: Request) {
   try {
     await client.query("begin");
     const updated = await client.query(
-      `update portfolio.holdings set average_cost_krw=$3, updated_at=now() where user_id=$1 and id=$2 and market='US' and xmin::text=$4 returning id`,
+      `update portfolio.holdings set average_cost_krw=$3, updated_at=now() where user_id=$1 and id=$2 and market='US' and position_revision::text=$4 returning id`,
       [userId, body.id, body.averageCostKrw, body.revision],
     );
     if (updated.rowCount !== 1) {

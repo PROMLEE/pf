@@ -167,6 +167,14 @@ try {
     );
   }
   const first = await input(sell, 1);
+  await client.query(
+    `update portfolio.holdings set quote_checked_at=now(), quote_label='QA quote refresh' where user_id=$1 and id=$2`,
+    [userId, sell.holdingId],
+  );
+  assert.equal(
+    (await listHoldings(userId)).find((h) => h.id === sell.holdingId)!.revision,
+    first.expectedRevision,
+  );
   await executeRebalanceItem(userId, first);
   run = (await listRebalanceRuns(userId)).active!;
   assert.equal(runItemProgress(sell, run.fills).remaining, sell.quantity - 1);
@@ -204,7 +212,48 @@ try {
       revision: current.revision!,
     },
   };
+  for (let n = 0; n < 3; n++)
+    await client.query(
+      `update portfolio.holdings set current_price=current_price+1,quote_checked_at=now(),updated_at=now() where user_id=$1 and id=$2`,
+      [userId, current.id],
+    );
+  assert.equal(
+    (await listHoldings(userId)).find((h) => h.id === current.id)!.revision,
+    current.revision,
+  );
   const normal = await applyHoldingTrade(userId, current.id, trade);
+  await assert.rejects(
+    () => applyHoldingTrade(userId, current.id, trade),
+    /보유 정보가 변경/,
+  );
+  const afterTrade = (await listHoldings(userId)).find(
+    (h) => h.id === current.id,
+  )!;
+  const abaTrade = {
+    ...trade,
+    expected: {
+      ...trade.expected,
+      quantity: afterTrade.quantity,
+      averageCost: afterTrade.averageCost,
+      revision: afterTrade.revision!,
+    },
+  };
+  await client.query(
+    `update portfolio.holdings set quantity=quantity+1 where user_id=$1 and id=$2`,
+    [userId, current.id],
+  );
+  await client.query(
+    `update portfolio.holdings set quantity=quantity-1 where user_id=$1 and id=$2`,
+    [userId, current.id],
+  );
+  assert.notEqual(
+    (await listHoldings(userId)).find((h) => h.id === current.id)!.revision,
+    afterTrade.revision,
+  );
+  await assert.rejects(
+    () => applyHoldingTrade(userId, current.id, abaTrade),
+    /보유 정보가 변경/,
+  );
   assert.equal(normal.progressRecorded, true);
   run = (await listRebalanceRuns(userId)).active!;
   assert.equal(runItemProgress(sell, run.fills).remaining, sell.quantity - 2);
@@ -367,7 +416,7 @@ try {
     ),
   );
   console.log(
-    "DB integration passed: frozen plan, partial/normal fills, duplicate protection, owner isolation, cash rollback, new holding, fractional crypto, completion, partial replacement, unchanged holdings, revision/owner checks, replacement execution and cancellation.",
+    "DB integration passed: frozen plan, partial/normal fills, duplicate protection, owner isolation, cash rollback, new holding, fractional crypto, completion, partial replacement, unchanged holdings, revision/owner checks, replacement execution, quote-only refresh without false conflicts, duplicate/ABA protection and cancellation.",
   );
 } finally {
   await client.query("rollback");

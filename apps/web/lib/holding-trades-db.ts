@@ -34,7 +34,7 @@ export async function applyHoldingTrade(
       account_id: string;
       revision: string;
     }>(
-      `select quantity, average_cost, average_cost_krw, market, symbol, account_id, xmin::text as revision from portfolio.holdings where user_id = $1 and id = $2 for update`,
+      `select quantity, average_cost, average_cost_krw, market, symbol, account_id, position_revision::text as revision from portfolio.holdings where user_id = $1 and id = $2 for update`,
       [userId, id],
     );
     const row = result.rows[0];

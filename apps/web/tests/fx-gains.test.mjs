@@ -148,7 +148,7 @@ test("basis endpoint authenticates, validates, rejects CSRF and protects owner/r
   assert.equal(r.status, 200);
   const update = state.calls.find((c) => c.sql.startsWith("update"));
   assert.match(update.sql, /user_id=\$1/);
-  assert.match(update.sql, /xmin::text=\$4/);
+  assert.match(update.sql, /position_revision::text=\$4/);
   assert.match(update.sql, /market='US'/);
   assert.deepEqual(update.args, ["owner", id, 130000, "123"]);
 });

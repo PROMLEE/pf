@@ -463,7 +463,17 @@ export function runReplacementChoices(
       run.snapshot.config.excludedBuySymbols.includes(`${h.market}:${h.symbol}`)
     )
       continue;
-    const price = h.currentPrice ?? h.capturedPrice;
+    const registered = plan.rules.find(
+      (r) =>
+        r.bucketId === item.bucketId &&
+        r.market === h.market &&
+        r.symbol === h.symbol,
+    );
+    const price =
+      h.currentPrice ??
+      h.capturedPrice ??
+      registered?.quotedPrice ??
+      registered?.manualPrice;
     if (!price || !Number.isFinite(price) || price <= 0) continue;
     choices.push({
       key: `holding:${h.id}`,
@@ -492,6 +502,13 @@ export function runReplacementChoices(
     for (const r of plan.rules) {
       if (
         r.bucketId !== item.bucketId ||
+        holdings.some(
+          (h) =>
+            h.market === r.market &&
+            h.symbol === r.symbol &&
+            h.accountId &&
+            holdingBucketId(plan, h) === item.bucketId,
+        ) ||
         run.snapshot.config.excludedBuySymbols.includes(
           `${r.market}:${r.symbol}`,
         )
@@ -501,7 +518,7 @@ export function runReplacementChoices(
       if (!price || !Number.isFinite(price) || price <= 0) continue;
       choices.push({
         key: `rule:${r.id}`,
-        label: `${r.name} · 매수 후보 / 거래 계좌 선택`,
+        label: `${r.name} · ${holdings.some((h) => h.market === r.market && h.symbol === r.symbol) ? "이 포트에 추가" : "신규 종목"}`,
         available: Infinity,
         item: {
           ...base,
