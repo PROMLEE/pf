@@ -1933,3 +1933,8 @@
 .rebalanceDisclosures .calculationNotes > .help { margin: 12px 0; font-size: 13px; }
 .theoreticalBudget { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
 .theoreticalBudget strong { color: var(--ink); margin-left: 8px; }
+
+.assignmentHint { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.assignmentList .assignmentIdentity strong { font-size: 14px; }
+.assignmentAccount { color: var(--ink); font-size: 13px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.assignmentList .assignmentIdentity small { font-size: 13px; color: var(--muted); white-space: normal; line-height: 1.5; }

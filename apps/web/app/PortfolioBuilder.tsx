@@ -2416,6 +2416,7 @@ export default function PortfolioBuilder({
                     <Camera size={15} /> 캡처 가져오기
                   </button>
                 </div>
+                {holdings.length > 0 && <p className={styles.assignmentHint}>같은 종목도 계좌별로 따로 배정합니다.</p>}
                 {holdings.length ? (
                   <div className={styles.assignmentList}>
                     {holdings.map((holding) => {
@@ -2444,16 +2445,16 @@ export default function PortfolioBuilder({
                             />
                             <div>
                               <strong>{holding.name}</strong>
+                              <span className={styles.assignmentAccount}>{holding.broker} · {holding.account || "계좌 미입력"}</span>
                               <small>
-                                {holding.broker} ·{" "}
-                                {holding.symbol || "코드 미확인"} ·{" "}
+                                {holding.symbol || "코드 미확인"} · {quantityFormat.format(holding.quantity)}주 ·{" "}
                                 {fmt(holdingValueKrw(holding, draft.usdKrw))}
                               </small>
                             </div>
                           </div>
                           <select
                             value={selection}
-                            aria-label={`${holding.name} 포트 배정`}
+                            aria-label={`${holding.name} ${holding.broker} ${holding.account || "계좌 미입력"} 포트 배정`}
                             onChange={(event) =>
                               assign(holding.id, event.target.value)
                             }
