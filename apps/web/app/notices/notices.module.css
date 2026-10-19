@@ -1,0 +1,105 @@
+.page {
+  width: min(100% - 40px, 760px);
+  margin: 0 auto;
+  padding: 28px 0 48px;
+  color: var(--ink);
+}
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 14px;
+}
+.nav a,
+.footer a {
+  color: var(--blue);
+  text-decoration: none;
+}
+.nav a:hover,
+.footer a:hover {
+  text-decoration: underline;
+}
+.nav .brand {
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 18px;
+}
+.heading {
+  margin: 48px 0 28px;
+}
+.heading h1 {
+  margin: 10px 0 14px;
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.heading p,
+.heading time {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.list li {
+  border-bottom: 1px solid var(--line);
+}
+.list a {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px 0;
+  color: inherit;
+  text-decoration: none;
+}
+.list a:hover strong {
+  color: var(--blue);
+}
+.list strong {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.list time {
+  color: var(--muted);
+  font-size: 13px;
+}
+.badge {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--blue);
+}
+.body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.9;
+}
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-top: 40px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+@media (max-width: 600px) {
+  .page {
+    padding-top: 22px;
+  }
+  .heading {
+    margin-top: 34px;
+  }
+  .body {
+    font-size: 15px;
+  }
+}

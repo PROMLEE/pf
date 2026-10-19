@@ -92,6 +92,7 @@ export default function AboutPage() {
             <div><span className={styles.eyebrow}>포트리듬 · PortRhythm 시작하기 전에</span><h2>무엇을 할 수 있나요?</h2></div>
             <div>
               <details><summary>계좌가 자동으로 동기화되나요?</summary><p>실제 계좌 잔고를 자동으로 가져오지는 않습니다. 주식은 지원하는 증권사 잔고 캡처를 검토하거나 직접 입력하고, 가상자산·현금도 직접 등록합니다. 거래 후 수량을 수정하면 시세 조회와 평가에 반영됩니다.</p></details>
+              <details><summary>다른 자산관리 앱을 사용 중이어도 이용할 수 있나요?</summary><p>도미노·더리치 등을 사용 중이어도, 목표 비중과 리밸런싱 계획을 관리하는 용도로 PortRhythm을 함께 이용할 수 있습니다. 자산은 직접 입력하거나 지원하는 잔고 캡처로 등록합니다. 다른 서비스의 데이터가 자동으로 이전되지는 않습니다.</p></details>
               <details><summary>가격은 어떻게 확인하나요?</summary><p>가격·환율·갱신 기준은 <Link href="/guide">사용 가이드</Link>에서 확인하세요.</p></details>
               <details><summary>앱이 자동으로 매매해주나요?</summary><p>예상 조정 수량과 비중을 검토하는 도구입니다. 주문은 직접 진행하며, 계좌별 거래 가능 여부·수수료·세금·환전 비용은 실제 거래 전에 확인합니다. 목표 비중은 사용자가 정하고, 앱이 최적 전략을 산출하지는 않습니다.</p></details>
               <details><summary>처음에는 무엇부터 하면 되나요?</summary><p>목표 포트와 비중을 만들고, 보유 자산을 등록해 각 포트에 배정하세요. 현재 비중과 목표의 차이를 확인한 뒤 필요한 조정을 검토합니다. <Link href="/guide">사용 가이드에서 시작 순서 보기 →</Link></p></details>
@@ -101,7 +102,7 @@ export default function AboutPage() {
           <section className={styles.finalCta} data-reveal><span className={styles.eyebrow}>나만의 투자 리듬을 만들어보세요</span><h2>내 기준으로 시작하고,<br />꾸준히 확인하세요.</h2><Link href="/" className={styles.primary}>PortRhythm 시작하기 <ArrowRight size={18} /></Link><Link href="/guide" className={styles.textLink}>먼저 사용 가이드 보기</Link></section>
         </main>
       </Experience>
-      <footer className={styles.footer}><span>© {new Date().getFullYear()} PROMLEE · PortRhythm</span><nav aria-label="서비스 관련 링크"><Link href="/guide">사용 가이드</Link><a href="https://github.com/PROMLEE/pf" target="_blank" rel="noopener noreferrer">GitHub<span className={styles.srOnly}> (새 탭)</span></a><a href="https://github.com/PROMLEE/pf/issues" target="_blank" rel="noopener noreferrer">문의·기능 제안<span className={styles.srOnly}> (새 탭)</span></a></nav></footer>
+      <footer className={styles.footer}><span>© {new Date().getFullYear()} PROMLEE · PortRhythm</span><nav aria-label="서비스 관련 링크"><Link href="/notices">공지사항</Link><Link href="/guide">사용 가이드</Link><a href="https://github.com/PROMLEE/pf" target="_blank" rel="noopener noreferrer">GitHub<span className={styles.srOnly}> (새 탭)</span></a><a href="https://github.com/PROMLEE/pf/issues" target="_blank" rel="noopener noreferrer">문의·기능 제안<span className={styles.srOnly}> (새 탭)</span></a></nav></footer>
     </div>
   );
 }

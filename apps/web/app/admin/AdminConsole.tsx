@@ -288,8 +288,8 @@ export default function AdminConsole() {
                           }
                         />
                         <small>
-                          일반 텍스트로 표시됩니다. 개인정보나 인증 정보를 넣지
-                          마세요.
+                          게시한 공지는 비로그인 방문자도 읽을 수 있으며 검색엔진에
+                          노출될 수 있습니다. 개인정보나 인증 정보를 넣지 마세요.
                         </small>
                       </label>
                       <div className={styles.fields}>
