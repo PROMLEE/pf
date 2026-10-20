@@ -97,14 +97,31 @@
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
-.resultHead p {
-  margin: 0;
-  color: var(--muted);
+.averageComparison {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 8px 0 0;
   font-size: 13px;
+  color: var(--muted);
 }
-.resultHead p span {
-  margin-left: 8px;
+.gainComparison {
+  display: grid;
+  gap: 4px;
+  margin-top: 18px;
+}
+.gainComparison > span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.gainComparison > strong {
   color: var(--ink);
+  font-size: 18px;
+  font-weight: 650;
+}
+.gainComparison > small {
+  color: var(--muted);
+  font-size: 12px;
 }
 .result dl {
   display: grid;

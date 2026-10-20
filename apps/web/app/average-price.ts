@@ -84,6 +84,8 @@ export function calculateAveragePrice(input: AveragePriceInput) {
     existingCost,
     averagePrice: nextAverage,
     changePercent: (nextAverage / averagePrice - 1) * 100,
+    beforeGainPercent: (buyPrice / averagePrice - 1) * 100,
+    afterGainPercent: (buyPrice / nextAverage - 1) * 100,
     remainingBudget:
       mode === "budget" ? Math.max(0, amount - additionalCost) : null,
   };

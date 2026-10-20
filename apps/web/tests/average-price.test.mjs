@@ -30,11 +30,15 @@ test("averaging down preserves the full old cost basis", () => {
   assert.equal(r.additionalCost, 400000);
   close(r.averagePrice, 1400000 / 15);
   assert.ok(r.changePercent < 0);
+  close(r.beforeGainPercent, -20);
+  close(r.afterGainPercent, (80000 / (1400000 / 15) - 1) * 100);
 });
 test("averaging up and equal-price purchases are handled", () => {
   const r = calculate({ ...input, buyPrice: 120000 });
   close(r.averagePrice, 1600000 / 15);
   assert.ok(r.changePercent > 0);
+  close(r.beforeGainPercent, 20);
+  close(r.afterGainPercent, 12.5);
   assert.equal(calculate({ ...input, buyPrice: 100000 }).changePercent, 0);
 });
 test("a whole-share budget respects the limit and returns unused cash", () => {

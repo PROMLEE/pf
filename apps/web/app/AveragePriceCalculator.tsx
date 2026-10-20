@@ -52,6 +52,10 @@ export default function AveragePriceCalculator({
   }
   const money = (n: number, unitPrice = false) =>
     `${currency === "USD" ? "$" : ""}${n.toLocaleString("ko-KR", { maximumFractionDigits: unitPrice ? (fractional ? 8 : currency === "USD" ? 4 : 2) : currency === "USD" ? 2 : 0 })}${currency === "KRW" ? "원" : ""}`;
+  const percent = (n: number) => {
+    const value = Math.abs(n) < 0.005 ? 0 : n;
+    return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+  };
   const qty = (n: number) =>
     n.toLocaleString("ko-KR", { maximumFractionDigits: 8 });
   function reset() {
@@ -193,13 +197,21 @@ export default function AveragePriceCalculator({
                       : "추가 매수 후 예상 평단가"}
               </span>
               <strong>{money(result.averagePrice, true)}</strong>
-              <p>
-                기존 {money(Number(averagePrice), true)}{" "}
+              <p className={styles.averageComparison}>
+                <span>평단가</span>
                 <span>
-                  → {result.changePercent > 0 ? "+" : ""}
-                  {result.changePercent.toFixed(2)}%
+                  {money(Number(averagePrice), true)} →{" "}
+                  {money(result.averagePrice, true)}
                 </span>
               </p>
+              <div className={styles.gainComparison}>
+                <span>매수 전 손익률 → 매수 후 손익률</span>
+                <strong>
+                  {percent(result.beforeGainPercent)} →{" "}
+                  {percent(result.afterGainPercent)}
+                </strong>
+                <small>입력한 추가 매수 단가 기준</small>
+              </div>
             </div>
             <dl>
               <div>
