@@ -28,15 +28,21 @@ import {
   ArrowLeftRight,
   FileUp,
   LayoutDashboard,
+  ChartNoAxesCombined,
+  Landmark,
+  SquarePen,
+  Target,
+  Network,
+  History,
+  SlidersHorizontal,
+  UserRound,
   Menu,
   Megaphone,
   Moon,
-  Pencil,
   PieChart,
   Plus,
   RefreshCw,
   Search,
-  Settings2,
   ShieldCheck,
   Sun,
   Wallet,
@@ -1098,32 +1104,40 @@ export default function PortfolioPage() {
 
   const nav = [
     { id: "portfolio" as View, label: "대시보드", Icon: LayoutDashboard },
-    { id: "holdings" as View, label: "보유 자산", Icon: Wallet },
-    { id: "accounts" as View, label: "계좌 관리", Icon: Wallet },
-    { id: "edit" as View, label: "자산 수정", Icon: Pencil },
-    { id: "strategy" as View, label: "목표 설계", Icon: Settings2 },
+    { id: "holdings" as View, label: "보유 자산", Icon: ChartNoAxesCombined },
+    { id: "accounts" as View, label: "계좌 관리", Icon: Landmark },
+    { id: "edit" as View, label: "자산 수정", Icon: SquarePen },
+    { id: "strategy" as View, label: "목표 설계", Icon: Target },
     { id: "composition" as View, label: "포트 비중", Icon: PieChart },
-    { id: "allocation" as View, label: "자산 배정", Icon: Wallet },
+    { id: "allocation" as View, label: "자산 배정", Icon: Network },
     { id: "rebalance" as View, label: "리밸런싱", Icon: RefreshCw },
-    { id: "history" as View, label: "자산 기록", Icon: LayoutDashboard },
+    { id: "history" as View, label: "자산 기록", Icon: History },
     { id: "import" as View, label: "캡처 가져오기", Icon: Camera },
-    { id: "preferences" as View, label: "설정", Icon: Settings2 },
-    { id: "settings" as View, label: "계정", Icon: Settings2 },
+    { id: "preferences" as View, label: "설정", Icon: SlidersHorizontal },
+    { id: "settings" as View, label: "계정", Icon: UserRound },
     { id: "notices" as View, label: "공지사항", Icon: Megaphone },
     { id: "guide" as View, label: "사용 가이드", Icon: CircleHelp },
   ];
   const navLabel = view === "more" ? "전체 메뉴" : view === "detail" ? "자산 상세" : nav.find((item) => item.id === view)?.label;
   const menuSections = [
-    { label: "포트폴리오", ids: ["portfolio", "composition", "strategy", "rebalance", "history"] },
-    { label: "자산 관리", ids: ["holdings", "edit", "accounts", "allocation", "import"] },
+    { label: "포트폴리오", ids: ["portfolio", "composition", "rebalance", "history"] },
+    { label: "자산 관리", ids: ["holdings"] },
     { label: "설정·도움말", ids: ["preferences", "settings", "notices", "guide"] },
   ];
+  const screenGroups = [
+    { parent: "composition" as View, label: "포트 비중", ids: ["composition", "strategy", "allocation"] as View[] },
+    { parent: "holdings" as View, label: "자산 관리", ids: ["holdings", "edit", "accounts"] as View[] },
+  ];
+  const screenGroup = screenGroups.find(group => group.ids.includes(view === "import" ? "edit" : view));
+  const menuView = view === "detail" ? detailSource : view;
+  const activeMenu = screenGroups.find(group => group.ids.includes(menuView === "import" ? "edit" : menuView))?.parent ?? menuView;
+  const subLabels: Partial<Record<View, string>> = { composition: "현재 비중", holdings: "보유 현황" };
   const menuDescriptions: Partial<Record<View, string>> = {
     portfolio: "총자산과 종목별 손익 요약",
     strategy: "목표 비중과 허용 오차 설정",
-    composition: "현재 비중과 목표 비교",
+    composition: "비중 확인·목표 설계·자산 배정",
     rebalance: "매수·매도 수량 확인",
-    holdings: "종목별 평가액과 손익",
+    holdings: "보유 현황·자산 수정·계좌 관리",
     accounts: "증권 계좌·주식·ETF",
     edit: "수량, 매입단가, 자산 이름 수정",
     allocation: "보유 자산의 포트 지정",
@@ -1149,18 +1163,18 @@ export default function PortfolioPage() {
           {menuSections.slice(0, 2).map((section) => (
             <Fragment key={section.label}>
               <span>{section.label}</span>
-              {section.ids.filter(id => id !== "import").map(id => {
+              {section.ids.map(id => {
                 const item = nav.find(entry => entry.id === id)!;
                 return (
-                  <button key={id} type="button" className={view === id ? styles.navActive : ""} aria-current={view === id ? "page" : undefined} onClick={() => go(item.id)}>
-                    <item.Icon size={19} />{item.label}{view === id && <i />}
+                  <button key={id} type="button" className={activeMenu === id ? styles.navActive : ""} aria-current={activeMenu === id ? "page" : undefined} onClick={() => go(item.id)}>
+                    <item.Icon size={19} />{item.label}{activeMenu === id && <i />}
                   </button>
                 );
               })}
             </Fragment>
           ))}
           <span>더 보기</span>
-          <button type="button" className={view === "more" || menuSections[2].ids.includes(view) || view === "import" ? styles.navActive : ""} onClick={() => go("more")}>
+          <button type="button" className={view === "more" || menuSections[2].ids.includes(view) ? styles.navActive : ""} onClick={() => go("more")}>
             <Menu size={19} />전체 메뉴
           </button>
         </nav>
@@ -1223,7 +1237,7 @@ export default function PortfolioPage() {
           >
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <button type="button" className={styles.themeToggle} aria-label="설정 열기" onClick={() => go("preferences")}><Settings2 size={18} /></button>
+          <button type="button" className={styles.themeToggle} aria-label="설정 열기" onClick={() => go("preferences")}><SlidersHorizontal size={18} /></button>
           <button className={styles.topAvatar} aria-label="내 계정 열기" onClick={() => go("settings")}>
             <ProfileAvatar image={session.user?.image} name={session.user?.name} />
           </button>
@@ -1232,6 +1246,17 @@ export default function PortfolioPage() {
         <main className={styles.content}>
           <ServiceNotices key={session.user?.appUserId ?? "account"} userId={session.user?.appUserId ?? "account"} page={view === "notices"} selectedId={selectedNoticeId} onOpen={id => go("notices", selectedAsset, detailSource, id)} onAdminChange={setOperator} />
           {view === "more" && operator && <Link href="/admin" style={{display:"block",padding:"16px 0",color:"var(--blue)"}}>관리자 전용 · 운영 관리 ↗</Link>}
+          {screenGroup && (
+            <nav className={styles.sectionNav} aria-label={`${screenGroup.label} 화면`}>
+              {screenGroup.ids.map(id => {
+                const item = nav.find(entry => entry.id === id)!;
+                const selected = id === (view === "import" ? "edit" : view);
+                return <button key={id} type="button" aria-current={selected ? "page" : undefined} onClick={() => go(id)}>
+                  <item.Icon size={17} /><span>{subLabels[id] ?? item.label}</span>
+                </button>;
+              })}
+            </nav>
+          )}
           {view === "accounts" && <AccountsManager onCashManage={()=>go("edit")} userId={session.user?.appUserId ?? ""} holdings={holdings} onHoldings={(rows)=>{setHoldings(rows);setQuoteVersion(version=>version+1);}} onNotice={setNotice} onDirty={setPortfolioDirty} onOpenAsset={row=>openAsset({id:`holding:${row.id}`,kind:"stock"},"accounts")} onRefreshQuotes={()=>void refreshQuotes(true)} />}
           {view === "guide" && <UserGuide onNavigate={go} />}
           {view === "portfolio" && showStartGuide && (
@@ -1347,13 +1372,6 @@ export default function PortfolioPage() {
                       : "현재가와 평균 매입가, 보유 자산의 평가손익을 확인하세요."}
                   </p>
                 </div>
-                <button
-                  className={`${styles.primaryButton} ${styles.assetPageAction}`}
-                  onClick={() => go(view === "edit" ? "holdings" : "edit")}
-                >
-                  {view === "edit" ? "보유 자산으로" : "자산 수정"}{" "}
-                  <ArrowRight size={17} />
-                </button>
               </div>
               {view === "holdings" && (
                 <div className={styles.holdingStats}>
@@ -1962,7 +1980,7 @@ export default function PortfolioPage() {
           return (
             <button
               key={id}
-              className={view === id ? styles.mobileActive : ""}
+              className={activeMenu === id || (id === "portfolio" && activeMenu === "holdings") ? styles.mobileActive : ""}
               onClick={() => go(id)}
             >
               <Icon size={21} />

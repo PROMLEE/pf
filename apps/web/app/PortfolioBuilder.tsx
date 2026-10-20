@@ -1840,9 +1840,6 @@ export default function PortfolioBuilder({
             <p>{titles[2]}</p>
           </div>
           <div>
-            {screen === "composition" && <button type="button" className={styles.designAction} onClick={() => onNavigate("strategy")}>
-              <Pencil size={16} /> 목표 설계
-            </button>}
             {screen !== "preferences" && <button
               className={styles.ghost}
               onClick={refresh}
@@ -2100,9 +2097,6 @@ export default function PortfolioBuilder({
           <div className={styles.screenLinks}>
             <button type="button" onClick={() => onNavigate("rebalance")}>
               리밸런싱 보기 <ArrowRight size={16} />
-            </button>
-            <button type="button" onClick={() => onNavigate("allocation")}>
-              자산 배정 수정 <ArrowRight size={16} />
             </button>
           </div>
         </div>

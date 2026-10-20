@@ -1958,3 +1958,15 @@
 @media(max-width:760px) { .editorJumpNav { gap: 4px; } .editorJumpNav button { flex-direction: column; gap: 5px; font-size: 12px; padding: 11px 3px; } .editIntro { padding: 16px 0 10px; } .editIntro + .panel { padding: 0 0 12px; } }
 
 .menuSection button { min-height: 62px; padding-block: 10px; }
+
+/* Task navigation stays inside its parent workspace. */
+.sectionNav { display: flex; align-items: stretch; gap: 8px; margin: 0 0 22px; padding: 0 0 8px; border-bottom: 1px solid var(--line); }
+.sectionNav button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 10px 14px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 550; white-space: nowrap; cursor: pointer; }
+.sectionNav button:hover { background: var(--soft); color: var(--ink); }
+.sectionNav button[aria-current="page"] { background: var(--soft); color: var(--blue); font-weight: 700; }
+@media(max-width:760px) {
+  .sectionNav { gap: 4px; margin-bottom: 18px; }
+  .sectionNav button { flex: 1; min-width: 0; gap: 6px; padding: 10px 6px; }
+}
+
+.sectionNav button > svg, .navGroup button > svg { flex-shrink: 0; }
