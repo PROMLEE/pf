@@ -9,6 +9,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: "https://pf.promleeblog.com/about" },
     { url: "https://pf.promleeblog.com/guide" },
     { url: "https://pf.promleeblog.com/notices" },
+    { url: "https://pf.promleeblog.com/calculators/average-price" },
     ...notices.map((notice) => ({
       url: `https://pf.promleeblog.com/notices/${notice.id}`,
       lastModified: notice.updated_at,

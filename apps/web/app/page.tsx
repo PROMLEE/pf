@@ -21,6 +21,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Camera,
+  Calculator,
   Check,
   ChevronRight,
   CircleHelp,
@@ -1158,6 +1159,7 @@ export default function PortfolioPage() {
               </button>
             </Fragment>
           ))}
+          <Link href="/calculators/average-price" onNavigate={event => { if (unsavedChanges && !window.confirm("저장하지 않은 변경 사항을 버리고 이동할까요?")) event.preventDefault(); }} className={styles.navTool}><Calculator size={19} />평단가 계산기</Link>
         </div>
         {operator && <Link href="/admin" style={{ padding: "12px 24px", color: "var(--blue)", fontSize: 14 }}>운영 관리 ↗</Link>}
         <div className={styles.sideFoot}>
@@ -1245,6 +1247,12 @@ export default function PortfolioPage() {
                   <p>내 투자 기준부터 자산 관리까지</p>
                 </div>
               </div>
+              <section className={styles.menuSection}>
+                <h2>투자 도구</h2>
+                <Link href="/calculators/average-price" onNavigate={event => { if (unsavedChanges && !window.confirm("저장하지 않은 변경 사항을 버리고 이동할까요?")) event.preventDefault(); }} className={styles.calculatorLink}>
+                  <Calculator size={22} strokeWidth={1.7} /><span><strong>물타기·불타기 계산기</strong><small>추가 매수 후 평단가와 필요 자금</small></span><ChevronRight size={17} />
+                </Link>
+              </section>
               {menuSections.map((section) => (
                 <section className={styles.menuSection} key={section.label}>
                   <h2>{section.label}</h2>

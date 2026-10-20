@@ -8,6 +8,7 @@ import type {BrokerageAccount} from "./accounts-model";
 import { withPreviousQuotes } from "./holdings";
 
 import NumberInput from "./NumberInput";
+import AveragePriceCalculator from "./AveragePriceCalculator";
 import { stockGains, cashGains, dailyUsdGains, validFx } from "./fx-gains";
 import HoldingTradeEditor from "./HoldingTradeEditor";
 import { portfolioCache, tradePortfolioEvent } from "./portfolio-cache";
@@ -573,6 +574,11 @@ function AssetDetail({
         {assigning && <p role="status">포트 배정을 저장하고 있습니다…</p>}
         {error && !editing && <p role="alert">{error}</p>}
       </details>
+      {(first || crypto) && <details className={styles.assetCalculator}>
+        <summary>물타기·불타기 계산기</summary>
+        {stockRows.length > 1 && <p>동일 종목의 {stockRows.length}개 계좌를 합산한 보유 수량과 평단가입니다.</p>}
+        <AveragePriceCalculator key={selection.id} initial={{quantity, averagePrice: averageCost, buyPrice: price, currency: first?.market === "US" ? "USD" : "KRW", fractional: Boolean(crypto) || (quantity !== null && !Number.isInteger(quantity))}} />
+      </details>}
       {manual && <p className={styles.detailHint}>{manual.valueUsd!==null?"평균 환전 단가를 입력하면 달러 자산의 환율 손익을 계산합니다.":"직접 입력 원화 자산은 평가 금액만 관리합니다."}</p>}
       {!first && !editing && <button type="button" className={styles.detailEdit} onClick={() => beginEdit()}>자산 수정 <Pencil size={16} /></button>}
       {editing && (editedStock && tradeMode ? <HoldingTradeEditor key={editedStock.id} holding={editedStock}

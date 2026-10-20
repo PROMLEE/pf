@@ -1,0 +1,55 @@
+.page {
+  width: min(100% - 40px, 820px);
+  margin: 0 auto;
+  padding: 26px 0 44px;
+  color: var(--ink);
+}
+.page nav,
+.page footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.page a {
+  color: var(--blue);
+  text-decoration: none;
+}
+.page a:hover {
+  text-decoration: underline;
+}
+.page nav a:first-child {
+  color: var(--ink);
+  font-weight: 700;
+}
+.page header {
+  margin: 42px 0 30px;
+}
+.page h1 {
+  font-size: clamp(24px, 5vw, 34px);
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+}
+.page header p,
+.guide p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+.guide {
+  margin-top: 36px;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+.guide h2 {
+  font-size: 18px;
+}
+.guide summary {
+  color: var(--blue);
+  font-size: 14px;
+  cursor: pointer;
+}
+.page footer {
+  margin-top: 32px;
+}
