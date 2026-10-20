@@ -1946,11 +1946,6 @@
 :global(html[data-theme="dark"]) .holdingStats .gainPositive { color: #ff9ca6; }
 :global(html[data-theme="dark"]) .holdingStats .gainNegative { color: #8abaff; }
 
-.menuTools .calculatorLink { display: flex; align-items: center; gap: 14px; padding: 16px 0; color: var(--ink); text-decoration: none; }
-.calculatorLink > span { flex: 1; display: grid; gap: 4px; }
-.calculatorLink strong { font-size: 14px; font-weight: 600; }
-.calculatorLink small { color: var(--muted); font-size: 13px; }
-
 .editorJumpNav { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; margin: 4px 0 22px; }
 .editorJumpNav button { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 12px 6px; border: 0; border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 13px; cursor: pointer; }
 .editorJumpNav button svg { color: var(--blue); }
@@ -1962,9 +1957,4 @@
 .editIntro + .panel { background: var(--surface); border: 0; border-radius: 0 0 16px 16px; padding: 0 22px 16px; }
 @media(max-width:760px) { .editorJumpNav { gap: 4px; } .editorJumpNav button { flex-direction: column; gap: 5px; font-size: 12px; padding: 11px 3px; } .editIntro { padding: 16px 0 10px; } .editIntro + .panel { padding: 0 0 12px; } }
 
-.menuTools { border-top: 1px solid var(--line); padding: 16px 0; }
-.menuTools summary { display: flex; align-items: center; justify-content: space-between; padding: 10px 6px; color: var(--muted); font-size: 13px; cursor: pointer; list-style: none; }
-.menuTools summary::-webkit-details-marker { display: none; }
-.menuTools[open] summary svg { transform: rotate(90deg); }
-.menuTools .calculatorLink { padding-inline: 6px; }
 .menuSection button { min-height: 62px; padding-block: 10px; }

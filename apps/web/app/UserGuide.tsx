@@ -1,8 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowDown, ArrowRight, Check, ChevronRight } from "lucide-react";
 import styles from "./UserGuide.module.css";
+
+const AveragePriceCalculator = dynamic(() => import("./AveragePriceCalculator"));
 
 type Destination =
   | "strategy"
@@ -93,6 +96,7 @@ export default function UserGuide({
 }) {
   const guideRef = useRef<HTMLElement>(null);
   const [chapter, setChapter] = useState("guide-start");
+  const [calculatorLoaded, setCalculatorLoaded] = useState(false);
 
   useEffect(() => {
     const root = guideRef.current;
@@ -392,6 +396,15 @@ export default function UserGuide({
             <p>{answer}</p>
           </details>
         ))}
+      </section>
+      <section id="guide-calculator" className={styles.section}>
+        <details className={styles.calculatorTool} onToggle={event => { if (event.currentTarget.open) setCalculatorLoaded(true); }}>
+          <summary>
+            <span><strong>물타기·불타기 계산기</strong><small>추가 매수 후 평단가를 미리 계산해 보세요.</small></span>
+            <ChevronRight size={18} />
+          </summary>
+          {calculatorLoaded && <AveragePriceCalculator />}
+        </details>
       </section>
       <footer data-reveal className={styles.end}>
         <strong>투자는 나만의 리듬으로. 내 기준을 지키며, 꾸준히.</strong>

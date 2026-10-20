@@ -21,7 +21,6 @@ import Link from "next/link";
 import {
   ArrowRight,
   Camera,
-  Calculator,
   Check,
   ChevronRight,
   CircleHelp,
@@ -1266,12 +1265,6 @@ export default function PortfolioPage() {
                   })}
                 </section>
               ))}
-              <details className={styles.menuTools}>
-                <summary>보조 도구 <ChevronRight size={16} /></summary>
-                <Link href="/calculators/average-price" onNavigate={event => { if (unsavedChanges && !window.confirm("저장하지 않은 변경 사항을 버리고 이동할까요?")) event.preventDefault(); }} className={styles.calculatorLink}>
-                  <Calculator size={20} strokeWidth={1.7} /><span><strong>물타기·불타기 계산기</strong><small>추가 매수 후 평단가 계산</small></span><ChevronRight size={17} />
-                </Link>
-              </details>
             </div>
           )}
           {notice && (

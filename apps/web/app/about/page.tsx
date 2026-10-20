@@ -102,7 +102,7 @@ export default function AboutPage() {
           <section className={styles.finalCta} data-reveal><span className={styles.eyebrow}>나만의 투자 리듬을 만들어보세요</span><h2>내 기준으로 시작하고,<br />꾸준히 확인하세요.</h2><Link href="/" className={styles.primary}>PortRhythm 시작하기 <ArrowRight size={18} /></Link><Link href="/guide" className={styles.textLink}>먼저 사용 가이드 보기</Link></section>
         </main>
       </Experience>
-      <footer className={styles.footer}><span>© {new Date().getFullYear()} PROMLEE · PortRhythm</span><nav aria-label="서비스 관련 링크"><Link href="/calculators/average-price">평단가 계산기</Link><Link href="/notices">공지사항</Link><Link href="/guide">사용 가이드</Link><a href="https://github.com/PROMLEE/pf" target="_blank" rel="noopener noreferrer">GitHub<span className={styles.srOnly}> (새 탭)</span></a><a href="https://github.com/PROMLEE/pf/issues" target="_blank" rel="noopener noreferrer">문의·기능 제안<span className={styles.srOnly}> (새 탭)</span></a></nav></footer>
+      <footer className={styles.footer}><span>© {new Date().getFullYear()} PROMLEE · PortRhythm</span><nav aria-label="서비스 관련 링크"><Link href="/notices">공지사항</Link><Link href="/guide">사용 가이드</Link><a href="https://github.com/PROMLEE/pf" target="_blank" rel="noopener noreferrer">GitHub<span className={styles.srOnly}> (새 탭)</span></a><a href="https://github.com/PROMLEE/pf/issues" target="_blank" rel="noopener noreferrer">문의·기능 제안<span className={styles.srOnly}> (새 탭)</span></a></nav></footer>
     </div>
   );
 }

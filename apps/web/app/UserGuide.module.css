@@ -485,3 +485,10 @@
   z-index: 1;
   outline: 7px solid var(--bg);
 }
+
+.calculatorTool summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; cursor: pointer; list-style: none; color: var(--ink); }
+.calculatorTool summary::-webkit-details-marker { display: none; }
+.calculatorTool summary span { display: grid; gap: 6px; }
+.calculatorTool summary strong { font-size: 16px; font-weight: 650; }
+.calculatorTool summary small { color: var(--muted); font-size: 13px; }
+.calculatorTool[open] summary > svg { transform: rotate(90deg); }
