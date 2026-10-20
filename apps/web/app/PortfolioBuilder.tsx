@@ -1840,6 +1840,9 @@ export default function PortfolioBuilder({
             <p>{titles[2]}</p>
           </div>
           <div>
+            {screen === "composition" && <button type="button" className={styles.designAction} onClick={() => onNavigate("strategy")}>
+              <Pencil size={16} /> 목표 설계
+            </button>}
             {screen !== "preferences" && <button
               className={styles.ghost}
               onClick={refresh}

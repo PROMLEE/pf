@@ -1115,11 +1115,12 @@ export default function PortfolioPage() {
   ];
   const navLabel = view === "more" ? "전체 메뉴" : view === "detail" ? "자산 상세" : nav.find((item) => item.id === view)?.label;
   const menuSections = [
-    { label: "포트폴리오", ids: ["strategy", "composition", "rebalance"] },
-    { label: "자산 관리", ids: ["accounts", "holdings", "edit", "allocation", "import"] },
-    { label: "기록과 설정", ids: ["history", "preferences", "settings", "notices", "guide"] },
+    { label: "포트폴리오", ids: ["portfolio", "composition", "strategy", "rebalance", "history"] },
+    { label: "자산 관리", ids: ["holdings", "edit", "accounts", "allocation", "import"] },
+    { label: "설정·도움말", ids: ["preferences", "settings", "notices", "guide"] },
   ];
   const menuDescriptions: Partial<Record<View, string>> = {
+    portfolio: "총자산과 종목별 손익 요약",
     strategy: "목표 비중과 허용 오차 설정",
     composition: "현재 비중과 목표 비교",
     rebalance: "매수·매도 수량 확인",
@@ -1145,24 +1146,25 @@ export default function PortfolioPage() {
             <small>투자는 나만의 리듬으로</small>
           </div>
         </div>
-        <div className={styles.navGroup}>
-          {nav.map(({ id, label, Icon }, index) => (
-            <Fragment key={id}>
-              {index === 0 && <span>자산</span>}
-              {id === "strategy" && <span>포트폴리오</span>}
-              {id === "history" && <span>도구</span>}
-              <button
-                className={view === id ? styles.navActive : ""}
-                onClick={() => go(id)}
-              >
-                <Icon size={19} />
-                {label}
-                {view === id && <i />}
-              </button>
+        <nav className={styles.navGroup} aria-label="주요 메뉴">
+          {menuSections.slice(0, 2).map((section) => (
+            <Fragment key={section.label}>
+              <span>{section.label}</span>
+              {section.ids.filter(id => id !== "import").map(id => {
+                const item = nav.find(entry => entry.id === id)!;
+                return (
+                  <button key={id} type="button" className={view === id ? styles.navActive : ""} aria-current={view === id ? "page" : undefined} onClick={() => go(item.id)}>
+                    <item.Icon size={19} />{item.label}{view === id && <i />}
+                  </button>
+                );
+              })}
             </Fragment>
           ))}
-          <Link href="/calculators/average-price" onNavigate={event => { if (unsavedChanges && !window.confirm("저장하지 않은 변경 사항을 버리고 이동할까요?")) event.preventDefault(); }} className={styles.navTool}><Calculator size={19} />평단가 계산기</Link>
-        </div>
+          <span>더 보기</span>
+          <button type="button" className={view === "more" || menuSections[2].ids.includes(view) || view === "import" ? styles.navActive : ""} onClick={() => go("more")}>
+            <Menu size={19} />전체 메뉴
+          </button>
+        </nav>
         {operator && <Link href="/admin" style={{ padding: "12px 24px", color: "var(--blue)", fontSize: 14 }}>운영 관리 ↗</Link>}
         <div className={styles.sideFoot}>
           <div className={styles.sideNote}>
@@ -1249,12 +1251,6 @@ export default function PortfolioPage() {
                   <p>내 투자 기준부터 자산 관리까지</p>
                 </div>
               </div>
-              <section className={styles.menuSection}>
-                <h2>투자 도구</h2>
-                <Link href="/calculators/average-price" onNavigate={event => { if (unsavedChanges && !window.confirm("저장하지 않은 변경 사항을 버리고 이동할까요?")) event.preventDefault(); }} className={styles.calculatorLink}>
-                  <Calculator size={22} strokeWidth={1.7} /><span><strong>물타기·불타기 계산기</strong><small>추가 매수 후 평단가와 필요 자금</small></span><ChevronRight size={17} />
-                </Link>
-              </section>
               {menuSections.map((section) => (
                 <section className={styles.menuSection} key={section.label}>
                   <h2>{section.label}</h2>
@@ -1270,6 +1266,12 @@ export default function PortfolioPage() {
                   })}
                 </section>
               ))}
+              <details className={styles.menuTools}>
+                <summary>보조 도구 <ChevronRight size={16} /></summary>
+                <Link href="/calculators/average-price" onNavigate={event => { if (unsavedChanges && !window.confirm("저장하지 않은 변경 사항을 버리고 이동할까요?")) event.preventDefault(); }} className={styles.calculatorLink}>
+                  <Calculator size={20} strokeWidth={1.7} /><span><strong>물타기·불타기 계산기</strong><small>추가 매수 후 평단가 계산</small></span><ChevronRight size={17} />
+                </Link>
+              </details>
             </div>
           )}
           {notice && (
