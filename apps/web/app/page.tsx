@@ -25,6 +25,8 @@ import {
   Check,
   ChevronRight,
   CircleHelp,
+  Coins,
+  ArrowLeftRight,
   FileUp,
   LayoutDashboard,
   Menu,
@@ -1420,8 +1422,11 @@ export default function PortfolioPage() {
                   </div>
                 </div>
               )}
+              {view === "edit" && <nav className={styles.editorJumpNav} aria-label="수정할 자산 종류">
+                {([["edit-stocks","주식·ETF",PieChart],["edit-crypto-group","가상자산",Coins],["edit-cash-group","현금·RP",Wallet],["edit-cash-movements","입출금",ArrowLeftRight]] as const).map(([id,label,Icon])=><button type="button" key={id} onClick={()=>{const target=document.getElementById(id);if(target instanceof HTMLDetailsElement)target.open=true;target?.scrollIntoView({behavior:"smooth",block:"start"});}}><Icon size={18}/>{label}</button>)}
+              </nav>}
               {view === "edit" && (
-                <div className={styles.editIntro}>
+                <div className={styles.editIntro} id="edit-stocks">
                   <strong>보유 주식·ETF</strong>
                   <button
                     type="button"

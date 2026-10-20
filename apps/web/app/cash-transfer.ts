@@ -1,7 +1,10 @@
+export type CashMovementKind = "transfer" | "deposit" | "withdrawal";
 export type CashTransferInput = {
+  kind?: CashMovementKind;
+  fxRate?: number | null;
   id: string;
-  sourceId: string;
-  destinationId: string;
+  sourceId: string | null;
+  destinationId: string | null;
   amount: number;
   note: string;
   expectedRevision: number;
@@ -18,11 +21,28 @@ const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 export function validCashTransfer(value: unknown): value is CashTransferInput {
   if (!value || typeof value !== "object") return false;
   const v = value as CashTransferInput;
+  const kind = v.kind ?? "transfer";
+  const validId = (id: unknown) => typeof id === "string" && uuid.test(id);
+  const endpoints =
+    kind === "transfer"
+      ? validId(v.sourceId) &&
+        validId(v.destinationId) &&
+        v.sourceId !== v.destinationId
+      : kind === "deposit"
+        ? v.sourceId === null && validId(v.destinationId)
+        : kind === "withdrawal"
+          ? validId(v.sourceId) && v.destinationId === null
+          : false;
   return (
-    [v.id, v.sourceId, v.destinationId].every(
-      (id) => typeof id === "string" && uuid.test(id),
-    ) &&
-    v.sourceId !== v.destinationId &&
+    validId(v.id) &&
+    endpoints &&
+    (v.fxRate == null ||
+      (kind === "deposit" &&
+        typeof v.fxRate === "number" &&
+        Number.isFinite(v.fxRate) &&
+        Number(v.fxRate.toFixed(6)) === v.fxRate &&
+        v.fxRate >= 100 &&
+        v.fxRate <= 100000)) &&
     typeof v.amount === "number" &&
     Number.isFinite(v.amount) &&
     v.amount > 0 &&

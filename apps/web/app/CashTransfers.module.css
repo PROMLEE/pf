@@ -110,3 +110,109 @@
     padding: 20px 0;
   }
 }
+.section {
+  padding: 22px;
+  margin: 24px 0;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface);
+  scroll-margin-top: 90px;
+}
+.heading {
+  list-style: none;
+  cursor: pointer;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.heading::-webkit-details-marker {
+  display: none;
+}
+.heading > span:nth-child(2) {
+  flex: 1;
+  display: grid;
+  gap: 3px;
+}
+.heading strong {
+  font-size: 18px;
+  color: var(--ink);
+}
+.heading small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.headingIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  color: var(--blue);
+  background: var(--soft);
+}
+.kindTabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--soft);
+  border-radius: 10px;
+  margin-top: 18px;
+}
+.kindTabs button {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  padding: 11px 5px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.kindTabs button[aria-pressed="true"] {
+  color: var(--blue);
+  background: var(--surface);
+  font-weight: 650;
+}
+.kindTabs button:disabled {
+  cursor: default;
+}
+.preview dl {
+  margin: 8px 0;
+  display: grid;
+  gap: 10px;
+}
+.preview dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+}
+.preview dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.preview dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 650;
+}
+.historyKind {
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+}
+@media (max-width: 700px) {
+  .section {
+    padding: 20px 16px;
+    margin: 18px 0;
+  }
+  .kindTabs button {
+    font-size: 12px;
+  }
+  .kindTabs button svg {
+    display: none;
+  }
+}

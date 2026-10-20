@@ -105,6 +105,7 @@ export function positionSignature(
 }
 
 export type CashFlow = {
+  balanceLinked?: boolean;
   id: string;
   occurredAt?: string | null;
   deletedAt?: string | null;

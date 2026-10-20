@@ -44,6 +44,7 @@ type PlanRow = {
   relative_tolerance_percent: string;
 };
 type CashFlowRow = {
+  balance_linked?: boolean;
   id: string;
   occurred_at: Date | null;
   deleted_at: Date | null;
@@ -119,7 +120,7 @@ function mapSnapshot(row: SnapshotRow): Snapshot {
   return {date:row.snapshot_date,recordedAt:snapshotTime(row),bucketKey:row.bucket_key,bucketName:row.bucket_name,valueKrw:Number(row.value_krw),targetPercent:row.target_percent === null ? null : Number(row.target_percent),positionSignature:row.position_signature};
 }
 function mapCashFlow(row: CashFlowRow): CashFlow {
-  return {id:row.id,date:row.flow_date,amountKrw:Number(row.amount_krw),note:row.note,occurredAt:row.occurred_at?.toISOString() ?? null,deletedAt:row.deleted_at?.toISOString() ?? null};
+  return {balanceLinked: row.balance_linked === true,id:row.id,date:row.flow_date,amountKrw:Number(row.amount_krw),note:row.note,occurredAt:row.occurred_at?.toISOString() ?? null,deletedAt:row.deleted_at?.toISOString() ?? null};
 }
 
 export async function listPortfolio(
@@ -167,7 +168,7 @@ export async function listPortfolio(
       [userId],
     ),
     client.query<CashFlowRow>(
-      `select id, flow_date::text, amount_krw, note, occurred_at, deleted_at from portfolio.cash_flows where user_id = $1 order by flow_date desc, created_at desc`,
+      `select f.id, f.flow_date::text, f.amount_krw, f.note, f.occurred_at, f.deleted_at, exists(select 1 from portfolio.cash_transfers t where t.user_id=f.user_id and t.id=f.id and t.kind<>'transfer') as balance_linked from portfolio.cash_flows f where f.user_id = $1 order by f.flow_date desc, f.created_at desc`,
       [userId],
     ),
   ]);
@@ -254,6 +255,7 @@ export async function listPortfolio(
     cashFlows: cashFlows.rows.filter((row) => !row.deleted_at).map(
       (row): CashFlow => ({
         id: row.id,
+        balanceLinked: row.balance_linked === true,
         date: row.flow_date,
         occurredAt: row.occurred_at?.toISOString() ?? null,
         deletedAt: row.deleted_at?.toISOString() ?? null,
@@ -665,7 +667,13 @@ export async function addCashFlow(userId: string, flow: CashFlow) {
   }
 }
 
+async function assertEditableCashFlow(userId: string, id: string) {
+  const result = await db().query(`select 1 from portfolio.cash_transfers where user_id=$1 and id=$2 and kind<>'transfer'`, [userId,id]);
+  if (result.rows.length) throw new CashTransferError("잔액과 함께 반영한 입출금 기록입니다. 자산 수정의 반대 방향 입출금으로 정정해 주세요.",409);
+}
+
 export async function updateCashFlow(userId: string, flow: CashFlow) {
+  await assertEditableCashFlow(userId,flow.id);
   const client = await db().connect();
   try {
     await client.query("begin");
@@ -681,11 +689,13 @@ export async function updateCashFlow(userId: string, flow: CashFlow) {
 }
 
 export async function restoreCashFlow(userId: string, id: string) {
+  await assertEditableCashFlow(userId,id);
   const result = await db().query(`update portfolio.cash_flows set deleted_at = null where user_id = $1 and id = $2 and deleted_at is not null`, [userId, id]);
   return result.rowCount === 1;
 }
 
 export async function deleteCashFlow(userId: string, flowId: string) {
+  await assertEditableCashFlow(userId,flowId);
   const result = await db().query(
     `update portfolio.cash_flows set deleted_at = clock_timestamp() where user_id = $1 and id = $2 and deleted_at is null`,
     [userId, flowId],

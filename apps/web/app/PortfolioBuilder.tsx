@@ -17,6 +17,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Camera,
+  Coins,
+  Wallet,
   Check,
   ChevronDown,
   ChevronRight,
@@ -1826,6 +1828,7 @@ export default function PortfolioBuilder({
       </div>
     );
 
+  const AssetSections = screen === "edit" ? "div" : "details";
   return (
     <div
       className={`${styles.builder} ${screen === "dashboard" ? styles.homeBuilder : ""}`}
@@ -2396,8 +2399,9 @@ export default function PortfolioBuilder({
             <Portfolio3D portfolio={draft} holdings={holdings} />
           )}
 
-          {screen === "edit" && <CashTransfers portfolio={draft} accounts={cashAccounts} disabled={dirty || saving} onDirty={setTransferDirty} onSaved={(next,message)=>{portfolioCache.set(userId,next);setDraft(next);setDirty(false);onNotice(message);}} />}
-          <details className={`${styles.panel} ${styles.collapsible}`} open>
+
+          <AssetSections className={screen === "edit" ? styles.editorGroups : `${styles.panel} ${styles.collapsible}`} {...(screen === "allocation" ? {open:true} : {})}>
+            {screen === "allocation" && (
             <summary className={styles.panelHead}>
               <div>
                 <h2>
@@ -2412,6 +2416,7 @@ export default function PortfolioBuilder({
                 <ChevronDown size={16} />
               </span>
             </summary>
+            )}
             {screen === "allocation" && (
               <>
                 <div className={styles.assignmentActions}>
@@ -2577,13 +2582,9 @@ export default function PortfolioBuilder({
             )}
             {screen === "edit" && (
               <>
-                <div className={styles.subHead}>
-                  <h3>가상자산</h3>
-                  <small>
-                    원화마켓 코드와 보유 수량을 등록하면 가격 갱신 시 평가액을
-                    계산합니다.
-                  </small>
-                </div>
+                <section className={styles.editorAssetGroup} id="edit-crypto-group">
+                <header className={styles.editorGroupHead}><span className={styles.editorGroupIcon}><Coins size={22}/></span><div><h2>가상자산 <small>{draft.cryptoAssets.length}</small></h2><p>코인별 수량과 평균 매입단가</p></div></header>
+                <details className={styles.editorAddForm}><summary><Plus size={15}/> 가상자산 추가</summary>
                 <div className={styles.cryptoSearch}>
                   <input
                     value={cryptoQuery}
@@ -2667,13 +2668,14 @@ export default function PortfolioBuilder({
                     <Plus size={15} /> 추가
                   </button>
                 </div>
+                </details>
                 {draft.cryptoAssets.map((asset) => (
                   <div
                     className={styles.cryptoRow}
                     id={`edit-crypto-${asset.id}`}
                     key={asset.id}
                   >
-                    <div>
+                    <div className={styles.editorIdentity}><AssetIcon kind="crypto" symbol={asset.marketCode} name={asset.name}/><div>
                       <strong>{asset.name}</strong>
                       <small>
                         {asset.marketCode} ·{" "}
@@ -2681,7 +2683,7 @@ export default function PortfolioBuilder({
                           ? "시세 미확인"
                           : `현재가 ${fmt(asset.quotedPriceKrw)}`}
                       </small>
-                    </div>
+                    </div></div>
                     <label className={styles.cryptoField}>
                       <span>보유 수량</span>
                       <NumberInput
@@ -2731,6 +2733,7 @@ export default function PortfolioBuilder({
                         }
                       />
                     </label>
+                    <label className={styles.cryptoField}><span>포트 배정</span>
                     <select
                       value={asset.bucketId ?? ""}
                       aria-label={`${asset.name} 포트`}
@@ -2755,7 +2758,8 @@ export default function PortfolioBuilder({
                         </option>
                       ))}
                     </select>
-                    <b>
+                    </label>
+                    <b><small>평가금액</small>
                       {asset.quotedPriceKrw === null
                         ? "가격 미확인"
                         : fmt(cryptoAssetValueKrw(asset))}
@@ -2777,10 +2781,9 @@ export default function PortfolioBuilder({
                     </button>
                   </div>
                 ))}
-                <div className={styles.subHead}>
-                  <h3>기타 직접 입력 자산</h3>
-                  <small>원화 금액이나 달러 수량을 직접 관리하는 자산</small>
-                </div>
+                </section>
+                <section className={styles.editorAssetGroup} id="edit-cash-group">
+                <header className={styles.editorGroupHead}><span className={styles.editorGroupIcon}><Wallet size={22}/></span><div><h2>현금·RP·기타 <small>{draft.manualAssets.length}</small></h2><p>원화·달러 잔고와 직접 입력한 자산</p></div></header>
                 {draft.manualAssets.some((asset) =>
                   /비트코인|bitcoin|BTC/i.test(asset.name),
                 ) && (
@@ -2790,6 +2793,7 @@ export default function PortfolioBuilder({
                     주세요.
                   </p>
                 )}
+                <details className={styles.editorAddForm}><summary><Plus size={15}/> 현금·기타 자산 추가</summary>
                 <div className={styles.manualForm}>
                   <input
                     value={manualName}
@@ -2836,12 +2840,14 @@ export default function PortfolioBuilder({
                     <Plus size={15} /> 추가
                   </button>
                 </div>
+                </details>
                 {draft.manualAssets.map((asset) => (
                   <div
                     className={styles.manualRow}
                     id={`edit-manual-${asset.id}`}
                     key={asset.id}
                   >
+                    <div className={styles.editorIdentity}><AssetIcon kind="cash" symbol={asset.valueUsd === null ? "KRW" : "USD"} name={asset.name}/><div><strong>{asset.name}</strong><small>{asset.valueUsd === null ? "원화 · KRW" : "미국 달러 · USD"}</small></div></div>
                     <label className={styles.manualNameField}>
                       <span>자산 이름</span>
                       <input
@@ -2856,6 +2862,7 @@ export default function PortfolioBuilder({
                         })}
                       />
                     </label>
+                    <label className={styles.cryptoField}><span>{asset.valueUsd === null ? "보유 금액 · KRW" : "보유 잔고 · USD"}</span>
                     <NumberInput
                       min="0"
                       max="1000000000000000"
@@ -2882,11 +2889,9 @@ export default function PortfolioBuilder({
                         })
                       }
                     />
-                    <small>
-                      {asset.valueUsd === null
-                        ? "KRW"
-                        : `USD · ${fmt(manualAssetValueKrw(asset, draft.usdKrw))}`}
-                    </small>
+                    </label>
+                    {asset.valueUsd !== null && <small>원화 환산 {fmt(manualAssetValueKrw(asset, draft.usdKrw))}</small>}
+                    <label className={styles.cryptoField}><span>포트 배정</span>
                     <select
                       value={asset.bucketId ?? ""}
                       aria-label={`${asset.name} 포트`}
@@ -2911,6 +2916,7 @@ export default function PortfolioBuilder({
                         </option>
                       ))}
                     </select>
+                    </label>
                     <button
                       className={styles.iconButton}
                       aria-label={`${asset.name} 삭제`}
@@ -2935,9 +2941,11 @@ export default function PortfolioBuilder({
                     {asset.valueUsd!==null && <label className={styles.fxBasisField}>평균 환전 단가 · 1 USD당 원<NumberInput value={asset.averageFxRate??""} min="100" max="100000" step="any" placeholder="모르면 비워두세요" onValueChange={value=>change({...draft,manualAssets:draft.manualAssets.map(item=>item.id===asset.id?{...item,averageFxRate:value===""?null:Number(value)}:item)})}/></label>}
                   </div>
                 ))}
+                </section>
               </>
             )}
-          </details>
+          </AssetSections>
+          {screen === "edit" && <CashTransfers portfolio={draft} accounts={cashAccounts} disabled={dirty || saving} onDirty={setTransferDirty} onSaved={(next,message)=>{portfolioCache.set(userId,next);setDraft(next);setDirty(false);onNotice(message);}} />}
           {screen === "edit" && (
             <div className={styles.assetEditorSave}>
               {dirty ? (
@@ -3667,8 +3675,7 @@ export default function PortfolioBuilder({
                 입출금 기록 {draft.cashFlows.length}건 <ChevronDown size={15} />
               </summary>
               <p className={styles.help}>
-                입출금 기록 → 현금 잔고 수정 → 지금 기록 순서로 반영하세요. 입출금 기록은 분석용이며 현금 잔고를 자동 변경하지 않습니다. 계좌 밖에서 들어오거나 나간 자금만 기록하세요. 계좌 간 이동은
-                합산 범위에 따라 중복되지 않게 입력해야 합니다.
+                여기서 직접 등록한 입출금은 분석용이며 잔고를 바꾸지 않습니다. 자산 수정의 외부 입출금으로 등록하면 잔고와 기록에 함께 반영되므로, 같은 내역을 다시 등록하지 마세요. 계좌 간 이동은 외부 입출금으로 등록하지 않습니다.
               </p>
               <button type="button" className={styles.ghost} onClick={onEditHoldings}>현금 잔고 수정 →</button>
 
@@ -3719,18 +3726,18 @@ export default function PortfolioBuilder({
                   <div key={flow.id}>
                     <span>
                       {flow.date} {flow.occurredAt ? kstTime(flow.occurredAt, true) : "시각 미기록"} ·{" "}
-                      {flow.note || (flow.amountKrw > 0 ? "입금" : "출금")}
+                      {flow.note || (flow.amountKrw > 0 ? "입금" : "출금")}{flow.balanceLinked && <small>잔액 반영 · 정정은 자산 수정에서 반대 방향 입출금으로 입력</small>}
                     </span>
                     <strong>
                       {flow.amountKrw > 0 ? "+" : ""}
                       {fmt(flow.amountKrw)}
                     </strong>
-                    <button type="button" className={styles.iconButton} onClick={() => editFlow(flow)} disabled={dirty || flowSaving} aria-label={`${flow.date} ${flow.amountKrw > 0 ? "입금" : "출금"} ${fmt(Math.abs(flow.amountKrw))} ${flow.note || "메모 없음"} 내역 ${flow.id} 수정`}><Pencil size={16} /></button>
+                    <button type="button" className={styles.iconButton} onClick={() => editFlow(flow)} disabled={dirty || flowSaving || flow.balanceLinked} aria-label={`${flow.date} ${flow.amountKrw > 0 ? "입금" : "출금"} ${fmt(Math.abs(flow.amountKrw))} ${flow.note || "메모 없음"} 내역 ${flow.id} 수정`}><Pencil size={16} /></button>
                     <button
                       type="button"
                       className={styles.iconButton}
                       onClick={() => removeFlow(flow.id)}
-                      disabled={dirty || flowSaving}
+                      disabled={dirty || flowSaving || flow.balanceLinked}
                       aria-label={`${flow.date} ${flow.amountKrw > 0 ? "입금" : "출금"} ${fmt(Math.abs(flow.amountKrw))} ${flow.note || "메모 없음"} 내역 ${flow.id} 삭제`}
                     >
                       <Trash2 size={14} />

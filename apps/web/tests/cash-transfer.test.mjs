@@ -118,3 +118,51 @@ test("API requires login, validates origin and uses session owner", async () => 
     400,
   );
 });
+test("external deposit and withdrawal require exactly one owned endpoint", () => {
+  const deposit = { ...input, kind: "deposit", sourceId: null };
+  const withdrawal = { ...input, kind: "withdrawal", destinationId: null };
+  assert.equal(validCashTransfer(deposit), true);
+  assert.equal(validCashTransfer(withdrawal), true);
+  for (const patch of [
+    { sourceId: source },
+    { destinationId: null },
+    { fxRate: NaN },
+    { fxRate: 99 },
+    { fxRate: 1200.1234567 },
+    { kind: "bad" },
+  ])
+    assert.equal(validCashTransfer({ ...deposit, ...patch }), false);
+  assert.equal(validCashTransfer({ ...deposit, fxRate: 1335.123456 }), true);
+  assert.equal(validCashTransfer({ ...withdrawal, fxRate: 1400 }), false);
+});
+test("external cash preview changes only the registered side with exact cents", () => {
+  assert.equal(
+    transferBalances("100.25", "10.123456", 100.25, "USD").destination,
+    "110.373456",
+  );
+  assert.equal(
+    transferBalances("110.373456", "0", 10.25, "USD").source,
+    "100.123456",
+  );
+  assert.throws(() => transferBalances("10", "0", 11, "USD"), /부족/);
+});
+test("external movement API keeps session ownership, origin checks and conflict statuses", async () => {
+  state.user = "owner";
+  state.calls = [];
+  state.error = null;
+  const deposit = { ...input, kind: "deposit", sourceId: null, fxRate: 1400 };
+  assert.equal(
+    (await api.POST(req({ ...deposit, userId: "intruder" }))).status,
+    200,
+  );
+  assert.equal(state.calls[0].user, "owner");
+  assert.equal(state.calls[0].input.sourceId, null);
+  assert.equal(
+    (await api.POST(req({ ...deposit, sourceId: source }))).status,
+    400,
+  );
+  const { CashTransferError } = await import(modelUrl);
+  state.error = new CashTransferError("잔액 충돌", 409);
+  assert.equal((await api.POST(req(deposit))).status, 409);
+  state.error = null;
+});
