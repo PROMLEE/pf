@@ -11,7 +11,7 @@ const code = ts.transpileModule(
     },
   },
 ).outputText;
-const { calculateAveragePrice: calculate } = await import(
+const { calculateAveragePrice: calculate, purchaseWithinBudget } = await import(
   `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`
 );
 const input = {
@@ -122,4 +122,52 @@ test("invalid precision, zero, unsafe numbers and invalid modes are rejected", (
     assert.throws(() => calculate({ ...input, buyPrice: n }));
   assert.throws(() => calculate({ ...input, quantity: 1e16 }));
   assert.throws(() => calculate({ ...input, mode: "invalid" }));
+});
+
+test("cash capacity works without a known existing quantity or cost basis", () => {
+  assert.deepEqual(purchaseWithinBudget(1000000, 80000, false), {
+    quantity: 12,
+    cost: 960000,
+    remaining: 40000,
+  });
+  assert.deepEqual(purchaseWithinBudget(1000, 300, false), {
+    quantity: 3,
+    cost: 900,
+    remaining: 100,
+  });
+  assert.deepEqual(purchaseWithinBudget(0, 300, false), {
+    quantity: 0,
+    cost: 0,
+    remaining: 0,
+  });
+  assert.deepEqual(purchaseWithinBudget(1000, 2000, false), {
+    quantity: 0,
+    cost: 0,
+    remaining: 1000,
+  });
+});
+test("cash fractions and fractional coin lots never exceed the selected balance", () => {
+  assert.equal(purchaseWithinBudget(1000000 * 0.25, 80000, false).quantity, 3);
+  assert.equal(purchaseWithinBudget(1000000 * 0.5, 80000, false).quantity, 6);
+  const r = purchaseWithinBudget(10000, 80000000, true);
+  assert.equal(r.quantity, 0.000125);
+  assert.equal(r.cost, 10000);
+  for (const [budget, price, fractional] of [
+    [0.3, 0.1, false],
+    [1000, 300, true],
+    [1, 3, true],
+    [50000, 132029, false],
+  ]) {
+    const value = purchaseWithinBudget(budget, price, fractional);
+    assert.ok(value.cost <= budget);
+    assert.ok(value.remaining >= 0);
+    assert.ok(value.quantity >= 0);
+  }
+});
+test("invalid or unsafe cash capacity inputs fail before filling a quantity", () => {
+  for (const balance of [-1, NaN, Infinity, 1e16])
+    assert.throws(() => purchaseWithinBudget(balance, 300, false));
+  for (const price of [0, -1, NaN, Infinity])
+    assert.throws(() => purchaseWithinBudget(1000, price, false));
+  assert.throws(() => purchaseWithinBudget(1000000, 1e-20, true));
 });

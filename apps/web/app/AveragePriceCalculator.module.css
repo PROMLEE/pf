@@ -174,3 +174,46 @@
     padding: 20px 16px;
   }
 }
+
+.cashControls {
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.cashControls > summary {
+  color: var(--blue);
+  font-size: 13px;
+  cursor: pointer;
+}
+.cashControls[open] > summary {
+  margin-bottom: 14px;
+}
+.cashControls > label {
+  margin-bottom: 12px;
+}
+.cashButtons {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.cashButtons button {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 6px;
+  color: var(--blue);
+  background: var(--surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+.cashButtons button:disabled {
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: default;
+}
+.cashButtons button:last-child:not(:disabled) {
+  background: var(--action-fill);
+  border-color: var(--action-fill);
+  color: var(--action-ink);
+}

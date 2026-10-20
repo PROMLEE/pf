@@ -8,6 +8,41 @@ export type AveragePriceInput = {
   fractional: boolean;
 };
 
+/** Buy only complete tradable lots without crossing the selected currency balance. */
+export function purchaseWithinBudget(
+  budget: number,
+  price: number,
+  fractional: boolean,
+) {
+  if (
+    !Number.isFinite(budget) ||
+    budget < 0 ||
+    budget > 1e15 ||
+    !Number.isFinite(price) ||
+    price <= 0
+  )
+    throw new Error("현금 잔고와 추가 매수 단가를 확인하세요.");
+  const scale = fractional ? 1e8 : 1;
+  const lots = (budget / price) * scale;
+  if (
+    !Number.isFinite(lots) ||
+    lots > Number.MAX_SAFE_INTEGER ||
+    lots / scale > 1e12
+  )
+    throw new Error("계산 가능한 금액 또는 수량 범위를 초과했습니다.");
+  const nearest = Math.round(lots);
+  const normalized =
+    Math.abs(lots - nearest) <= Number.EPSILON * Math.max(1, Math.abs(lots)) * 4
+      ? nearest
+      : lots;
+  let quantity = Math.floor(normalized) / scale;
+  const epsilon = Number.EPSILON * Math.max(1, budget) * 4;
+  if (quantity * price - budget > epsilon)
+    quantity = Math.max(0, (Math.round(quantity * scale) - 1) / scale);
+  const cost = Math.min(budget, quantity * price);
+  return { quantity, cost, remaining: Math.max(0, budget - cost) };
+}
+
 /** A local simulation only. Costs are in one currency; fees and FX are excluded. */
 export function calculateAveragePrice(input: AveragePriceInput) {
   const { quantity, averagePrice, buyPrice, amount, mode, fractional } = input;
@@ -21,8 +56,11 @@ export function calculateAveragePrice(input: AveragePriceInput) {
     throw new Error("계산 방식을 확인하세요.");
   const scale = fractional ? 1e8 : 1;
   const existingCost = quantity * averagePrice;
-  let rawQuantity = amount;
-  if (mode === "budget") rawQuantity = amount / buyPrice;
+  const budget =
+    mode === "budget"
+      ? purchaseWithinBudget(amount, buyPrice, fractional)
+      : null;
+  let rawQuantity = budget?.quantity ?? amount;
   if (mode === "target") {
     if (
       amount <= Math.min(averagePrice, buyPrice) ||
@@ -53,24 +91,12 @@ export function calculateAveragePrice(input: AveragePriceInput) {
         ? "수량은 소수점 8자리까지 입력하세요."
         : "주식 수량은 1주 단위로 입력하거나 소수점 거래를 선택하세요.",
     );
-  let additionalQuantity =
+  const additionalQuantity =
+    budget?.quantity ??
     (mode === "target"
       ? Math.max(1, Math.ceil(normalized))
       : Math.floor(normalized)) / scale;
-  // A budget must never be overspent, including at floating-point boundaries.
-  const budgetEpsilon = Number.EPSILON * Math.max(1, amount) * 4;
-  if (
-    mode === "budget" &&
-    additionalQuantity * buyPrice - amount > budgetEpsilon
-  )
-    additionalQuantity = Math.max(
-      0,
-      (Math.round(additionalQuantity * scale) - 1) / scale,
-    );
-  const additionalCost =
-    mode === "budget"
-      ? Math.min(amount, additionalQuantity * buyPrice)
-      : additionalQuantity * buyPrice;
+  const additionalCost = budget?.cost ?? additionalQuantity * buyPrice;
   const totalQuantity = quantity + additionalQuantity;
   const totalCost = existingCost + additionalCost;
   if (!Number.isFinite(totalCost) || totalCost > 1e15 || totalQuantity > 1e12)

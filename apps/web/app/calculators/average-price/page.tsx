@@ -35,6 +35,15 @@ export default function AveragePricePage() {
       </header>
       <AveragePriceCalculator />
       <section className={styles.guide}>
+        <details>
+          <summary>현금 잔고 안에서 최대 몇 주 살 수 있나요?</summary>
+          <p>
+            ‘현금 잔고로 수량 채우기’를 펼치면 25%·50%·최대 수량을 채울 수
+            있습니다. 이 공개 계산기에서는 현금을 직접 입력하고, 로그인 후 종목
+            상세의 계산기에서는 같은 통화로 등록한 현금 자산을 선택할 수
+            있습니다. 수수료와 실제 주문 가능 금액은 별도로 확인하세요.
+          </p>
+        </details>
         <h2>평단가는 어떻게 달라지나요?</h2>
         <p>
           기존 총매입금액과 추가 매수 금액을 더한 뒤, 매수 후 총수량으로

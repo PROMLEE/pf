@@ -1,8 +1,19 @@
 "use client";
 import { useId, useState } from "react";
 import NumberInput from "./NumberInput";
-import { calculateAveragePrice, type AveragePriceMode } from "./average-price";
+import {
+  calculateAveragePrice,
+  purchaseWithinBudget,
+  type AveragePriceMode,
+} from "./average-price";
 import styles from "./AveragePriceCalculator.module.css";
+
+export type CalculatorCash = {
+  id: string;
+  name: string;
+  currency: "KRW" | "USD";
+  balance: number;
+};
 
 type Initial = {
   quantity?: number | null;
@@ -15,8 +26,10 @@ const raw = (n: number | null | undefined) =>
   n != null && n > 0 ? String(n) : "";
 export default function AveragePriceCalculator({
   initial = {},
+  cashBalances,
 }: {
   initial?: Initial;
+  cashBalances?: CalculatorCash[];
 }) {
   const id = useId();
   const [quantity, setQuantity] = useState(raw(initial.quantity));
@@ -30,6 +43,40 @@ export default function AveragePriceCalculator({
     budget: "",
     target: "",
   });
+  const [cashId, setCashId] = useState("");
+  const [manualCash, setManualCash] = useState("");
+  const matches =
+    cashBalances?.filter((cash) => cash.currency === currency) ?? [];
+  const selectedCash = matches.find((cash) => cash.id === cashId);
+  const cashAmount =
+    cashBalances === undefined || cashId === "manual"
+      ? manualCash.trim() !== ""
+        ? Number(manualCash)
+        : null
+      : (selectedCash?.balance ?? null);
+  let capacity: ReturnType<typeof purchaseWithinBudget> | null = null,
+    cashError = "";
+  if (cashAmount !== null && buyPrice.trim() !== "") {
+    try {
+      capacity = purchaseWithinBudget(cashAmount, Number(buyPrice), fractional);
+    } catch (e) {
+      cashError = e instanceof Error ? e.message : "현금과 가격을 확인하세요.";
+    }
+  }
+  function useCash(proportion: number) {
+    if (cashAmount === null || !capacity) return;
+    const purchase = purchaseWithinBudget(
+      cashAmount * proportion,
+      Number(buyPrice),
+      fractional,
+    );
+    if (purchase.quantity <= 0) return;
+    setMode("quantity");
+    setAmounts((current) => ({
+      ...current,
+      quantity: String(purchase.quantity),
+    }));
+  }
   const amount = amounts[mode];
   const ready = [quantity, averagePrice, buyPrice, amount].every(
     (v) => v.trim() !== "",
@@ -50,6 +97,20 @@ export default function AveragePriceCalculator({
       error = e instanceof Error ? e.message : "입력값을 확인하세요.";
     }
   }
+  const difference =
+    result &&
+    cashAmount !== null &&
+    Number.isFinite(cashAmount) &&
+    cashAmount >= 0
+      ? cashAmount - result.additionalCost
+      : null;
+  const cashRemainder =
+    difference === null
+      ? null
+      : Math.abs(difference) <=
+          Number.EPSILON * Math.max(1, cashAmount!, result!.additionalCost) * 4
+        ? 0
+        : difference;
   const money = (n: number, unitPrice = false) =>
     `${currency === "USD" ? "$" : ""}${n.toLocaleString("ko-KR", { maximumFractionDigits: unitPrice ? (fractional ? 8 : currency === "USD" ? 4 : 2) : currency === "USD" ? 2 : 0 })}${currency === "KRW" ? "원" : ""}`;
   const percent = (n: number) => {
@@ -65,6 +126,8 @@ export default function AveragePriceCalculator({
     setCurrency(initial.currency ?? "KRW");
     setFractional(initial.fractional ?? false);
     setAmounts({ quantity: "", budget: "", target: "" });
+    setCashId("");
+    setManualCash("");
   }
   return (
     <div className={styles.calculator}>
@@ -167,6 +230,81 @@ export default function AveragePriceCalculator({
               aria-describedby={`${id}-help`}
             />
           </label>
+          <details className={styles.cashControls}>
+            <summary>현금 잔고로 수량 채우기</summary>
+            {cashBalances !== undefined && (
+              <label>
+                사용할 현금 · {currency}
+                <select
+                  value={
+                    selectedCash ? cashId : cashId === "manual" ? "manual" : ""
+                  }
+                  onChange={(e) => setCashId(e.target.value)}
+                >
+                  <option value="">현금 자산 선택</option>
+                  {matches.map((cash) => (
+                    <option key={cash.id} value={cash.id}>
+                      {cash.name} · {money(cash.balance)}
+                    </option>
+                  ))}
+                  <option value="manual">현금 금액 직접 입력</option>
+                </select>
+              </label>
+            )}
+            {(cashBalances === undefined || cashId === "manual") && (
+              <label>
+                사용 가능한 현금 · {currency}
+                <NumberInput
+                  value={manualCash}
+                  onValueChange={setManualCash}
+                  min="0"
+                  step="any"
+                  placeholder="현금 잔고 입력"
+                />
+              </label>
+            )}
+            {selectedCash && (
+              <p className={styles.hint}>
+                선택한 잔고 {money(selectedCash.balance)}
+              </p>
+            )}
+            <div
+              className={styles.cashButtons}
+              role="group"
+              aria-label="현금으로 매수 수량 채우기"
+            >
+              {(
+                [
+                  [0.25, "25%"],
+                  [0.5, "50%"],
+                  [1, "최대 수량"],
+                ] as const
+              ).map(([fraction, label]) => (
+                <button
+                  type="button"
+                  key={fraction}
+                  disabled={
+                    !capacity ||
+                    cashAmount === null ||
+                    purchaseWithinBudget(
+                      cashAmount * fraction,
+                      Number(buyPrice),
+                      fractional,
+                    ).quantity <= 0
+                  }
+                  onClick={() => useCash(fraction)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className={styles.hint}>
+              {cashError ||
+                (capacity?.quantity === 0
+                  ? "현재 잔고로는 최소 거래 단위만큼 살 수 없습니다."
+                  : "선택한 현금과 추가 매수 단가 기준 · 수수료 별도")}
+            </p>
+          </details>
           <p id={`${id}-help`} className={styles.hint}>
             {mode === "target"
               ? "목표에 도달하거나 넘어서는 최소 수량을 계산합니다."
@@ -236,6 +374,14 @@ export default function AveragePriceCalculator({
                 <dt>매수 후 총매입금액</dt>
                 <dd>{money(result.totalCost)}</dd>
               </div>
+              {cashRemainder !== null && (
+                <div>
+                  <dt>
+                    {cashRemainder < 0 ? "현금보다 초과" : "매수 후 남는 현금"}
+                  </dt>
+                  <dd>{money(Math.abs(cashRemainder))}</dd>
+                </div>
+              )}
               {result.remainingBudget !== null && (
                 <div>
                   <dt>남는 예산</dt>
