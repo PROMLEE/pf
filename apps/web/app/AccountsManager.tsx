@@ -944,7 +944,7 @@ export default function AccountsManager({
                       </section>
                     )}
                     <small>
-                      종목명·코드는 한국투자증권 종목 마스터로 확인합니다.
+                      종목명·코드는 연결된 시세 공급자의 종목 목록으로 확인합니다.
                       현재가는 저장 후 조회합니다.
                     </small>
                     <div className={styles.actions}>

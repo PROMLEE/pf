@@ -1,5 +1,6 @@
 "use client";
 import PushSettings from "./PushSettings";
+import MarketDataStatus from "./MarketDataStatus";
 import RebalancePlans from "./RebalancePlans";
 import type { MarketSessions } from "./market-sessions";
 import CashTransfers from "./CashTransfers";
@@ -2104,6 +2105,7 @@ export default function PortfolioBuilder({
 
       {screen === "preferences" && (
         <div className={styles.preferences}>
+          <MarketDataStatus />
           <PushSettings />
           <section aria-labelledby="fx-settings-title">
             <h2 id="fx-settings-title">환율</h2>

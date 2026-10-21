@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUserId } from "../../../lib/auth";
-import { findInstruments } from "../../../lib/kis";
+import { searchStocks } from "../../../lib/stock-data";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     );
   try {
     return NextResponse.json({
-      instruments: await findInstruments(market, query),
+      instruments: await searchStocks(market, query),
     });
   } catch (error) {
     return NextResponse.json(

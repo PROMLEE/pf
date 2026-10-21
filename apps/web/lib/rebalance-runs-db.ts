@@ -315,7 +315,7 @@ export async function executeRebalanceItem(
             accountId,
             basis,
             rule?.quotedPrice ?? null,
-            rule?.quotedPrice ? "KIS 후보 조회 시세" : null,
+            rule?.quotedPrice ? "매수 후보 조회 시세" : null,
             rule?.quoteCheckedAt ?? null,
           ],
         );

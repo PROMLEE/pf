@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { currentUserId } from "../../../lib/auth";
-import { kisConfigured, quoteKis } from "../../../lib/kis";
+import {
+  stockQuotesConfigured,
+  quoteStocks,
+  stockDataStatus,
+} from "../../../lib/stock-data";
 import { listHoldings, setQuote } from "../../../lib/holdings-db";
 import {
   listRules,
@@ -42,11 +46,11 @@ export async function POST(request: Request) {
       listHoldings(userId),
       listRules(userId),
     ]);
-    if (!kisConfigured() && !cryptoCodes.length)
+    if (!stockQuotesConfigured() && !cryptoCodes.length)
       return NextResponse.json(
         {
           message:
-            "조회할 시세가 없습니다. KIS API 설정이나 가상자산 보유 항목을 확인해 주세요.",
+            "조회할 시세가 없습니다. 주식 시세 API 설정이나 가상자산 보유 항목을 확인해 주세요.",
         },
         { status: 503 },
       );
@@ -74,9 +78,14 @@ export async function POST(request: Request) {
         ]),
       ).values(),
     );
-    if (kisConfigured() && unique.length > 30) {
+    if (
+      stockQuotesConfigured() &&
+      unique.length > stockDataStatus().maxSymbols
+    ) {
       return NextResponse.json(
-        { message: "종목은 한 번에 30개까지 조회할 수 있습니다" },
+        {
+          message: `종목은 한 번에 ${stockDataStatus().maxSymbols}개까지 조회할 수 있습니다`,
+        },
         { status: 400 },
       );
     }
@@ -86,52 +95,40 @@ export async function POST(request: Request) {
           { price: null, error: "빗썸 원화 시세를 가져오지 못했습니다." },
         ])
       : Promise.resolve([]);
-    const stockQuotes = kisConfigured()
-      ? await Promise.all(
-          unique.map(async (row) => {
-            try {
-              const quote = await quoteKis(
-                row.market,
-                row.symbol,
-                row.exchange ?? null,
-              );
-              if (quote.price !== null && quote.checkedAt) {
-                await Promise.all([
-                  setQuote(
-                    userId,
-                    row.market,
-                    row.symbol,
-                    row.exchange ?? null,
-                    quote.price,
-                    quote.label,
-                    quote.checkedAt,
-                  ),
-                  setRuleQuote(
-                    userId,
-                    row.market,
-                    row.symbol,
-                    quote.price,
-                    quote.checkedAt,
-                  ),
-                ]);
-              }
-              return quote;
-            } catch {
-              return {
-                price: null,
-                error: `${row.symbol} 시세를 가져오지 못했습니다.`,
-              };
-            }
-          }),
-        )
-      : unique.length
-        ? [
-            {
-              price: null,
-              error: "주식 가격은 KIS API 설정 후 갱신할 수 있습니다.",
-            },
-          ]
-        : [];
+    const stockQuotes = await Promise.all(
+      (await quoteStocks(unique)).map(async (quote) => {
+        if (quote.price === null || !quote.checkedAt) return quote;
+        try {
+          await Promise.all([
+            setQuote(
+              userId,
+              quote.market,
+              quote.symbol,
+              quote.exchange,
+              quote.price,
+              quote.label,
+              quote.checkedAt,
+            ),
+            setRuleQuote(
+              userId,
+              quote.market,
+              quote.symbol,
+              quote.price,
+              quote.checkedAt,
+            ),
+          ]);
+          return quote;
+        } catch {
+          return {
+            ...quote,
+            price: null,
+            previousClose: null,
+            checkedAt: null,
+            error: `${quote.symbol} 시세를 저장하지 못했습니다.`,
+          };
+        }
+      }),
+    );
     const cryptoQuotes = await cryptoPromise;
     const quotes = [...stockQuotes, ...cryptoQuotes];
     await recordSnapshot(userId, undefined, false);
@@ -140,7 +137,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         message:
-          error instanceof Error ? error.message : "한국투자증권 API 연결 실패",
+          error instanceof Error ? error.message : "주식 시세 API 연결 실패",
       },
       { status: 502 },
     );

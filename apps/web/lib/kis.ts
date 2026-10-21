@@ -15,23 +15,8 @@ const BASE =
 const MASTER_BASE = "https://new.real.download.dws.co.kr/common/master";
 const KOREAN_DECODER = new TextDecoder("euc-kr");
 
-export type Instrument = {
-  market: Market;
-  symbol: string;
-  name: string;
-  exchange: string | null;
-};
-export type KisQuote = {
-  market: Market;
-  symbol: string;
-  exchange: string | null;
-  price: number | null;
-  previousClose: number | null;
-  currency: "KRW" | "USD";
-  checkedAt: string | null;
-  label: string;
-  error?: string;
-};
+export type Instrument = import("./market-data-types").StockInstrument;
+export type KisQuote = import("./market-data-types").StockQuote;
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 let pendingToken: Promise<string> | null = null;
@@ -55,7 +40,6 @@ async function paceQuoteRequest() {
   quoteQueue = turn.catch(() => {});
   await turn;
 }
-
 
 function configured() {
   return Boolean(process.env.KIS_APP_KEY && process.env.KIS_APP_SECRET);
@@ -438,8 +422,11 @@ export function kisConfigured() {
 
 /** Trading-day metadata only; reuses the existing shared token and request queue. */
 export async function domesticTradingCalendar(date: string): Promise<unknown> {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid calendar date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
+    throw new Error("Invalid calendar date");
   return kisGet("/uapi/domestic-stock/v1/quotations/chk-holiday", "CTCA0903R", {
-    BASS_DT:date.replaceAll("-", ""), CTX_AREA_FK:"", CTX_AREA_NK:"",
+    BASS_DT: date.replaceAll("-", ""),
+    CTX_AREA_FK: "",
+    CTX_AREA_NK: "",
   });
 }
