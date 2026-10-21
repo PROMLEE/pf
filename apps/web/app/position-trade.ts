@@ -18,6 +18,20 @@ export type HoldingTradeInput = PositionTrade & {
   expected: ExpectedPosition;
   cash?: { assetId: string; expectedBalance: number } | null;
 };
+export type NewHoldingCashInput = { assetId: string; expectedBalance: number };
+export function validateNewHoldingCash(
+  value: unknown,
+): value is NewHoldingCashInput {
+  if (!value || typeof value !== "object") return false;
+  const cash = value as NewHoldingCashInput;
+  return (
+    uuid(cash.assetId) &&
+    typeof cash.expectedBalance === "number" &&
+    Number.isFinite(cash.expectedBalance) &&
+    cash.expectedBalance >= 0 &&
+    cash.expectedBalance < 1e15
+  );
+}
 export class PositionTradeError extends Error {
   constructor(
     message: string,

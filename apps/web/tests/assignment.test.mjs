@@ -6,6 +6,8 @@ const state={user:'owner',calls:[]};globalThis.__pfAssignmentTest=state;
 let code=ts.transpileModule(await readFile(new URL('../app/api/holdings/route.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 code=code.replace(/import \{ NextResponse \} from "next\/server";/,'const NextResponse={json:(data,options)=>Response.json(data,options)};').replace(/import \{ currentUserId \} from "[^\"]+";/,'const currentUserId=async()=>globalThis.__pfAssignmentTest.user;').replace(/import \{[^}]+\} from "[^\"]+holdings-db";/,`const addHoldings=async()=>[],listHoldings=async()=>[],removeHolding=async()=>true,updateHoldingAmounts=async()=>[],updateHoldingInstrument=async()=>[];
 const updateHoldingAssignment=async(user,id,bucket,source)=>{globalThis.__pfAssignmentTest.calls.push({user,id,bucket,source});return bucket === '22222222-2222-4222-8222-222222222222' ? null : {holdings:[],snapshots:[]};};`);
+const positionModel=ts.transpileModule(await readFile(new URL('../app/position-trade.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+code=code.replace('"../../position-trade"',JSON.stringify(`data:text/javascript;base64,${Buffer.from(positionModel).toString('base64')}`));
 const {PATCH}=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 const id='11111111-1111-4111-8111-111111111111';
 const request=(body,origin='http://localhost:3000')=>new Request('http://localhost:3000/api/holdings',{method:'PATCH',headers:{host:'localhost:3000',origin,'Content-Type':'application/json'},body:JSON.stringify(body)});

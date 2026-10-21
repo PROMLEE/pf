@@ -13,6 +13,9 @@ import {
 import AssetIcon from "./AssetIcon";
 import NumberInput from "./NumberInput";
 import HoldingTradeEditor from "./HoldingTradeEditor";
+import { calculateTradeCash } from "./position-trade";
+import type { ManualAsset, Portfolio } from "./portfolio-model";
+import { publishTradePortfolio } from "./portfolio-cache";
 import styles from "./AccountsManager.module.css";
 
 type Instrument = {
@@ -70,6 +73,14 @@ export default function AccountsManager({
   const [searching, setSearching] = useState(false),
     [quantity, setQuantity] = useState(""),
     [cost, setCost] = useState("");
+  const [reflectPurchaseCash, setReflectPurchaseCash] = useState(false);
+  const [purchaseCashId, setPurchaseCashId] = useState("");
+  const [purchaseCashAssets, setPurchaseCashAssets] = useState<ManualAsset[]>(
+    [],
+  );
+  const [purchaseCashLoading, setPurchaseCashLoading] = useState(false);
+  const [purchaseCashError, setPurchaseCashError] = useState("");
+  const [cashReload, setCashReload] = useState(0);
   const [tradeMode, setTradeMode] = useState(true);
   const [tradeDirty, setTradeDirty] = useState(false);
   const [pendingMove, setPendingMove] = useState<{
@@ -89,20 +100,100 @@ export default function AccountsManager({
   );
   const editingRow = holdings.find((row) => row.id === editingId);
   const stockDirty = Boolean(
-    formOpen && !(editingRow && tradeMode) &&
+    formOpen &&
+      !(editingRow && tradeMode) &&
       (editingRow
         ? quantity !== String(editingRow.quantity) ||
           cost !==
             (editingRow.averageCost === null
               ? ""
               : String(editingRow.averageCost))
-        : instrument || query || quantity || cost),
+        : instrument || query || quantity || cost || reflectPurchaseCash),
   );
   const createDirty = Boolean(creating && (newBroker || newName));
   const inputDirty = accountDirty || stockDirty || createDirty || tradeDirty;
   const dirty = inputDirty || Boolean(pendingMove);
   const valuation = accountValuation(rows);
   const totalCost = purchaseTotal(quantity, cost);
+  const purchaseMarket = instrument?.market ?? market;
+  const availableCash = purchaseCashAssets.filter(
+    (asset) => (purchaseMarket === "US") === (asset.valueUsd !== null),
+  );
+  const purchaseCash = availableCash.find(
+    (asset) => asset.id === purchaseCashId,
+  );
+  const purchaseBalance = purchaseCash
+    ? (purchaseCash.valueUsd ?? purchaseCash.valueKrw)
+    : null;
+  let purchaseCashPreview: ReturnType<typeof calculateTradeCash> | null = null;
+  let purchaseCashValidation = "";
+  if (reflectPurchaseCash && !editingId) {
+    if (purchaseCashError) purchaseCashValidation = purchaseCashError;
+    else if (!purchaseCash)
+      purchaseCashValidation = "매수에 사용할 현금 자산을 선택해 주세요.";
+    else if (totalCost === null || Number(cost) <= 0)
+      purchaseCashValidation = "매수 수량과 주당 매입단가를 입력해 주세요.";
+    else
+      try {
+        purchaseCashPreview = calculateTradeCash(
+          purchaseBalance!,
+          {
+            side: "buy",
+            quantity: Number(quantity),
+            price: Number(cost),
+            fee: 0,
+          },
+          purchaseMarket,
+        );
+      } catch (error) {
+        purchaseCashValidation =
+          error instanceof Error ? error.message : "현금 잔고를 확인해 주세요.";
+      }
+  }
+  useEffect(() => {
+    if (!formOpen || editingId) return;
+    let active = true;
+    setPurchaseCashLoading(true);
+    setPurchaseCashError("");
+    fetch("/api/portfolio", { cache: "no-store" })
+      .then((res) => response<{ portfolio: Portfolio | null }>(res))
+      .then((result) => {
+        if (active) setPurchaseCashAssets(result.portfolio?.manualAssets ?? []);
+      })
+      .catch((error) => {
+        if (active) {
+          setPurchaseCashAssets([]);
+          setPurchaseCashError(
+            error instanceof Error
+              ? error.message
+              : "현금 목록을 불러오지 못했습니다.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setPurchaseCashLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [formOpen, editingId, userId, cashReload]);
+  useEffect(() => {
+    const eligible = purchaseCashAssets.filter(
+      (asset) => (purchaseMarket === "US") === (asset.valueUsd !== null),
+    );
+    setPurchaseCashId((current) => {
+      if (eligible.some((asset) => asset.id === current)) return current;
+      const sameAccount = eligible.filter(
+        (asset) => asset.accountId === selectedId,
+      );
+      return sameAccount.length === 1
+        ? sameAccount[0].id
+        : eligible.length === 1
+          ? eligible[0].id
+          : "";
+    });
+  }, [purchaseCashAssets, purchaseMarket, selectedId]);
+
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
@@ -162,6 +253,8 @@ export default function AccountsManager({
     setMatches([]);
     setQuantity("");
     setCost("");
+    setReflectPurchaseCash(false);
+    setPurchaseCashId("");
     setError("");
   }
   function selectAccount(id: string) {
@@ -226,7 +319,9 @@ export default function AccountsManager({
       );
       setMatches(result.instruments);
       if (!result.instruments.length)
-        setError("검색 결과가 없습니다. 종목명 철자를 확인하거나 종목코드로 검색해 주세요.");
+        setError(
+          "검색 결과가 없습니다. 종목명 철자를 확인하거나 종목코드로 검색해 주세요.",
+        );
     } catch (error) {
       setError(error instanceof Error ? error.message : "종목 검색 실패");
     } finally {
@@ -250,10 +345,22 @@ export default function AccountsManager({
       );
       return;
     }
+    if (
+      !editingId &&
+      reflectPurchaseCash &&
+      (purchaseCashLoading || purchaseCashValidation || !purchaseCashPreview)
+    ) {
+      setError(purchaseCashValidation || "현금 잔고를 확인해 주세요.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      const result = await response<{ holdings: Holding[] }>(
+      const result = await response<{
+        holdings: Holding[];
+        portfolio?: Portfolio | null;
+        cashChange?: { name: string; balance: number };
+      }>(
         await fetch("/api/holdings", {
           method: editingId ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -262,6 +369,13 @@ export default function AccountsManager({
               ? { id: editingId, quantity: shares, averageCost: average }
               : {
                   insertOnly: true,
+                  cash:
+                    reflectPurchaseCash && purchaseCash
+                      ? {
+                          assetId: purchaseCash.id,
+                          expectedBalance: purchaseBalance,
+                        }
+                      : undefined,
                   holdings: [
                     {
                       ...instrument,
@@ -278,10 +392,12 @@ export default function AccountsManager({
           ),
         }),
       );
+      if (result.portfolio && reflectPurchaseCash && purchaseCash)
+        publishTradePortfolio(result.portfolio, purchaseCash.id);
       onHoldings(withPreviousQuotes(result.holdings, holdings));
       resetStock();
       onNotice(
-        `${selected.name} · ${instrument.name} ${editingId ? "수정" : "추가"} 완료`,
+        `${selected.name} · ${instrument.name} ${editingId ? "수정" : "추가"} 완료${result.cashChange ? ` · ${result.cashChange.name} 잔고 ${amount(result.cashChange.balance, purchaseMarket)}` : ""}`,
       );
       if (!editingId) onRefreshQuotes();
     } catch (error) {
@@ -345,7 +461,9 @@ export default function AccountsManager({
       <header className={styles.header}>
         <div>
           <h1>계좌 관리</h1>
-          <button type="button" onClick={onCashManage}>현금 관리·이체</button>
+          <button type="button" onClick={onCashManage}>
+            현금 관리·이체
+          </button>
           <p>증권사·계좌명과 계좌별 주식·ETF를 직접 관리하세요.</p>
         </div>
         <button disabled={busy || dirty} onClick={() => setCreating(!creating)}>
@@ -500,7 +618,9 @@ export default function AccountsManager({
                     : ""}
                   {rows.length === 0 ? "—" : ""}
                 </strong>
-                {valuation.unpriced > 0 && <small>가격 미확인 {valuation.unpriced}종목 제외</small>}
+                {valuation.unpriced > 0 && (
+                  <small>가격 미확인 {valuation.unpriced}종목 제외</small>
+                )}
               </div>
               <details className={styles.metadata}>
                 <summary>계좌 정보 수정</summary>
@@ -577,152 +697,285 @@ export default function AccountsManager({
                   종목 직접 추가
                 </button>
               </div>
-              {formOpen && (editingRow && tradeMode ? <HoldingTradeEditor key={editingRow.id} holding={editingRow}
-                onDirty={setTradeDirty} onBusy={setBusy} onCancel={resetStock} onDirect={() => setTradeMode(false)}
-                onSaved={(next, message) => { onHoldings(withPreviousQuotes(next, holdings));resetStock();onNotice(message); }}
-              /> : <form
-                  className={styles.form}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveStock();
-                  }}
-                >
-                  <h3>{editingId ? "보유 종목 수정" : "종목 추가"}</h3>
-                  {!editingId && (
-                    <>
-                      <label>
-                        시장
-                        <select
-                          value={market}
-                          disabled={busy || searching}
-                          onChange={(event) => {
-                            setMarket(event.target.value as Market);
-                            setMatches([]);
-                            setInstrument(null);
-                          }}
-                        >
-                          <option value="KR">국내 주식·ETF</option>
-                          <option value="US">미국 주식·ETF</option>
-                        </select>
-                      </label>
-                      <label>
-                        종목명 또는 코드
-                        <div className={styles.search}>
-                          <input
-                            value={query}
-                            aria-label="종목명 또는 코드"
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                void search();
-                              }
-                            }}
+              {formOpen &&
+                (editingRow && tradeMode ? (
+                  <HoldingTradeEditor
+                    key={editingRow.id}
+                    holding={editingRow}
+                    onDirty={setTradeDirty}
+                    onBusy={setBusy}
+                    onCancel={resetStock}
+                    onDirect={() => setTradeMode(false)}
+                    onSaved={(next, message) => {
+                      onHoldings(withPreviousQuotes(next, holdings));
+                      resetStock();
+                      onNotice(message);
+                    }}
+                  />
+                ) : (
+                  <form
+                    className={styles.form}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveStock();
+                    }}
+                  >
+                    <h3>{editingId ? "보유 종목 수정" : "종목 추가"}</h3>
+                    {!editingId && (
+                      <>
+                        <label>
+                          시장
+                          <select
+                            value={market}
                             disabled={busy || searching}
                             onChange={(event) => {
-                              setQuery(event.target.value);
+                              setMarket(event.target.value as Market);
                               setMatches([]);
                               setInstrument(null);
                             }}
-                            maxLength={80}
-                            placeholder="삼성전자, 005930, AAPL"
-                          />
-                          <button
-                            type="button"
-                            disabled={searching || busy || !query.trim()}
-                            onClick={() => void search()}
                           >
-                            {searching ? "검색 중" : "검색"}
-                          </button>
-                        </div>
-                      </label>
-                      {matches.length > 0 && (
-                        <div className={styles.matches}>
-                          {matches.map((item) => (
+                            <option value="KR">국내 주식·ETF</option>
+                            <option value="US">미국 주식·ETF</option>
+                          </select>
+                        </label>
+                        <label>
+                          종목명 또는 코드
+                          <div className={styles.search}>
+                            <input
+                              value={query}
+                              aria-label="종목명 또는 코드"
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void search();
+                                }
+                              }}
+                              disabled={busy || searching}
+                              onChange={(event) => {
+                                setQuery(event.target.value);
+                                setMatches([]);
+                                setInstrument(null);
+                              }}
+                              maxLength={80}
+                              placeholder="삼성전자, 005930, AAPL"
+                            />
                             <button
                               type="button"
-                              key={`${item.market}:${item.symbol}:${item.exchange}`}
-                              onClick={() => {
-                                setInstrument(item);
-                                setMatches([]);
-                              }}
+                              disabled={searching || busy || !query.trim()}
+                              onClick={() => void search()}
                             >
-                              <strong>{item.name}</strong>
-                              <small>
-                                {item.symbol} · {item.exchange}
-                              </small>
+                              {searching ? "검색 중" : "검색"}
                             </button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {instrument && (
-                    <p className={styles.selected}>
-                      {instrument.name}{" "}
-                      <span>
-                        {instrument.symbol} · {instrument.exchange}
-                      </span>
-                    </p>
-                  )}
-                  <div className={styles.numbers}>
-                    <label>
-                      현재 총보유 수량 · 주
-                      <NumberInput
-                        value={quantity}
-                        onValueChange={setQuantity}
-                        min="0.000001"
-                        max="999999999999"
-                        step="0.000001"
-                        required
-                        disabled={busy}
-                      />
-                    </label>
-                    <label>
-                      주당 평균 매입단가 ·{" "}
-                      {(instrument?.market ?? market) === "US" ? "USD" : "원"}
-                      <NumberInput
-                        value={cost}
-                        onValueChange={setCost}
-                        min="0"
-                        step="any"
-                        placeholder="모르면 비워두세요"
-                        disabled={busy}
-                      />
-                    </label>
-                  </div>
-                  <small>
-                    이번 거래 수량이 아니라, 거래 후 현재 보유한 전체 수량을
-                    입력하세요.
-                  </small>
-                  <p className={styles.verification} role="status">
-                    총매입금액 검산{" "}
-                    <strong>
-                      {totalCost === null
-                        ? "수량과 평균 단가를 입력하면 표시됩니다"
-                        : amount(totalCost, instrument?.market ?? market)}
-                    </strong>
+                          </div>
+                        </label>
+                        {matches.length > 0 && (
+                          <div className={styles.matches}>
+                            {matches.map((item) => (
+                              <button
+                                type="button"
+                                key={`${item.market}:${item.symbol}:${item.exchange}`}
+                                onClick={() => {
+                                  setInstrument(item);
+                                  setMatches([]);
+                                }}
+                              >
+                                <strong>{item.name}</strong>
+                                <small>
+                                  {item.symbol} · {item.exchange}
+                                </small>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {instrument && (
+                      <p className={styles.selected}>
+                        {instrument.name}{" "}
+                        <span>
+                          {instrument.symbol} · {instrument.exchange}
+                        </span>
+                      </p>
+                    )}
+                    <div className={styles.numbers}>
+                      <label>
+                        {!editingId && reflectPurchaseCash
+                          ? "이번 매수 수량 · 주"
+                          : "현재 총보유 수량 · 주"}
+                        <NumberInput
+                          value={quantity}
+                          onValueChange={setQuantity}
+                          min="0.000001"
+                          max="999999999999"
+                          step="0.000001"
+                          required
+                          disabled={busy}
+                        />
+                      </label>
+                      <label>
+                        {!editingId && reflectPurchaseCash
+                          ? "주당 매수 단가"
+                          : "주당 평균 매입단가"}{" "}
+                        ·{" "}
+                        {(instrument?.market ?? market) === "US" ? "USD" : "원"}
+                        <NumberInput
+                          value={cost}
+                          onValueChange={setCost}
+                          min="0"
+                          step="any"
+                          placeholder="모르면 비워두세요"
+                          disabled={busy}
+                        />
+                      </label>
+                    </div>
                     <small>
-                      총보유 수량 × 주당 평균 매입단가 · 수수료 별도
+                      {!editingId && reflectPurchaseCash
+                        ? "새로 매수한 수량을 등록하고 선택한 현금에서 총매입금액을 차감합니다."
+                        : "이번 거래 수량이 아니라, 거래 후 현재 보유한 전체 수량을 입력하세요."}
                     </small>
-                  </p>
-                  <small>
-                    종목명·코드는 한국투자증권 종목 마스터로 확인합니다.
-                    현재가는 저장 후 조회합니다.
-                  </small>
-                  <div className={styles.actions}>
-                    <button type="submit" disabled={busy || !instrument}>
-                      {busy
-                        ? "저장 중"
-                        : editingId
-                          ? "종목 수정 저장"
-                          : "이 계좌에 추가"}
-                    </button>
-                    <button type="button" disabled={busy} onClick={resetStock}>
-                      취소
-                    </button>
-                  </div>
-                </form>
-              )}
+                    <p className={styles.verification} role="status">
+                      총매입금액 검산{" "}
+                      <strong>
+                        {totalCost === null
+                          ? "수량과 평균 단가를 입력하면 표시됩니다"
+                          : amount(totalCost, instrument?.market ?? market)}
+                      </strong>
+                      <small>
+                        {!editingId && reflectPurchaseCash
+                          ? "매수 수량 × 주당 매수 단가 · 수수료 별도"
+                          : "총보유 수량 × 주당 평균 매입단가 · 수수료 별도"}
+                      </small>
+                    </p>
+                    {!editingId && (
+                      <section
+                        className={styles.purchaseCash}
+                        aria-label="새 종목 매수 현금 반영"
+                      >
+                        <label className={styles.purchaseCashToggle}>
+                          <input
+                            type="checkbox"
+                            checked={reflectPurchaseCash}
+                            disabled={busy}
+                            onChange={(event) =>
+                              setReflectPurchaseCash(event.target.checked)
+                            }
+                          />
+                          보유 현금에서 매수금액 차감
+                        </label>
+                        {reflectPurchaseCash ? (
+                          <>
+                            <label>
+                              매수에 사용할 현금 ·{" "}
+                              {purchaseMarket === "US" ? "USD" : "KRW"}
+                              <select
+                                aria-label="새 종목 매수에 사용할 현금"
+                                value={purchaseCashId}
+                                disabled={busy || purchaseCashLoading}
+                                onChange={(event) =>
+                                  setPurchaseCashId(event.target.value)
+                                }
+                              >
+                                <option value="">
+                                  {purchaseCashLoading
+                                    ? "현금 목록 불러오는 중…"
+                                    : "현금 자산 선택"}
+                                </option>
+                                {availableCash.map((asset) => (
+                                  <option key={asset.id} value={asset.id}>
+                                    {asset.name}
+                                    {asset.accountId
+                                      ? ` · ${accounts.find((account) => account.id === asset.accountId)?.name ?? "연결 계좌"}`
+                                      : ""}{" "}
+                                    ·{" "}
+                                    {amount(
+                                      asset.valueUsd ?? asset.valueKrw,
+                                      purchaseMarket,
+                                    )}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            {purchaseBalance !== null && (
+                              <p role="status">
+                                차감 후 잔고{" "}
+                                <strong>
+                                  {amount(purchaseBalance, purchaseMarket)} →{" "}
+                                  {purchaseCashPreview
+                                    ? amount(
+                                        purchaseCashPreview.balance,
+                                        purchaseMarket,
+                                      )
+                                    : "—"}
+                                </strong>
+                              </p>
+                            )}
+                            {purchaseCashValidation && !purchaseCashLoading && (
+                              <p role="alert">{purchaseCashValidation}</p>
+                            )}
+                            {!purchaseCashLoading &&
+                              !availableCash.length &&
+                              !purchaseCashError && (
+                                <small>
+                                  자산 수정에서{" "}
+                                  {purchaseMarket === "US" ? "달러" : "원화"}{" "}
+                                  현금 자산을 먼저 추가해 주세요.
+                                </small>
+                              )}
+                            <button
+                              type="button"
+                              disabled={busy || purchaseCashLoading}
+                              onClick={() =>
+                                setCashReload((value) => value + 1)
+                              }
+                            >
+                              현금 목록 새로고침
+                            </button>
+                            <small>
+                              기존 잔고를 옮겨 적는 경우에는 끄세요. 추가
+                              수수료는 별도로 더하지 않으며 자동 환전은 하지
+                              않습니다.
+                            </small>
+                          </>
+                        ) : (
+                          <small>
+                            보유 내역만 등록하고 현금 잔고는 유지합니다.
+                          </small>
+                        )}
+                      </section>
+                    )}
+                    <small>
+                      종목명·코드는 한국투자증권 종목 마스터로 확인합니다.
+                      현재가는 저장 후 조회합니다.
+                    </small>
+                    <div className={styles.actions}>
+                      <button
+                        type="submit"
+                        disabled={
+                          busy ||
+                          !instrument ||
+                          (!editingId &&
+                            reflectPurchaseCash &&
+                            (purchaseCashLoading ||
+                              Boolean(purchaseCashValidation) ||
+                              !purchaseCashPreview))
+                        }
+                      >
+                        {busy
+                          ? "저장 중"
+                          : editingId
+                            ? "종목 수정 저장"
+                            : "이 계좌에 추가"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={resetStock}
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </form>
+                ))}
               {rows.length === 0 ? (
                 <div className={styles.empty}>
                   <Wallet size={28} />

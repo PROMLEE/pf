@@ -3,6 +3,7 @@ import type { Holding } from "../../holdings";
 import { currentUserId } from "../../../lib/auth";
 import {
   addHoldings,
+  addHoldingWithCash,
   listHoldings,
   removeHolding,
   updateHoldingAmounts,
@@ -10,6 +11,11 @@ import {
   updateHoldingAssignment,
   moveHoldingAccount,
 } from "../../../lib/holdings-db";
+
+import {
+  validateNewHoldingCash,
+  PositionTradeError,
+} from "../../position-trade";
 
 export const runtime = "nodejs";
 
@@ -102,6 +108,7 @@ export async function POST(request: Request) {
     const data = (await request.json()) as {
       holdings?: Holding[];
       insertOnly?: boolean;
+      cash?: unknown;
     };
     if (
       (data.insertOnly !== undefined && typeof data.insertOnly !== "boolean") ||
@@ -115,6 +122,24 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (data.cash != null) {
+      if (
+        data.insertOnly !== true ||
+        data.holdings.length !== 1 ||
+        !validateNewHoldingCash(data.cash) ||
+        data.holdings[0].averageCost == null
+      )
+        return NextResponse.json(
+          {
+            message:
+              "현금 차감은 매입단가를 입력한 새 종목 한 건에만 사용할 수 있습니다.",
+          },
+          { status: 400 },
+        );
+      return NextResponse.json(
+        await addHoldingWithCash(userId, data.holdings[0], data.cash),
+      );
+    }
     return NextResponse.json({
       holdings: await addHoldings(
         userId,
@@ -123,6 +148,11 @@ export async function POST(request: Request) {
       ),
     });
   } catch (error) {
+    if (error instanceof PositionTradeError)
+      return NextResponse.json(
+        { message: error.message },
+        { status: error.status },
+      );
     return NextResponse.json(
       {
         message:

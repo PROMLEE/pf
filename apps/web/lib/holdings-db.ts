@@ -2,7 +2,13 @@ import type { PoolClient } from "pg";
 import type { Holding } from "../app/holdings";
 import { db } from "./db";
 import { resolveAccount } from "./accounts-db";
-import { recordSnapshot } from "./portfolio-db";
+import { recordSnapshot, listPortfolio } from "./portfolio-db";
+import {
+  calculatePositionTrade,
+  calculateTradeCash,
+  PositionTradeError,
+  type NewHoldingCashInput,
+} from "../app/position-trade";
 
 type Row = {
   id: string;
@@ -43,7 +49,8 @@ function fromRow(row: Row): Holding {
     capturedPrice:
       row.captured_price === null ? null : Number(row.captured_price),
     averageCost: row.average_cost === null ? null : Number(row.average_cost),
-    averageCostKrw: row.average_cost_krw == null ? null : Number(row.average_cost_krw),
+    averageCostKrw:
+      row.average_cost_krw == null ? null : Number(row.average_cost_krw),
     capturedAt: row.captured_at.toISOString(),
     currentPrice: row.current_price === null ? null : Number(row.current_price),
     quoteLabel: row.quote_label,
@@ -60,7 +67,10 @@ async function select(client: Pick<PoolClient, "query">, userId: string) {
   return result.rows.map(fromRow);
 }
 
-export async function listHoldings(userId: string, client?: Pick<PoolClient, "query">) {
+export async function listHoldings(
+  userId: string,
+  client?: Pick<PoolClient, "query">,
+) {
   return select(client ?? db(), userId);
 }
 
@@ -69,9 +79,40 @@ export async function addHoldings(
   incoming: Holding[],
   insertOnly = false,
 ) {
+  return (await saveHoldings(userId, incoming, insertOnly)).holdings;
+}
+export async function addHoldingWithCash(
+  userId: string,
+  incoming: Holding,
+  cash: NewHoldingCashInput,
+) {
+  return saveHoldings(userId, [incoming], true, cash);
+}
+async function saveHoldings(
+  userId: string,
+  incoming: Holding[],
+  insertOnly: boolean,
+  cash?: NewHoldingCashInput,
+) {
   const client = await db().connect();
   try {
     await client.query("begin");
+    const plan = cash
+      ? (
+          await client.query<{ usd_krw: string }>(
+            "select usd_krw from portfolio.plans where user_id=$1 for update",
+            [userId],
+          )
+        ).rows[0]
+      : null;
+    if (cash && !plan)
+      throw new PositionTradeError("포트폴리오를 찾지 못했습니다.", 404);
+    let cashChange: {
+      name: string;
+      balance: number;
+      delta: number;
+      currency: string;
+    } | null = null;
     for (const input of incoming) {
       const account = await resolveAccount(
         client,
@@ -96,14 +137,84 @@ export async function addHoldings(
             "이미 보유한 종목입니다. 기존 종목의 수량을 수정해 주세요.",
           );
       }
+      if (cash) {
+        const trade = {
+          side: "buy" as const,
+          quantity: row.quantity,
+          price: row.averageCost ?? 0,
+          fee: 0,
+        };
+        calculatePositionTrade({ quantity: 0, averageCost: null }, trade);
+        if (
+          row.market === "US" &&
+          (!Number.isFinite(Number(plan!.usd_krw)) ||
+            Number(plan!.usd_krw) < 100 ||
+            Number(plan!.usd_krw) > 100000)
+        )
+          throw new PositionTradeError("적용 환율을 확인해 주세요.");
+        const balanceRow = (
+          await client.query<{
+            name: string;
+            value_krw: string;
+            value_usd: string | null;
+          }>(
+            "select name,value_krw,value_usd from portfolio.manual_assets where user_id=$1 and id=$2 for update",
+            [userId, cash.assetId],
+          )
+        ).rows[0];
+        if (!balanceRow)
+          throw new PositionTradeError(
+            "선택한 현금 자산을 찾지 못했습니다.",
+            404,
+          );
+        if ((row.market === "US") !== (balanceRow.value_usd !== null))
+          throw new PositionTradeError(
+            "국내 주식은 원화, 미국 주식은 달러 자산을 선택해 주세요.",
+          );
+        const balance = Number(balanceRow.value_usd ?? balanceRow.value_krw);
+        if (balance !== cash.expectedBalance)
+          throw new PositionTradeError(
+            "현금 잔고가 변경되었습니다. 현금 목록을 다시 불러온 후 확인해 주세요.",
+            409,
+          );
+        const change = calculateTradeCash(balance, trade, row.market);
+        await client.query(
+          "update portfolio.manual_assets set value_krw=$3,value_usd=$4,updated_at=now() where user_id=$1 and id=$2",
+          [
+            userId,
+            cash.assetId,
+            row.market === "US"
+              ? change.balance * Number(plan!.usd_krw)
+              : change.balance,
+            row.market === "US" ? change.balance : null,
+          ],
+        );
+        await client.query(
+          "update portfolio.plans set cash_revision=cash_revision+1 where user_id=$1",
+          [userId],
+        );
+        cashChange = {
+          name: balanceRow.name,
+          ...change,
+          currency: row.market === "US" ? "USD" : "KRW",
+        };
+      }
       let previousAssignment:
-        | { bucket_id: string | null; assignment_source: "auto" | "manual"; average_cost_krw: string | null; average_cost: string | null; quantity: string }
+        | {
+            bucket_id: string | null;
+            assignment_source: "auto" | "manual";
+            average_cost_krw: string | null;
+            average_cost: string | null;
+            quantity: string;
+          }
         | undefined;
       if (row.symbol) {
         const deleted = await client.query<{
           bucket_id: string | null;
           assignment_source: "auto" | "manual";
-          average_cost_krw: string | null; average_cost: string | null; quantity: string;
+          average_cost_krw: string | null;
+          average_cost: string | null;
+          quantity: string;
         }>(
           `delete from portfolio.holdings where user_id = $1 and lower(broker) = lower($2) and lower(account_label) = lower($3) and market = $4 and symbol = $5 and (exchange_code is not distinct from $6 or exchange_code is null or $6::text is null) returning bucket_id, assignment_source, average_cost_krw, average_cost, quantity`,
           [
@@ -143,18 +254,26 @@ export async function addHoldings(
           bucketId,
           manual ? "manual" : "auto",
           row.quantity,
-          row.capturedPrice,
+          cash ? row.averageCost : row.capturedPrice,
           row.averageCost,
           row.capturedAt,
           row.accountId,
-          row.market === "US" && previousAssignment?.average_cost_krw != null && Number(previousAssignment.average_cost) === row.averageCost && Number(previousAssignment.quantity) === row.quantity ? previousAssignment.average_cost_krw : null,
+          cash && row.market === "US"
+            ? row.averageCost! * Number(plan!.usd_krw)
+            : row.market === "US" &&
+                previousAssignment?.average_cost_krw != null &&
+                Number(previousAssignment.average_cost) === row.averageCost &&
+                Number(previousAssignment.quantity) === row.quantity
+              ? previousAssignment.average_cost_krw
+              : null,
         ],
       );
     }
     await recordSnapshot(userId, client);
-    const rows = await select(client, userId);
+    const holdings = await select(client, userId);
+    const portfolio = cash ? await listPortfolio(userId, client) : null;
     await client.query("commit");
-    return rows;
+    return { holdings, portfolio, cashChange };
   } catch (error) {
     await client.query("rollback");
     throw error;
