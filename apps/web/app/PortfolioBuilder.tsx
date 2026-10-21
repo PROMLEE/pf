@@ -1096,7 +1096,7 @@ export default function PortfolioBuilder({
         throw new Error(payload.message || "종목을 찾지 못했습니다.");
       setCandidates(payload.instruments ?? []);
       if (!payload.instruments?.length)
-        onNotice("KIS 종목 마스터에서 일치하는 종목을 찾지 못했습니다.");
+        onNotice("검색 결과가 없습니다. 종목명 철자를 확인하거나 종목코드로 검색해 주세요.");
     } catch (error) {
       onNotice(
         error instanceof Error ? error.message : "종목을 찾지 못했습니다.",

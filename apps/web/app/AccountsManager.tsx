@@ -226,7 +226,7 @@ export default function AccountsManager({
       );
       setMatches(result.instruments);
       if (!result.instruments.length)
-        setError("검색 결과가 없습니다. 종목명 또는 코드를 확인해 주세요.");
+        setError("검색 결과가 없습니다. 종목명 철자를 확인하거나 종목코드로 검색해 주세요.");
     } catch (error) {
       setError(error instanceof Error ? error.message : "종목 검색 실패");
     } finally {

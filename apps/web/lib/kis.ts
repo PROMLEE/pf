@@ -1,4 +1,5 @@
 import AdmZip from "adm-zip";
+import { searchInstrumentCatalog } from "./instrument-search";
 import {
   createCipheriv,
   createDecipheriv,
@@ -55,9 +56,6 @@ async function paceQuoteRequest() {
   await turn;
 }
 
-function normalize(value: string) {
-  return value.toLocaleLowerCase("ko-KR").replace(/[\s()[\]{}.,…·ㆍ-]/g, "");
-}
 
 function configured() {
   return Boolean(process.env.KIS_APP_KEY && process.env.KIS_APP_SECRET);
@@ -352,18 +350,8 @@ async function instruments(market: Market) {
 }
 
 export async function findInstruments(market: Market, query: string) {
-  const needle = normalize(query);
-  if (!needle) return [];
-  const catalog = await instruments(market);
-  const exact = catalog.filter(
-    (item) =>
-      normalize(item.symbol) === needle || normalize(item.name) === needle,
-  );
-  if (exact.length) return exact.slice(0, 12);
-  const matches = catalog
-    .filter((item) => normalize(item.name).includes(needle))
-    .sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
-  return matches.slice(0, 12);
+  if (!query.trim()) return [];
+  return searchInstrumentCatalog(await instruments(market), query);
 }
 
 export async function quoteKis(
