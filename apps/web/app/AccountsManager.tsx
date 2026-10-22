@@ -11,6 +11,7 @@ import {
   type BrokerageAccount,
 } from "./accounts-model";
 import AssetIcon from "./AssetIcon";
+import MeritzImport from "./MeritzImport";
 import NumberInput from "./NumberInput";
 import HoldingTradeEditor from "./HoldingTradeEditor";
 import { calculateTradeCash } from "./position-trade";
@@ -112,7 +113,8 @@ export default function AccountsManager({
   );
   const createDirty = Boolean(creating && (newBroker || newName));
   const inputDirty = accountDirty || stockDirty || createDirty || tradeDirty;
-  const dirty = inputDirty || Boolean(pendingMove);
+  const [importDirty, setImportDirty] = useState(false);
+  const dirty = inputDirty || Boolean(pendingMove) || importDirty;
   const valuation = accountValuation(rows);
   const totalCost = purchaseTotal(quantity, cost);
   const purchaseMarket = instrument?.market ?? market;
@@ -471,6 +473,17 @@ export default function AccountsManager({
           계좌 추가
         </button>
       </header>
+      <MeritzImport
+        accounts={accounts}
+        disabled={inputDirty || Boolean(pendingMove)}
+        onDirty={setImportDirty}
+        onApplied={(result) => {
+          onHoldings(withPreviousQuotes(result.holdings, holdings));
+          publishTradePortfolio(result.portfolio, "");
+          setCashReload((n) => n + 1);
+          onNotice(`메리츠 잔고 ${result.count}건을 반영했습니다.`);
+        }}
+      />
       <datalist id="pf-brokers">
         {[
           "미래에셋증권",
@@ -944,8 +957,8 @@ export default function AccountsManager({
                       </section>
                     )}
                     <small>
-                      종목명·코드는 연결된 시세 공급자의 종목 목록으로 확인합니다.
-                      현재가는 저장 후 조회합니다.
+                      종목명·코드는 연결된 시세 공급자의 종목 목록으로
+                      확인합니다. 현재가는 저장 후 조회합니다.
                     </small>
                     <div className={styles.actions}>
                       <button
