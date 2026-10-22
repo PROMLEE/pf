@@ -294,6 +294,8 @@ async function saveRequest(request: Request, assetsOnly: boolean) {
       : await savePortfolio(userId, input);
     return NextResponse.json({ portfolio });
   } catch (error) {
+    if((error as {code?:string})?.code === "23503" && /meritz_sync_(krw|usd)_asset_id_fkey/.test((error as {constraint?:string}).constraint ?? ""))
+      return NextResponse.json({message:"메리츠 자동 동기화에 연결된 현금입니다. 계좌 관리에서 연결 해제 후 삭제해 주세요."},{status:409});
     return NextResponse.json(
       {
         message:

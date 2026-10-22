@@ -139,10 +139,20 @@ async function state(
 export async function createMeritzPreview(
   userId: string,
   options: Options,
+  context?: {
+    remote: Awaited<ReturnType<typeof fetchMeritzBalance>>;
+    client: PoolClient;
+    authoritative: boolean;
+  },
 ): Promise<MeritzPreview> {
-  await state(userId, options); // Validate ownership before contacting the broker.
-  const remote = await fetchMeritzBalance();
-  const local = await state(userId, options);
+  await state(userId, options, context?.client); // Validate ownership before contacting the broker.
+  const remote = context?.remote ?? (await fetchMeritzBalance());
+  if (context?.authoritative && remote.warnings.length)
+    throw new MeritzImportError(
+      "일부 메리츠 잔고를 해석하지 못해 자동 반영을 보류했습니다. 계좌 관리에서 확인해 주세요.",
+      409,
+    );
+  const local = await state(userId, options, context?.client);
   const changes: MeritzChange[] = [],
     warnings = [...remote.warnings];
   let unchanged = 0;
@@ -177,13 +187,29 @@ export async function createMeritzPreview(
       position: p,
     });
   }
-  // Never infer sales from omitted/unsupported broker rows. Absences require manual review.
+  // Manual imports retain absences; authoritative sync closes positions only after a complete validated fetch.
   const keys = new Set(remote.positions.map((p) => `${p.market}:${p.symbol}`));
   for (const h of local.holdings)
-    if (!keys.has(`${h.market}:${h.symbol}`))
-      warnings.push(
-        `${h.name}: 불러온 목록에 없어 그대로 유지합니다. 매도·지원 제외 여부를 직접 확인하세요.`,
-      );
+    if (!keys.has(`${h.market}:${h.symbol}`)) {
+      if (
+        context?.authoritative &&
+        ((h.market === "KR" && /^[0-9A-Z]{6}$/.test(h.symbol)) ||
+          (h.market === "US" && /^[A-Z.]{1,10}$/.test(h.symbol)))
+      )
+        changes.push({
+          key: `remove:${h.id}`,
+          kind: "remove",
+          id: h.id,
+          name: h.name,
+          currency: h.market === "US" ? "USD" : "KRW",
+          before: h.quantity,
+          after: 0,
+        });
+      else
+        warnings.push(
+          `${h.name}: 불러온 목록에 없어 그대로 유지합니다. 매도·지원 제외 여부를 직접 확인하세요.`,
+        );
+    }
   for (const currency of ["KRW", "USD"] as const) {
     const id = currency === "KRW" ? options.krwAssetId : options.usdAssetId;
     if (id === "skip") continue;
@@ -230,6 +256,7 @@ export async function applyMeritzPreview(
   userId: string,
   token: string,
   selected: string[],
+  transaction?: PoolClient,
 ) {
   const preview = readPreview(token, userId);
   if (
@@ -239,9 +266,9 @@ export async function applyMeritzPreview(
     selected.some((k) => !preview.changes.some((c) => c.key === k))
   )
     throw new MeritzImportError("반영할 변경 사항을 선택해 주세요.");
-  const client = await db().connect();
+  const client = transaction ?? (await db().connect());
   try {
-    await client.query("begin");
+    if (!transaction) await client.query("begin");
     const plan = (
       await client.query<{ usd_krw: string }>(
         "select usd_krw from portfolio.plans where user_id=$1 for update",
@@ -273,7 +300,12 @@ export async function applyMeritzPreview(
       );
     const chosen = preview.changes.filter((c) => selected.includes(c.key));
     for (const change of chosen) {
-      if (change.kind === "stock" && change.position) {
+      if (change.kind === "remove" && change.id) {
+        await client.query(
+          "delete from portfolio.holdings where user_id=$1 and id=$2",
+          [userId, change.id],
+        );
+      } else if (change.kind === "stock" && change.position) {
         const p = change.position;
         if (change.id) {
           // Preserve identity, portfolio assignment and historical acquisition FX.
@@ -353,12 +385,12 @@ export async function applyMeritzPreview(
     await recordSnapshot(userId, client);
     const holdings = await listHoldings(userId, client),
       portfolio = await listPortfolio(userId, client);
-    await client.query("commit");
+    if (!transaction) await client.query("commit");
     return { holdings, portfolio, count: chosen.length };
   } catch (error) {
-    await client.query("rollback");
+    if (!transaction) await client.query("rollback");
     throw error;
   } finally {
-    client.release();
+    if (!transaction) client.release();
   }
 }

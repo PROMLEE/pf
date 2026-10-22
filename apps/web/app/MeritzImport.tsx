@@ -7,6 +7,11 @@ import type { ManualAsset, Portfolio } from "./portfolio-model";
 import type { MeritzPreview } from "./meritz-model";
 import AssetIcon from "./AssetIcon";
 import styles from "./MeritzImport.module.css";
+import {
+  meritzSyncSettingsEvent,
+  meritzSyncStatusEvent,
+  type MeritzSyncStatus,
+} from "./use-meritz-sync";
 const value = (n: number | null, currency: string) =>
   n === null
     ? "미등록"
@@ -31,6 +36,7 @@ export default function MeritzImport({
   }) => void;
   onDirty: (dirty: boolean) => void;
 }) {
+  const [sync, setSync] = useState<MeritzSyncStatus | null>(null);
   const [available, setAvailable] = useState(false),
     [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
@@ -54,6 +60,60 @@ export default function MeritzImport({
       active = false;
     };
   }, []);
+  useEffect(() => {
+    let active = true;
+    const loadStatus = () =>
+      void fetch("/api/accounts/meritz/sync", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((r) => {
+          if (active) setSync(r);
+        })
+        .catch(() => {});
+    const receive = (event: Event) => {
+      if (active) setSync((event as CustomEvent<MeritzSyncStatus>).detail);
+    };
+    loadStatus();
+    window.addEventListener(meritzSyncStatusEvent, receive);
+    window.addEventListener(meritzSyncSettingsEvent, loadStatus);
+    return () => {
+      active = false;
+      window.removeEventListener(meritzSyncStatusEvent, receive);
+      window.removeEventListener(meritzSyncSettingsEvent, loadStatus);
+    };
+  }, []);
+  async function autoSync(configure = false, disconnect = false) {
+    if (
+      disconnect &&
+      !window.confirm(
+        "자동 동기화 연결을 해제할까요? 등록된 자산은 그대로 유지됩니다.",
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await read<MeritzSyncStatus>(
+        await fetch("/api/accounts/meritz/sync", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            disconnect
+              ? { action: "disconnect" }
+              : configure
+                ? { action: "configure", accountId, krwAssetId, usdAssetId }
+                : { enabled: !sync?.enabled },
+          ),
+        }),
+      );
+      setSync(result);
+      if (configure) setOpen(false);
+      window.dispatchEvent(new Event(meritzSyncSettingsEvent));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     onDirty(!!preview || busy);
     return () => onDirty(false);
@@ -184,6 +244,43 @@ export default function MeritzImport({
           </button>
         )}
       </div>
+      {sync?.configured && (
+        <div className={styles.autoSync}>
+          <div>
+            <strong>
+              {sync.enabled ? "자동 동기화 켜짐" : "자동 동기화 꺼짐"} ·{" "}
+              {sync.accountName}
+            </strong>
+            <p>
+              {sync.enabled
+                ? "접속 중 30초마다 수량·평단·예수금을 맞춥니다. 메리츠에서 거래한 내용은 별도로 입력하지 않아도 됩니다."
+                : "자동 반영을 중지했습니다. 다시 시작하면 실제 계좌 잔고로 맞춥니다."}
+            </p>
+            <small>
+              {sync.lastSuccessAt
+                ? `${new Date(sync.lastSuccessAt).toLocaleString("ko-KR")} 마지막 확인`
+                : "다음 접속 시 실제 잔고를 확인합니다."}
+            </small>
+            {sync.error && <p role="status">{sync.error}</p>}
+          </div>
+          <div className={styles.autoActions}>
+            <button
+              type="button"
+              disabled={busy || disabled || !!preview}
+              onClick={() => void autoSync()}
+            >
+              {sync.enabled ? "일시 중지" : "다시 시작"}
+            </button>
+            <button
+              type="button"
+              disabled={busy || disabled || !!preview}
+              onClick={() => void autoSync(false, true)}
+            >
+              연결 해제
+            </button>
+          </div>
+        </div>
+      )}
       {error && (
         <p role="alert" className={styles.error}>
           {error}
@@ -222,6 +319,10 @@ export default function MeritzImport({
             더하지 않고 조회된 잔고로 바꿉니다. 다른 곳에 이미 등록한 현금은
             기존 자산을 선택해 중복을 방지하세요.
           </p>
+          <p className={styles.note}>
+            자동 동기화는 기존 원화·달러 현금 자산을 모두 선택한 후 연결할 수
+            있습니다.
+          </p>
           <details>
             <summary>현금 집계 기준</summary>
             <p>
@@ -231,6 +332,19 @@ export default function MeritzImport({
             </p>
           </details>
           <div className={styles.actions}>
+            <button
+              type="button"
+              disabled={
+                busy ||
+                !accountId ||
+                [krwAssetId, usdAssetId].some(
+                  (id) => id === "skip" || id === "new",
+                )
+              }
+              onClick={() => void autoSync(true)}
+            >
+              이 계좌 자동 동기화
+            </button>
             <button
               type="button"
               disabled={!accountId || busy}

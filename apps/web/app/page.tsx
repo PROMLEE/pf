@@ -57,6 +57,8 @@ import {
 import PortfolioBuilder, { stockAssetId, type AssetSelection } from "./PortfolioBuilder";
 import UserGuide from "./UserGuide";
 import AccountsManager from "./AccountsManager";
+import {useMeritzSync} from "./use-meritz-sync";
+import {publishTradePortfolio} from "./portfolio-cache";
 import { protectUnsavedChanges } from "./unsaved-changes";
 import AccountSettings from "./AccountSettings";
 import ServiceNotices from "./ServiceNotices";
@@ -262,6 +264,14 @@ export default function PortfolioPage() {
   const editedHolding = holdings.find(row => row.id === editingHoldingId);
   const holdingDirty = Boolean(view === "edit" && !holdingTradeMode && editedHolding && (holdingQuantity !== String(editedHolding.quantity) || holdingCost !== (editedHolding.averageCost === null ? "" : String(editedHolding.averageCost))));
   const unsavedChanges = portfolioDirty || holdingDirty || holdingTradeDirty || (view === "import" && draft.length > 0);
+  const meritzSync = useMeritzSync({
+    userId: session?.user?.appUserId ?? "", authenticated: authStatus === "authenticated",
+    paused: loading || busy || quoteBusy || unsavedChanges || view === "edit" || view === "detail" || view === "import",
+    onApplied: result => {
+      setHoldings(current => withPreviousQuotes(result.holdings,current));
+      publishTradePortfolio(result.portfolio, "");
+    },
+  });
   useEffect(() => { navigationState.current.dirty = unsavedChanges; }, [unsavedChanges]);
   useEffect(() => protectUnsavedChanges(window, unsavedChanges), [unsavedChanges]);
 
@@ -819,7 +829,7 @@ export default function PortfolioPage() {
           error?: string;
         }[];
       }>(await fetch("/api/quotes", { method: "POST" }));
-      setHoldings(result.holdings);
+      setHoldings(current => withPreviousQuotes(current, result.holdings));
       const daily = result.quotes
         .filter(
           (quote): quote is typeof quote & { market: Market; symbol: string } =>
@@ -1244,6 +1254,11 @@ export default function PortfolioPage() {
           </div>
         </header>
         <main className={styles.content}>
+          {meritzSync.status.available && meritzSync.status.configured && <div className={styles.meritzSyncStatus} role="status">
+            <span>{meritzSync.status.error ? "메리츠 동기화 지연 · 기존 잔고 유지" : !meritzSync.status.enabled ? "메리츠 자동 동기화 꺼짐" : meritzSync.checking ? "메리츠 잔고 확인 중" : "메리츠 자동 동기화"}</span>
+            {meritzSync.status.lastSuccessAt && <small>{new Date(meritzSync.status.lastSuccessAt).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})} 확인</small>}
+            <button type="button" onClick={()=>go("accounts")}>연결 관리</button>
+          </div>}
           <ServiceNotices key={session.user?.appUserId ?? "account"} userId={session.user?.appUserId ?? "account"} page={view === "notices"} selectedId={selectedNoticeId} onOpen={id => go("notices", selectedAsset, detailSource, id)} onAdminChange={setOperator} />
           {view === "more" && operator && <Link href="/admin" style={{display:"block",padding:"16px 0",color:"var(--blue)"}}>관리자 전용 · 운영 관리 ↗</Link>}
           {screenGroup && (

@@ -1970,3 +1970,7 @@
 }
 
 .sectionNav button > svg, .navGroup button > svg { flex-shrink: 0; }
+
+.meritzSyncStatus{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 16px;font-size:12px;color:var(--blue)}
+.meritzSyncStatus small{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.meritzSyncStatus button{border:0;background:transparent;padding:4px 0;color:var(--muted);text-decoration:underline;text-underline-offset:3px;font-size:12px;cursor:pointer}

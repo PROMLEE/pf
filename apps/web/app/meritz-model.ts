@@ -9,7 +9,7 @@ export type MeritzPosition = {
 };
 export type MeritzChange = {
   key: string;
-  kind: "stock" | "cash";
+  kind: "stock" | "cash" | "remove";
   name: string;
   currency: "KRW" | "USD";
   id: string | null;

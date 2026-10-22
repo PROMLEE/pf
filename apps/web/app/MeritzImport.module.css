@@ -131,3 +131,39 @@
     font-size: 13px;
   }
 }
+.autoSync {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 14px;
+  background: var(--soft);
+  border-radius: 10px;
+  font-size: 14px;
+}
+.autoSync p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 6px 0;
+}
+.autoSync small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.autoSync button {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .autoSync {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+.autoActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
