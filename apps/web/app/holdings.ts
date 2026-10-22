@@ -1,6 +1,7 @@
 export type Market = "KR" | "US";
 
 export type Holding = {
+  readOnly?: boolean;
   id: string;
   accountId?: string;
   revision?: string;

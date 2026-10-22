@@ -1,3 +1,4 @@
+import { assertMeritzEditable } from "./meritz-readonly";
 import { db } from "./db";
 import { recordActiveRunStockFill } from "./rebalance-progress-db";
 import { captureRunOutcome } from "../app/rebalance-runs";
@@ -19,6 +20,7 @@ export async function applyHoldingTrade(
   const client = await db().connect();
   try {
     await client.query("begin");
+    await assertMeritzEditable(client, userId, { holdingId: id, cashIds: [trade.cash?.assetId] });
     const plan = await client.query<{ usd_krw: string }>(
       `select usd_krw from portfolio.plans where user_id = $1 for update`,
       [userId],

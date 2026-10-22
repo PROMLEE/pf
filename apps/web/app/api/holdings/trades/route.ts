@@ -1,3 +1,4 @@
+import { CashTransferError } from "../../../cash-transfer";
 import { NextResponse } from "next/server";
 import { currentUserId } from "../../../../lib/auth";
 import { applyHoldingTrade } from "../../../../lib/holding-trades-db";
@@ -56,11 +57,11 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         message:
-          error instanceof PositionTradeError
+          (error instanceof PositionTradeError || error instanceof CashTransferError)
             ? error.message
             : "거래를 반영하지 못했습니다.",
       },
-      { status: error instanceof PositionTradeError ? error.status : 500 },
+      { status: (error instanceof PositionTradeError || error instanceof CashTransferError) ? error.status : 500 },
     );
   }
 }

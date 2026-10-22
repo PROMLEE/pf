@@ -75,6 +75,8 @@ test("weighted bases preserve unknown history, keep sale basis, and clear empty 
 let state = { user: "owner", allowed: true, calls: [] };
 globalThis.__pfBasis = state;
 let code = (await compile("../app/api/holdings/basis/route.ts"))
+  .replace(/import \{ assertMeritzEditable \} from "[^\"]+";/, "const assertMeritzEditable=async()=>{};")
+  .replace(/import \{ CashTransferError \} from "[^\"]+";/, "class CashTransferError extends Error{};")
   .replace(
     /import \{ NextResponse \} from "next\/server";/,
     "const NextResponse={json:(body,options)=>Response.json(body,options)};",

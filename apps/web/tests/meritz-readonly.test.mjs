@@ -1,0 +1,18 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+const compile=async f=>ts.transpileModule(await readFile(new URL(f,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+const url=s=>`data:text/javascript;base64,${Buffer.from(s).toString('base64')}`;
+const cashUrl=url(await compile('../app/cash-transfer.ts'));
+const code=(await compile('../lib/meritz-readonly.ts')).replace('"../app/cash-transfer"',JSON.stringify(cashUrl));
+const {assertMeritzEditable,assertMeritzCashUnchanged}=await import(url(code));
+const sync={account_id:'meritz-account',krw_asset_id:'krw',usd_asset_id:'usd'};
+const rows=[{id:'krw',account_id:'meritz-account',name:'원화',value_krw:'1000',value_usd:null,average_fx_rate:null},{id:'usd',account_id:'meritz-account',name:'달러',value_krw:'14000',value_usd:'10',average_fx_rate:'1300'}];
+const assets=rows.map(r=>({id:r.id,accountId:r.account_id,name:r.name,valueKrw:Number(r.value_krw),valueUsd:r.value_usd===null?null:Number(r.value_usd),averageFxRate:r.average_fx_rate===null?null:Number(r.average_fx_rate),bucketId:'cash'}));
+const client={query:async(sql,args)=>{assert.equal(args[0],'owner');if(sql.includes('from portfolio.meritz_sync')){assert.match(sql,/for share/);return {rows:[sync]};}if(sql.includes('from portfolio.holdings'))return {rows:args[1]==='synced-stock'?[{id:args[1]}]:[]};if(sql.includes('select id,name'))return {rows};return {rows:args[1].includes('other-meritz-cash')?[{id:'other-meritz-cash'}]:[]};}};
+const blocked=fn=>assert.rejects(fn,e=>e.status===409 && /메리츠/.test(e.message));
+test('linked holdings, target accounts and cash mutations are rejected',async()=>{for(const target of [{holdingId:'synced-stock'},{accountId:'meritz-account'},{cashIds:['krw']},{cashIds:['usd']},{cashIds:['other-meritz-cash']}])await blocked(()=>assertMeritzEditable(client,'owner',target));await assertMeritzEditable(client,'owner',{holdingId:'other-stock',accountId:'other-account',cashIds:['other-cash']});});
+test('full portfolio and asset-only saves cannot rename, edit, remove, relink or create synced cash',async()=>{for(const change of [{name:'changed'},{valueKrw:999},{valueUsd:1},{accountId:'other'},{averageFxRate:1400}])await blocked(()=>assertMeritzCashUnchanged(client,'owner',assets.map((a,i)=>i===0?{...a,...change}:a)));await blocked(()=>assertMeritzCashUnchanged(client,'owner',assets.slice(1)));await blocked(()=>assertMeritzCashUnchanged(client,'owner',[...assets,{...assets[0],id:'new'}]));});
+test('allocation and currency conversion remain editable without changing broker balances',async()=>{await assertMeritzCashUnchanged(client,'owner',assets.map(a=>({...a,bucketId:'new-bucket',valueKrw:a.valueUsd===null?a.valueKrw:15000})));});
+test('unconnected users can still edit their own assets',async()=>{const empty={query:async()=>({rows:[]})};await assertMeritzEditable(empty,'other-user',{holdingId:'x'});await assertMeritzCashUnchanged(empty,'other-user',[]);});

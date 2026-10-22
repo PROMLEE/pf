@@ -20,6 +20,7 @@ export type Rule = {
 };
 
 export type ManualAsset = {
+  readOnly?: boolean;
   accountId?: string | null;
   id: string;
   bucketId: string | null;

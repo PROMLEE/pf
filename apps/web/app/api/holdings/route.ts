@@ -1,3 +1,4 @@
+import { CashTransferError } from "../../cash-transfer";
 import { NextResponse } from "next/server";
 import type { Holding } from "../../holdings";
 import { currentUserId } from "../../../lib/auth";
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
       ),
     });
   } catch (error) {
-    if (error instanceof PositionTradeError)
+    if (error instanceof PositionTradeError || error instanceof CashTransferError)
       return NextResponse.json(
         { message: error.message },
         { status: error.status },
@@ -192,7 +193,8 @@ export async function DELETE(request: Request) {
     return NextResponse.json({
       holdings: await removeHolding(userId, data.id),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof CashTransferError) return NextResponse.json({message:error.message},{status:error.status});
     return NextResponse.json(
       { message: "종목을 삭제하지 못했습니다" },
       { status: 500 },
@@ -343,6 +345,7 @@ export async function PATCH(request: Request) {
       }),
     });
   } catch (error) {
+    if (error instanceof CashTransferError) return NextResponse.json({message:error.message},{status:error.status});
     if (
       error instanceof Error &&
       error.message === "수정할 자산을 찾지 못했습니다."

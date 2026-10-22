@@ -4,6 +4,7 @@ import test from 'node:test';
 import ts from 'typescript';
 const state={user:'owner',calls:[]};globalThis.__pfAssignmentTest=state;
 let code=ts.transpileModule(await readFile(new URL('../app/api/holdings/route.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+code=code.replace(/import \{ CashTransferError \} from "[^\"]+cash-transfer";/, 'class CashTransferError extends Error {}');
 code=code.replace(/import \{ NextResponse \} from "next\/server";/,'const NextResponse={json:(data,options)=>Response.json(data,options)};').replace(/import \{ currentUserId \} from "[^\"]+";/,'const currentUserId=async()=>globalThis.__pfAssignmentTest.user;').replace(/import \{[^}]+\} from "[^\"]+holdings-db";/,`const addHoldings=async()=>[],listHoldings=async()=>[],removeHolding=async()=>true,updateHoldingAmounts=async()=>[],updateHoldingInstrument=async()=>[];
 const updateHoldingAssignment=async(user,id,bucket,source)=>{globalThis.__pfAssignmentTest.calls.push({user,id,bucket,source});return bucket === '22222222-2222-4222-8222-222222222222' ? null : {holdings:[],snapshots:[]};};`);
 const positionModel=ts.transpileModule(await readFile(new URL('../app/position-trade.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;

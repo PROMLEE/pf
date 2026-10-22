@@ -69,8 +69,8 @@ export default function EditableHoldingRow({
         type="button"
         className={styles.main}
         onClick={onEdit}
-        disabled={editDisabled}
-        aria-label={`${holding.name} 자산 수정`}
+        disabled={editDisabled || holding.readOnly}
+        aria-label={`${holding.name} ${holding.readOnly ? "메리츠 연동 읽기 전용" : "자산 수정"}`}
         aria-describedby={`holding-summary-${holding.id}`}
         aria-expanded={editing}
       >
@@ -89,7 +89,7 @@ export default function EditableHoldingRow({
           <span className={styles.identityText}>
             <span className={styles.name}>
               <strong>{holding.name}</strong>
-              {editing ? (
+              {holding.readOnly ? <small>메리츠 연동 · 읽기 전용</small> : editing ? (
                 <small>수정 중</small>
               ) : (
                 <ChevronRight size={15} aria-hidden="true" />
@@ -122,7 +122,7 @@ export default function EditableHoldingRow({
           {percent && <span>{percent}</span>}
         </span>
       </button>
-      <details
+      {!holding.readOnly && <details
         ref={details}
         className={styles.more}
         onToggle={(event) => setOpen(event.currentTarget.open)}
@@ -137,7 +137,7 @@ export default function EditableHoldingRow({
         >
           <button
             type="button"
-            disabled={editDisabled}
+            disabled={editDisabled || holding.readOnly}
             onClick={() => act(onEdit)}
           >
             <Pencil size={16} />
@@ -146,14 +146,14 @@ export default function EditableHoldingRow({
           <button
             type="button"
             className={styles.remove}
-            disabled={removeDisabled}
+            disabled={removeDisabled || holding.readOnly}
             onClick={() => act(onRemove)}
           >
             <Trash2 size={16} />
             등록 자산 삭제
           </button>
         </div>
-      </details>
+      </details>}
     </div>
   );
 }

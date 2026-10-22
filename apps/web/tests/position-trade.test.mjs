@@ -139,7 +139,7 @@ const reset = () => {
     revision: "123",
   };
 };
-let dbCode = await compile("../lib/holding-trades-db.ts");
+let dbCode = (await compile("../lib/holding-trades-db.ts")).replace(/import \{ assertMeritzEditable \} from "[^\"]+";/, "const assertMeritzEditable=async()=>{};");
 dbCode = dbCode
   .replace(/import \{ recordActiveRunStockFill \} from "\.\/rebalance-progress-db";/, 'const recordActiveRunStockFill=async()=>false;')
   .replace(/import \{ captureRunOutcome \} from "\.\.\/app\/rebalance-runs";/, 'const captureRunOutcome=()=>({});')
@@ -227,6 +227,7 @@ test("full sale deletes only the selected owner holding and snapshot failures ro
   );
 });
 let routeCode = (await compile("../app/api/holdings/trades/route.ts"))
+  .replace(/import \{ CashTransferError \} from "[^\"]+";/, "class CashTransferError extends Error{};")
   .replace(
     /import \{ NextResponse \} from "next\/server";/,
     "const NextResponse={json:(body,options)=>Response.json(body,options)};",

@@ -206,6 +206,23 @@ try {
     (c) => c.accountId === account && c.valueUsd === null,
   )!;
   await syncApi.configureMeritzSync(user, account, krw.id, cash);
+  const holdingsDb = await import("../lib/holdings-db");
+  const portfolioDb = await import("../lib/portfolio-db");
+  const cashDb = await import("../lib/cash-transfers-db");
+  const beforeLocked = await holdingsDb.listHoldings(user);
+  assert.equal(beforeLocked.find(row => row.id === holding)?.readOnly, true);
+  await assert.rejects(holdingsDb.updateHoldingAmounts(user, holding, 99, 99), /메리츠/);
+  await assert.rejects(holdingsDb.removeHolding(user, holding), /메리츠/);
+  await assert.rejects(holdingsDb.moveHoldingAccount(user, holding, account), /메리츠/);
+  await assert.rejects(holdingsDb.addHoldings(user, [changed]), /메리츠/);
+  const lockedPlan = (await portfolioDb.listPortfolio(user))!;
+  assert.equal(lockedPlan.manualAssets.find(row => row.id === cash)?.readOnly, true);
+  const editedCash = { ...lockedPlan, manualAssets: lockedPlan.manualAssets.map(row => row.id === cash ? { ...row, valueUsd: (row.valueUsd ?? 0) + 1 } : row) };
+  await assert.rejects(portfolioDb.savePortfolioAssets(user, editedCash), /메리츠/);
+  await assert.rejects(portfolioDb.savePortfolio(user, editedCash), /메리츠/);
+  await assert.rejects(cashDb.applyCashTransfer(user, {id:randomUUID(),kind:"deposit",sourceId:null,destinationId:cash,amount:1,note:"QA",expectedRevision:lockedPlan.cashRevision??0}), /메리츠/);
+  assert.deepEqual(await holdingsDb.listHoldings(user), beforeLocked);
+
   await client.query(
     "update portfolio.meritz_sync set lease_id=$2,lease_until=now()+interval '1 minute',last_attempt_at=null where user_id=$1",
     [user, randomUUID()],
@@ -299,7 +316,7 @@ try {
   await client.query("set constraints all immediate");
   await client.query("rollback to savepoint cash_replace");
   console.log(
-    "PASS: auto sync, throttle, pause/resume, failed/partial fetch preservation, fully sold removal, deferred cash references; preview read-only; atomic stocks+cash; assignments/FX retained; repeat/stale/foreign rejected; token reused. All QA changes roll back.",
+    "PASS: synced holdings/cash read-only through mutation entry points; auto sync, throttle, pause/resume, failed/partial fetch preservation, fully sold removal, deferred cash references; preview read-only; atomic stocks+cash; assignments/FX retained; repeat/stale/foreign rejected; token reused. All QA changes roll back.",
   );
 } finally {
   globalThis.fetch = oldFetch;

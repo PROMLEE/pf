@@ -8,7 +8,7 @@ export async function listAccounts(
   client: Client = db(),
 ): Promise<BrokerageAccount[]> {
   const result = await client.query<BrokerageAccount>(
-    `select id,broker,name from portfolio.accounts where user_id=$1 order by broker,name`,
+    `select exists(select 1 from portfolio.meritz_sync s where s.user_id=a.user_id and s.account_id=a.id) as "readOnly",id,broker,name from portfolio.accounts a where user_id=$1 order by broker,name`,
     [userId],
   );
   return result.rows;

@@ -230,7 +230,7 @@ export default function CashTransfers({
           자산 변경 내용을 먼저 저장하거나 취소하면 입출금을 입력할 수 있습니다.
         </p>
       )}
-      {!portfolio.manualAssets.length ? (
+      {!portfolio.manualAssets.some(a => !a.readOnly) ? (
         <p>현금 자산을 등록하고 저장한 뒤 입출금을 입력하세요.</p>
       ) : (
         <>
@@ -251,7 +251,7 @@ export default function CashTransfers({
                   }}
                 >
                   <option value="">출금 자산 선택</option>
-                  {portfolio.manualAssets.map((a) => (
+                  {portfolio.manualAssets.filter(a => !a.readOnly).map((a) => (
                     <option key={a.id} value={a.id}>
                       {label(a)}
                     </option>
@@ -270,6 +270,7 @@ export default function CashTransfers({
                 >
                   <option value="">입금 자산 선택</option>
                   {portfolio.manualAssets
+                    .filter(a => !a.readOnly)
                     .filter(
                       (a) =>
                         kind === "deposit" ||

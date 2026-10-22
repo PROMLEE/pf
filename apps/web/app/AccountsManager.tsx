@@ -119,7 +119,7 @@ export default function AccountsManager({
   const totalCost = purchaseTotal(quantity, cost);
   const purchaseMarket = instrument?.market ?? market;
   const availableCash = purchaseCashAssets.filter(
-    (asset) => (purchaseMarket === "US") === (asset.valueUsd !== null),
+    (asset) => !asset.readOnly && (purchaseMarket === "US") === (asset.valueUsd !== null),
   );
   const purchaseCash = availableCash.find(
     (asset) => asset.id === purchaseCashId,
@@ -181,7 +181,7 @@ export default function AccountsManager({
   }, [formOpen, editingId, userId, cashReload]);
   useEffect(() => {
     const eligible = purchaseCashAssets.filter(
-      (asset) => (purchaseMarket === "US") === (asset.valueUsd !== null),
+      (asset) => !asset.readOnly && (purchaseMarket === "US") === (asset.valueUsd !== null),
     );
     setPurchaseCashId((current) => {
       if (eligible.some((asset) => asset.id === current)) return current;
@@ -700,7 +700,7 @@ export default function AccountsManager({
               <div className={styles.stockHead}>
                 <h3>보유 종목</h3>
                 <button
-                  disabled={busy || dirty}
+                  disabled={busy || dirty || selected.readOnly}
                   onClick={() => {
                     resetStock();
                     setFormOpen(true);
@@ -1035,9 +1035,9 @@ export default function AccountsManager({
                         </div>
                       </div>
                       <div className={styles.rowActions}>
-                        <button disabled={busy} onClick={() => editStock(row)}>
+                        <button disabled={busy || row.readOnly} onClick={() => editStock(row)}>
                           <Pencil size={14} />
-                          수정
+                          {row.readOnly ? "메리츠 연동" : "수정"}
                         </button>
                         <label className={styles.move}>
                           계좌 이동
@@ -1049,7 +1049,7 @@ export default function AccountsManager({
                                 : ""
                             }
                             disabled={
-                              busy ||
+                              busy || row.readOnly ||
                               formOpen ||
                               inputDirty ||
                               Boolean(
@@ -1071,7 +1071,7 @@ export default function AccountsManager({
                             {accounts
                               .filter(
                                 (account) =>
-                                  account.id !== (row.accountId ?? selectedId),
+                                  account.id !== (row.accountId ?? selectedId) && !account.readOnly,
                               )
                               .map((account) => (
                                 <option key={account.id} value={account.id}>

@@ -1,5 +1,5 @@
 import type { Holding } from "./holdings";
-export type BrokerageAccount = { id: string; broker: string; name: string };
+export type BrokerageAccount = { readOnly?: boolean; id: string; broker: string; name: string };
 
 export function purchaseTotal(quantity: string, cost: string): number | null {
   if (!quantity.trim() || !cost.trim()) return null;

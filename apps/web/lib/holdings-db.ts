@@ -1,3 +1,4 @@
+import { assertMeritzEditable } from "./meritz-readonly";
 import type { PoolClient } from "pg";
 import type { Holding } from "../app/holdings";
 import { db } from "./db";
@@ -11,6 +12,7 @@ import {
 } from "../app/position-trade";
 
 type Row = {
+  read_only: boolean;
   id: string;
   revision: string;
   broker: string;
@@ -34,6 +36,7 @@ type Row = {
 
 function fromRow(row: Row): Holding {
   return {
+    readOnly: row.read_only,
     id: row.id,
     revision: row.revision,
     broker: row.broker,
@@ -60,8 +63,8 @@ function fromRow(row: Row): Holding {
 
 async function select(client: Pick<PoolClient, "query">, userId: string) {
   const result = await client.query<Row>(
-    `select id, position_revision::text as revision, broker, account_label, account_id, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, average_cost_krw, captured_at, current_price, quote_label, quote_checked_at
-     from portfolio.holdings where user_id = $1 order by created_at desc, name asc`,
+    `select exists(select 1 from portfolio.meritz_sync s where s.user_id=h.user_id and s.account_id=h.account_id) as read_only, id, position_revision::text as revision, broker, account_label, account_id, market, name, symbol, exchange_code, bucket_id, assignment_source, quantity, captured_price, average_cost, average_cost_krw, captured_at, current_price, quote_label, quote_checked_at
+     from portfolio.holdings h where user_id = $1 order by created_at desc, name asc`,
     [userId],
   );
   return result.rows.map(fromRow);
@@ -121,6 +124,7 @@ async function saveHoldings(
         input.account,
         input.accountId,
       );
+      await assertMeritzEditable(client, userId, { accountId: account.id, cashIds: [cash?.assetId] });
       const row = {
         ...input,
         broker: account.broker,
@@ -286,6 +290,7 @@ export async function removeHolding(userId: string, id: string) {
   const client = await db().connect();
   try {
     await client.query("begin");
+    await assertMeritzEditable(client, userId, { holdingId: id });
     await client.query(
       `delete from portfolio.holdings where user_id = $1 and id = $2`,
       [userId, id],
@@ -311,6 +316,7 @@ export async function updateHoldingAmounts(
   const client = await db().connect();
   try {
     await client.query("begin");
+    await assertMeritzEditable(client, userId, { holdingId: id });
     const result = await client.query(
       `update portfolio.holdings
        set quantity = $3, average_cost_krw = case when average_cost is distinct from $4 then null else average_cost_krw end, average_cost = $4, updated_at = now()
@@ -344,6 +350,7 @@ export async function updateHoldingInstrument(
   const client = await db().connect();
   try {
     await client.query("begin");
+    await assertMeritzEditable(client, userId, { holdingId: id });
     await client.query(
       `update portfolio.holdings
      set average_cost_krw = case when symbol is distinct from $4 then null else average_cost_krw end, name = $3, symbol = $4, exchange_code = $5, current_price = null,
@@ -429,6 +436,7 @@ export async function moveHoldingAccount(
   const client = await db().connect();
   try {
     await client.query("begin");
+    await assertMeritzEditable(client, userId, { holdingId: id, accountId });
     const account = await resolveAccount(client, userId, "", "", accountId);
     const owned = await client.query<{ market: string; symbol: string }>(
       `select market,symbol from portfolio.holdings where user_id=$1 and id=$2 for update`,

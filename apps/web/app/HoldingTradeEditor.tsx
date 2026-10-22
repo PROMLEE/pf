@@ -76,7 +76,7 @@ export default function HoldingTradeEditor({
         const assets = (
           (payload.portfolio as Portfolio | null)?.manualAssets ?? []
         ).filter(
-          (asset) => (base.market === "US") === (asset.valueUsd !== null),
+          (asset) => !asset.readOnly && (base.market === "US") === (asset.valueUsd !== null),
         );
         if (active) {
           setReferenceRate(payload.portfolio?.usdKrw ?? null);

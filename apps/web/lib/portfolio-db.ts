@@ -1,3 +1,4 @@
+import { assertMeritzCashUnchanged } from "./meritz-readonly";
 import type { PoolClient } from "pg";
 import type {
   Assignment,
@@ -70,6 +71,7 @@ type RuleRow = {
   quote_checked_at: Date | null;
 };
 type ManualRow = {
+  read_only: boolean;
   account_id: string | null;
   average_fx_rate: string | null;
   id: string;
@@ -151,7 +153,7 @@ export async function listPortfolio(
       [userId],
     ),
     client.query<ManualRow>(
-      `select id, account_id, bucket_id, name, value_krw, value_usd, average_fx_rate from portfolio.manual_assets where user_id = $1 order by name`,
+      `select exists(select 1 from portfolio.meritz_sync s where s.user_id=m.user_id and (s.account_id=m.account_id or m.id in (s.krw_asset_id,s.usd_asset_id))) as read_only, id, account_id, bucket_id, name, value_krw, value_usd, average_fx_rate from portfolio.manual_assets m where user_id = $1 order by name`,
       [userId],
     ),
     client.query<CryptoRow>(
@@ -208,6 +210,7 @@ export async function listPortfolio(
     ),
     manualAssets: manualAssets.rows.map(
       (row): ManualAsset => ({
+        readOnly: row.read_only,
         id: row.id,
         bucketId: row.bucket_id,
         accountId: row.account_id,
@@ -281,6 +284,7 @@ export async function savePortfolio(userId: string, input: Portfolio) {
   const client = await db().connect();
   try {
     await client.query("begin");
+    await assertMeritzCashUnchanged(client, userId, input.manualAssets);
     await checkCashRevision(client, userId, input);
     if (input.usdKrwMode === "auto") {
       const currentFx = await client.query<{
@@ -499,6 +503,7 @@ export async function savePortfolioAssets(userId: string, input: Portfolio) {
   const client = await db().connect();
   try {
     await client.query("begin");
+    await assertMeritzCashUnchanged(client, userId, input.manualAssets);
     await checkCashRevision(client, userId, input);
     const plan = await client.query<PlanRow & { bucket_ids: string[] }>(
       `select cash_revision, include_fx_gains, title, usd_krw, usd_krw_updated_at, usd_krw_mode,

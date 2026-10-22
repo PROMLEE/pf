@@ -1,3 +1,5 @@
+import { assertMeritzEditable } from "../../../../lib/meritz-readonly";
+import { CashTransferError } from "../../../cash-transfer";
 import { NextResponse } from "next/server";
 import { currentUserId } from "../../../../lib/auth";
 import { db } from "../../../../lib/db";
@@ -48,6 +50,7 @@ export async function PATCH(request: Request) {
   const client = await db().connect();
   try {
     await client.query("begin");
+    await assertMeritzEditable(client, userId, { holdingId: body.id });
     const updated = await client.query(
       `update portfolio.holdings set average_cost_krw=$3, updated_at=now() where user_id=$1 and id=$2 and market='US' and position_revision::text=$4 returning id`,
       [userId, body.id, body.averageCostKrw, body.revision],
@@ -65,8 +68,9 @@ export async function PATCH(request: Request) {
     const holdings = await listHoldings(userId, client);
     await client.query("commit");
     return NextResponse.json({ holdings });
-  } catch {
+  } catch (error) {
     await client.query("rollback");
+    if(error instanceof CashTransferError) return NextResponse.json({message:error.message},{status:error.status});
     return NextResponse.json(
       { message: "원화 원가를 저장하지 못했습니다." },
       { status: 500 },

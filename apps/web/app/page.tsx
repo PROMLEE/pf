@@ -630,6 +630,7 @@ export default function PortfolioPage() {
   }
 
   function beginHoldingEdit(row: Holding) {
+    if (row.readOnly) return;
     setPendingHoldingRemoval(null);
     setHoldingTradeMode(true);
     setEditingHoldingId(row.id);

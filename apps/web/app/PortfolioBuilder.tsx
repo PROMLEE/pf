@@ -1,5 +1,6 @@
 "use client";
 import PushSettings from "./PushSettings";
+import AssetEditDialog, { type EditableAssetSelection } from "./AssetEditDialog";
 import MarketDataStatus from "./MarketDataStatus";
 import RebalancePlans from "./RebalancePlans";
 import type { MarketSessions } from "./market-sessions";
@@ -393,6 +394,7 @@ function AssetDetail({
   onSavePortfolio,
   onAssignStock,
   onEditingChange,
+  onEditAsset,
   backLabel = "이전 화면",
 }: {
   selection: AssetSelection;
@@ -406,6 +408,7 @@ function AssetDetail({
   onSavePortfolio: (next: Portfolio) => Promise<void>;
   onAssignStock: (id: string, bucketId: string | null, source: "auto" | "manual") => Promise<void>;
   onEditingChange: (editing: boolean) => void;
+  onEditAsset: (selection: EditableAssetSelection) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [tradeMode, setTradeMode] = useState(true);
@@ -478,6 +481,7 @@ function AssetDetail({
     (first ? holdingBucketId(portfolio, first) : null);
   const bucketName = portfolio.buckets.find((bucket) => bucket.id === bucketId)?.name ?? "미분류";
   function beginEdit(row?: Holding) {
+    if (row?.readOnly || manual?.readOnly) return;
     setTradeMode(true);
     setEditing(row?.id ?? selection.id);
     setEditQuantity(String(row?.quantity ?? crypto?.quantity ?? ""));
@@ -553,7 +557,7 @@ function AssetDetail({
       )}
       {stockRows.length > 0 && <div className={styles.detailAccounts}>
         <h3>계좌별 보유</h3>
-        {stockRows.map((row) => <div key={row.id}><span>{row.broker} · {row.account}<small>{quantityFormat.format(row.quantity)}주 · 매입단가 {row.averageCost === null ? "—" : unitPrice(row.averageCost)}</small></span><button type="button" disabled={editing !== null || assigning} onClick={() => beginEdit(row)}>수정</button></div>)}
+        {stockRows.map((row) => <div key={row.id}><span>{row.broker} · {row.account}<small>{quantityFormat.format(row.quantity)}주 · 매입단가 {row.averageCost === null ? "—" : unitPrice(row.averageCost)}</small></span><button type="button" disabled={editing !== null || assigning || row.readOnly} onClick={() => beginEdit(row)}>{row.readOnly ? "메리츠 연동 · 읽기 전용" : "수정"}</button></div>)}
       </div>}
       <details className={styles.detailAllocation}>
         <summary>{bucketName === "미분류" ? "미분류 자산 · 지금 포트에 배정" : "포트 배정 수정"}</summary>
@@ -583,7 +587,7 @@ function AssetDetail({
         <AveragePriceCalculator key={selection.id} cashBalances={portfolio.manualAssets.map(asset => ({id: asset.id, name: asset.name, currency: asset.valueUsd === null ? "KRW" as const : "USD" as const, balance: asset.valueUsd ?? asset.valueKrw}))} initial={{quantity, averagePrice: averageCost, buyPrice: price, currency: first?.market === "US" ? "USD" : "KRW", fractional: Boolean(crypto) || (quantity !== null && !Number.isInteger(quantity))}} />
       </details>}
       {manual && <p className={styles.detailHint}>{manual.valueUsd!==null?"평균 환전 단가를 입력하면 달러 자산의 환율 손익을 계산합니다.":"직접 입력 원화 자산은 평가 금액만 관리합니다."}</p>}
-      {!first && !editing && <button type="button" className={styles.detailEdit} onClick={() => beginEdit()}>자산 수정 <Pencil size={16} /></button>}
+      {!first && !editing && (manual?.readOnly ? <p className={styles.detailHint}>메리츠 연동 자산입니다. 동기화 버튼으로 잔고를 반영해 주세요.</p> : <button type="button" className={styles.detailEdit} onClick={() => onEditAsset({kind: manual ? "manual" : "crypto", id: selection.id})}>자산 수정 <Pencil size={16} /></button>)}
       {editing && (editedStock && tradeMode ? <HoldingTradeEditor key={editedStock.id} holding={editedStock}
         onDirty={setTradeDirty} onBusy={setSaving} onCancel={() => setEditing(null)} onDirect={() => setTradeMode(false)}
         onSaved={(next, message) => {setEditing(null);onStockTradeSaved(next, message);}}
@@ -661,6 +665,7 @@ export default function PortfolioBuilder({
     () => portfolioCache.get(userId) ?? null,
   );
   const [loading, setLoading] = useState(() => !portfolioCache.has(userId));
+  const [assetEditor, setAssetEditor] = useState<EditableAssetSelection | null>(null);
   const [saving, setSaving] = useState(false);
   const [recording, setRecording] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -671,7 +676,7 @@ export default function PortfolioBuilder({
   const [showRunPreview, setShowRunPreview] = useState(false);
   const [cashAccounts, setCashAccounts] = useState<BrokerageAccount[]>([]);
   const [manualAccountId, setManualAccountId] = useState("");
-  useEffect(()=>{if(screen!=="edit")return;let live=true;void fetch("/api/accounts",{cache:"no-store"}).then(async response=>{if(!response.ok)throw Error();const data=await response.json();if(live)setCashAccounts(data.accounts);}).catch(()=>{if(live)onNotice("계좌 목록을 불러오지 못했습니다. 새로고침해서 다시 확인해 주세요.");});return()=>{live=false;};},[screen,userId,onNotice]);
+  useEffect(()=>{if(screen!=="edit" && screen!=="detail")return;let live=true;void fetch("/api/accounts",{cache:"no-store"}).then(async response=>{if(!response.ok)throw Error();const data=await response.json();if(live)setCashAccounts(data.accounts);}).catch(()=>{if(live)onNotice("계좌 목록을 불러오지 못했습니다. 새로고침해서 다시 확인해 주세요.");});return()=>{live=false;};},[screen,userId,onNotice]);
 
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
@@ -1862,6 +1867,12 @@ export default function PortfolioBuilder({
         </div>
       )}
 
+      {assetEditor && <AssetEditDialog key={`${assetEditor.kind}:${assetEditor.id}`} selection={assetEditor} portfolio={draft} accounts={cashAccounts} onDirty={setDetailDirty} onClose={() => setAssetEditor(null)} onSave={async next => {
+        const response = await fetch("/api/portfolio", {method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(next)});
+        const result = await response.json();
+        if (!response.ok || !result.portfolio) throw Error(result.message || "자산을 저장하지 못했습니다.");
+        setDraft(result.portfolio); portfolioCache.set(userId,result.portfolio); onNotice("자산 정보를 저장했습니다.");
+      }} />}
       {screen === "detail" && selectedAsset && selectedAsset.kind !== "candidate" && (
         <AssetDetail
           selection={selectedAsset}
@@ -1871,6 +1882,7 @@ export default function PortfolioBuilder({
           onBack={onBack}
           backLabel={detailBackLabel}
           onEditingChange={setDetailDirty}
+          onEditAsset={setAssetEditor}
           onStockTradeSaved={(next, message) => {
             onHoldings(withPreviousQuotes(next, holdings));
             onNotice(message);
@@ -2668,118 +2680,10 @@ export default function PortfolioBuilder({
                   </button>
                 </div>
                 </details>
-                {draft.cryptoAssets.map((asset) => (
-                  <div
-                    className={styles.cryptoRow}
-                    id={`edit-crypto-${asset.id}`}
-                    key={asset.id}
-                  >
-                    <div className={styles.editorIdentity}><AssetIcon kind="crypto" symbol={asset.marketCode} name={asset.name}/><div>
-                      <strong>{asset.name}</strong>
-                      <small>
-                        {asset.marketCode} ·{" "}
-                        {asset.quotedPriceKrw === null
-                          ? "시세 미확인"
-                          : `현재가 ${fmt(asset.quotedPriceKrw)}`}
-                      </small>
-                    </div></div>
-                    <label className={styles.cryptoField}>
-                      <span>보유 수량</span>
-                      <NumberInput
-                        min="0"
-                        max="999999999999"
-                        step="0.000000000001"
-                        value={asset.quantity}
-                        aria-label={`${asset.name} 보유 수량`}
-                        onValueChange={(value) =>
-                          change({
-                            ...draft,
-                            cryptoAssets: draft.cryptoAssets.map((item) =>
-                              item.id === asset.id
-                                ? {
-                                    ...item,
-                                    quantity: Number(value),
-                                  }
-                                : item,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label className={styles.cryptoField}>
-                      <span>코인당 매입가 (원)</span>
-                      <NumberInput
-                        min="0"
-                        max="999999999999"
-                        step="any"
-                        value={asset.averageCostKrw ?? ""}
-                        aria-label={`${asset.name} 코인당 매입단가 원화`}
-                        onValueChange={(value) =>
-                          change({
-                            ...draft,
-                            cryptoAssets: draft.cryptoAssets.map((item) =>
-                              item.id === asset.id
-                                ? {
-                                    ...item,
-                                    averageCostKrw:
-                                      value === ""
-                                        ? null
-                                        : Number(value),
-                                  }
-                                : item,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label className={styles.cryptoField}><span>포트 배정</span>
-                    <select
-                      value={asset.bucketId ?? ""}
-                      aria-label={`${asset.name} 포트`}
-                      onChange={(event) =>
-                        change({
-                          ...draft,
-                          cryptoAssets: draft.cryptoAssets.map((item) =>
-                            item.id === asset.id
-                              ? {
-                                  ...item,
-                                  bucketId: event.target.value || null,
-                                }
-                              : item,
-                          ),
-                        })
-                      }
-                    >
-                      <option value="">미분류</option>
-                      {draft.buckets.map((bucket) => (
-                        <option key={bucket.id} value={bucket.id}>
-                          {bucket.name}
-                        </option>
-                      ))}
-                    </select>
-                    </label>
-                    <b><small>평가금액</small>
-                      {asset.quotedPriceKrw === null
-                        ? "가격 미확인"
-                        : fmt(cryptoAssetValueKrw(asset))}
-                    </b>
-                    <button
-                      className={styles.iconButton}
-                      aria-label={`${asset.name} 삭제`}
-                      onClick={() => {
-                        if (!window.confirm(`${asset.name}을 등록 자산에서 삭제할까요?\n저장을 눌러야 삭제가 반영됩니다. 실제 잔고는 바뀌지 않습니다.`)) return;
-                        change({
-                          ...draft,
-                          cryptoAssets: draft.cryptoAssets.filter(
-                            (item) => item.id !== asset.id,
-                          ),
-                        });
-                      }}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))}
+                {draft.cryptoAssets.map(asset => <button type="button" key={asset.id} id={`edit-crypto-${asset.id}`} className={styles.editorAssetButton} disabled={dirty || saving} onClick={() => setAssetEditor({kind:"crypto",id:`crypto:${asset.id}`})} aria-label={`${asset.name} 수정 창 열기`}>
+                  <span className={styles.editorIdentity}><AssetIcon kind="crypto" symbol={asset.marketCode} name={asset.name}/><span><strong>{asset.name}</strong><small>{quantityFormat.format(asset.quantity)}개 · 평균 매입가 {asset.averageCostKrw === null ? "미입력" : fmt(asset.averageCostKrw)}</small></span></span>
+                  <span className={styles.editorAssetAmount}><strong>{asset.quotedPriceKrw === null ? "시세 미확인" : fmt(cryptoAssetValueKrw(asset))}</strong><ChevronRight size={17}/></span>
+                </button>)}
                 </section>
                 <section className={styles.editorAssetGroup} id="edit-cash-group">
                 <header className={styles.editorGroupHead}><span className={styles.editorGroupIcon}><Wallet size={22}/></span><div><h2>현금·RP·기타 <small>{draft.manualAssets.length}</small></h2><p>원화·달러 잔고와 직접 입력한 자산</p></div></header>
@@ -2833,113 +2737,17 @@ export default function PortfolioBuilder({
                   </select>
                   <select aria-label="새 현금·직접 입력 자산 계좌" value={manualAccountId} onChange={event=>setManualAccountId(event.target.value)}>
                     <option value="">계좌 미연결</option>
-                    {cashAccounts.map(account=><option key={account.id} value={account.id}>{account.broker} · {account.name}</option>)}
+                    {cashAccounts.filter(account=>!account.readOnly).map(account=><option key={account.id} value={account.id}>{account.broker} · {account.name}</option>)}
                   </select>
                   <button onClick={addManualAsset}>
                     <Plus size={15} /> 추가
                   </button>
                 </div>
                 </details>
-                {draft.manualAssets.map((asset) => (
-                  <div
-                    className={styles.manualRow}
-                    id={`edit-manual-${asset.id}`}
-                    key={asset.id}
-                  >
-                    <div className={styles.editorIdentity}><AssetIcon kind="cash" symbol={asset.valueUsd === null ? "KRW" : "USD"} name={asset.name}/><div><strong>{asset.name}</strong><small>{asset.valueUsd === null ? "원화 · KRW" : "미국 달러 · USD"}</small></div></div>
-                    <label className={styles.manualNameField}>
-                      <span>자산 이름</span>
-                      <input
-                        value={asset.name}
-                        maxLength={100}
-                        aria-label={`${asset.name || "직접 입력 자산"} 이름`}
-                        onChange={(event) => change({
-                          ...draft,
-                          manualAssets: draft.manualAssets.map((item) =>
-                            item.id === asset.id ? { ...item, name: event.target.value } : item,
-                          ),
-                        })}
-                      />
-                    </label>
-                    <label className={styles.cryptoField}><span>{asset.valueUsd === null ? "보유 금액 · KRW" : "보유 잔고 · USD"}</span>
-                    <NumberInput
-                      min="0"
-                      max="1000000000000000"
-                      value={asset.valueUsd ?? asset.valueKrw}
-                      aria-label={`${asset.name} ${asset.valueUsd === null ? "원화 평가액" : "달러 금액"}`}
-                      onValueChange={(value) =>
-                        change({
-                          ...draft,
-                          manualAssets: draft.manualAssets.map((item) =>
-                            item.id === asset.id
-                              ? item.valueUsd === null
-                                ? {
-                                    ...item,
-                                    valueKrw: Number(value),
-                                  }
-                                : {
-                                    ...item,
-                                    valueUsd: Number(value),
-                                    valueKrw:
-                                      Number(value) * draft.usdKrw,
-                                  }
-                              : item,
-                          ),
-                        })
-                      }
-                    />
-                    </label>
-                    {asset.valueUsd !== null && <small>원화 환산 {fmt(manualAssetValueKrw(asset, draft.usdKrw))}</small>}
-                    <label className={styles.cryptoField}><span>포트 배정</span>
-                    <select
-                      value={asset.bucketId ?? ""}
-                      aria-label={`${asset.name} 포트`}
-                      onChange={(event) =>
-                        change({
-                          ...draft,
-                          manualAssets: draft.manualAssets.map((item) =>
-                            item.id === asset.id
-                              ? {
-                                  ...item,
-                                  bucketId: event.target.value || null,
-                                }
-                              : item,
-                          ),
-                        })
-                      }
-                    >
-                      <option value="">미분류</option>
-                      {draft.buckets.map((bucket) => (
-                        <option key={bucket.id} value={bucket.id}>
-                          {bucket.name}
-                        </option>
-                      ))}
-                    </select>
-                    </label>
-                    <button
-                      className={styles.iconButton}
-                      aria-label={`${asset.name} 삭제`}
-                      onClick={() => {
-                        if (!window.confirm(`${asset.name}을 등록 자산에서 삭제할까요?\n저장을 눌러야 삭제가 반영됩니다. 실제 잔고는 바뀌지 않습니다.`)) return;
-                        change({
-                          ...draft,
-                          manualAssets: draft.manualAssets.filter(
-                            (item) => item.id !== asset.id,
-                          ),
-                        });
-                      }}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                    <label className={styles.fxBasisField}>연결 계좌
-                      <select value={asset.accountId ?? ""} aria-label={`${asset.name} 연결 계좌`} onChange={event=>change({...draft,manualAssets:draft.manualAssets.map(item=>item.id===asset.id?{...item,accountId:event.target.value||null}:item)})}>
-                        <option value="">계좌 미연결</option>
-                        {cashAccounts.map(account=><option key={account.id} value={account.id}>{account.broker} · {account.name}</option>)}
-                      </select>
-                    </label>
-                    {asset.valueUsd!==null && <label className={styles.fxBasisField}>평균 환전 단가 · 1 USD당 원<NumberInput value={asset.averageFxRate??""} min="100" max="100000" step="any" placeholder="모르면 비워두세요" onValueChange={value=>change({...draft,manualAssets:draft.manualAssets.map(item=>item.id===asset.id?{...item,averageFxRate:value===""?null:Number(value)}:item)})}/></label>}
-                  </div>
-                ))}
+                {draft.manualAssets.map(asset => <button type="button" key={asset.id} id={`edit-manual-${asset.id}`} className={styles.editorAssetButton} disabled={dirty || saving || asset.readOnly} onClick={() => setAssetEditor({kind:"manual",id:asset.id})} aria-label={`${asset.name} ${asset.readOnly ? "메리츠 연동 읽기 전용" : "수정 창 열기"}`}>
+                  <span className={styles.editorIdentity}><AssetIcon kind="cash" symbol={asset.valueUsd === null ? "KRW" : "USD"} name={asset.name}/><span><strong>{asset.name}</strong><small>{asset.readOnly ? "메리츠 연동 · 읽기 전용" : asset.valueUsd === null ? "원화 · KRW" : "미국 달러 · USD"}</small></span></span>
+                  <span className={styles.editorAssetAmount}><strong>{asset.valueUsd === null ? fmt(asset.valueKrw) : `$${quantityFormat.format(asset.valueUsd)}`}</strong>{!asset.readOnly && <ChevronRight size={17}/>}</span>
+                </button>)}
                 </section>
               </>
             )}

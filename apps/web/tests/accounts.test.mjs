@@ -13,6 +13,7 @@ const moveHoldingAccount=async(user,id,accountId)=>{const s=globalThis.__pfAccou
 const addHoldingWithCash=async(user,row,cash)=>{const s=globalThis.__pfAccountsTest;s.calls.push({user,row,cash});if(s.missing)throw new PositionTradeError('선택한 현금 자산을 찾지 못했습니다.',404);if(s.conflict)throw new PositionTradeError('현금 잔고가 변경되었습니다.',409);return {holdings:[row],portfolio:{},cashChange:{name:'현금',balance:0}};};
 const addHoldings=async(user,rows,insertOnly)=>{const s=globalThis.__pfAccountsTest;s.calls.push({user,rows,insertOnly});if(s.conflict)throw new Error('이미 보유한 종목입니다.');return [];};`);
 code=code.replace('"../../position-trade"',JSON.stringify(url(await compile('../app/position-trade.ts'))));
+code=code.replace(/import \{ CashTransferError \} from "[^\"]+cash-transfer";/, 'class CashTransferError extends Error {}');
 const holdings=await import(url(code));
 const id='11111111-1111-4111-8111-111111111111',target='22222222-2222-4222-8222-222222222222';
 const request=(method,body,origin='http://localhost:3000')=>new Request('http://localhost:3000/api/accounts',{method,headers:{origin,host:'localhost:3000','Content-Type':'application/json'},body:JSON.stringify(body)});

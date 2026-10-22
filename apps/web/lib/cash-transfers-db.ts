@@ -1,3 +1,4 @@
+import { assertMeritzEditable } from "./meritz-readonly";
 import { db } from "./db";
 import { listPortfolio, recordSnapshot } from "./portfolio-db";
 import {
@@ -22,6 +23,7 @@ export async function applyCashTransfer(
   const client = await db().connect();
   try {
     await client.query("begin");
+    await assertMeritzEditable(client, userId, { cashIds: [input.sourceId, input.destinationId] });
     const plan = (
       await client.query(
         `select usd_krw,cash_revision from portfolio.plans where user_id=$1 for update`,
