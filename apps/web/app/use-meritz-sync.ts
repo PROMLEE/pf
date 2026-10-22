@@ -15,6 +15,7 @@ export type MeritzSyncStatus = {
 };
 export const meritzSyncSettingsEvent = "pf-meritz-sync-settings";
 export const meritzSyncStatusEvent = "pf-meritz-sync-status";
+export const meritzSyncRequestEvent = "pf-meritz-sync-request";
 export function useMeritzSync({
   userId,
   authenticated,
@@ -26,93 +27,112 @@ export function useMeritzSync({
   paused: boolean;
   onApplied: (result: { holdings: Holding[]; portfolio: Portfolio }) => void;
 }) {
-  const [status, setStatus] = useState<MeritzSyncStatus>({ available: false }),
-    [checking, setChecking] = useState(false);
+  const [status, setStatus] = useState<MeritzSyncStatus>({ available: false });
+  const [checking, setChecking] = useState(false);
   const latest = useRef({ paused, onApplied });
   latest.current = { paused, onApplied };
   const wake = useRef<() => void>(() => {});
   useEffect(() => {
     setStatus({ available: false });
+    setChecking(false);
     if (!authenticated || !userId) return;
     let active = true,
       initialized = false,
       inFlight = false,
-      current: MeritzSyncStatus = { available: false };
-    const tick = async (reload = false) => {
+      pending = true;
+    let current: MeritzSyncStatus = { available: false };
+    const publish = (next: MeritzSyncStatus) => {
+      current = next;
+      if (!active) return;
+      setStatus(next);
+      window.dispatchEvent(
+        new CustomEvent(meritzSyncStatusEvent, { detail: next }),
+      );
+    };
+    const tick = async () => {
       if (!active || inFlight || document.visibilityState !== "visible") return;
       inFlight = true;
       try {
-        if (reload || !initialized || (current.available && !current.enabled)) {
+        if (!initialized) {
           const r = await fetch("/api/accounts/meritz/sync", {
             cache: "no-store",
           });
           if (!r.ok) throw Error();
-          current = await r.json();
+          const next = await r.json();
+          if (!active) return;
           initialized = true;
-          if (active) {
-            setStatus(current);
-            window.dispatchEvent(
-              new CustomEvent(meritzSyncStatusEvent, { detail: current }),
-            );
-          }
-        }
-        if (!current.available || !current.enabled || latest.current.paused)
-          return;
-        if (active) setChecking(true);
-        const r = await fetch("/api/accounts/meritz/sync", { method: "POST" });
-        if (!r.ok) throw Error();
-        const result = await r.json();
-        if (result.sync) {
-          current = result.sync;
-          if (active) {
-            setStatus(current);
-            window.dispatchEvent(
-              new CustomEvent(meritzSyncStatusEvent, { detail: current }),
-            );
-          }
+          publish(next);
         }
         if (
-          active &&
-          !latest.current.paused &&
-          result.holdings &&
-          result.portfolio
+          !active ||
+          !pending ||
+          !current.available ||
+          !current.enabled ||
+          latest.current.paused
         )
-          latest.current.onApplied(result);
-      } catch {
-        if (active)
-          setStatus((s) =>
-            s.available
-              ? {
-                  ...s,
-                  error:
-                    "동기화 연결을 확인하지 못했습니다. 기존 잔고를 표시합니다.",
-                }
-              : s,
+          return;
+        pending = false;
+        setChecking(true);
+        const r = await fetch("/api/accounts/meritz/sync", { method: "POST" });
+        const result = await r.json();
+        if (!active) return;
+        if (!r.ok)
+          throw Error(
+            result.message || "동기화하지 못했습니다. 다시 시도해 주세요.",
           );
+        if (result.sync) publish(result.sync);
+        if (result.holdings && result.portfolio) {
+          if (latest.current.paused) pending = true;
+          else latest.current.onApplied(result);
+        }
+      } catch (e) {
+        pending = false;
+        if (active && current.available)
+          publish({
+            ...current,
+            error:
+              e instanceof Error && e.message
+                ? e.message
+                : "동기화 연결을 확인하지 못했습니다. 다시 시도해 주세요.",
+          });
       } finally {
         inFlight = false;
         if (active) setChecking(false);
       }
     };
-    const visible = () => void tick();
-    wake.current = visible;
-    const settings = () => void tick(true);
-    void tick(true);
-    const timer = window.setInterval(visible, 30000);
-    window.addEventListener("focus", visible);
-    document.addEventListener("visibilitychange", visible);
+    const resume = () => {
+      if (pending) void tick();
+    };
+    const request = () => {
+      if (inFlight || latest.current.paused) return;
+      pending = true;
+      void tick();
+    };
+    const settings = () => {
+      initialized = false;
+      pending = true;
+      void tick();
+    };
+    wake.current = resume;
+    void tick();
+    document.addEventListener("visibilitychange", resume);
     window.addEventListener(meritzSyncSettingsEvent, settings);
+    window.addEventListener(meritzSyncRequestEvent, request);
     return () => {
       active = false;
       wake.current = () => {};
-      window.clearInterval(timer);
-      window.removeEventListener("focus", visible);
-      document.removeEventListener("visibilitychange", visible);
+      document.removeEventListener("visibilitychange", resume);
       window.removeEventListener(meritzSyncSettingsEvent, settings);
+      window.removeEventListener(meritzSyncRequestEvent, request);
     };
   }, [userId, authenticated]);
   useEffect(() => {
     if (!paused) wake.current();
   }, [paused]);
-  return { status, checking };
+  return {
+    status,
+    checking,
+    canSync: !paused && !checking && !!status.enabled,
+    synchronize: () => window.dispatchEvent(new Event(meritzSyncRequestEvent)),
+  };
 }

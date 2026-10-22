@@ -14,8 +14,8 @@
   font-size: 15px;
 }
 .heading p,
-.review p,
-.form p {
+.form p,
+.connection p {
   font-size: 13px;
   line-height: 1.65;
   color: var(--muted);
@@ -24,8 +24,7 @@
 .heading button {
   flex-shrink: 0;
 }
-.form,
-.review {
+.form {
   display: grid;
   gap: 16px;
   margin-top: 20px;
@@ -49,72 +48,22 @@
   background: var(--action-fill);
   color: var(--action-ink);
 }
-.importer input[type="checkbox"] {
-  appearance: auto;
-  min-height: 20px;
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  padding: 0;
-  flex: none;
-  accent-color: var(--blue);
-}
-.rows {
-  display: grid;
-}
-.row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--line);
-  cursor: pointer;
-  min-width: 0;
-}
-.row > span {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  font-size: 14px;
-  overflow-wrap: anywhere;
-  font-variant-numeric: tabular-nums;
-}
-.row small {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.review h3 {
-  margin: 0;
-  font-size: 16px;
-}
-.confirm {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  min-height: 44px;
-  width: fit-content;
-  cursor: pointer;
-}
 .error {
   color: var(--sell);
   font-size: 14px;
 }
-.importer details {
+.connection {
+  margin-top: 12px;
   font-size: 13px;
   line-height: 1.7;
   color: var(--muted);
 }
-.importer summary {
+.connection p {
+  margin: 8px 0;
+}
+.connection summary {
   color: var(--blue);
   cursor: pointer;
-}
-.importer ul {
-  padding-left: 20px;
-}
-.note {
-  max-width: 780px;
 }
 @media (max-width: 600px) {
   .heading {
@@ -124,46 +73,4 @@
   .fields {
     grid-template-columns: 1fr;
   }
-  .row {
-    gap: 10px;
-  }
-  .row > span {
-    font-size: 13px;
-  }
-}
-.autoSync {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-  padding: 14px;
-  background: var(--soft);
-  border-radius: 10px;
-  font-size: 14px;
-}
-.autoSync p {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--muted);
-  margin: 6px 0;
-}
-.autoSync small {
-  font-size: 12px;
-  color: var(--muted);
-}
-.autoSync button {
-  flex-shrink: 0;
-}
-@media (max-width: 600px) {
-  .autoSync {
-    flex-direction: column;
-    gap: 10px;
-  }
-}
-.autoActions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex-shrink: 0;
 }

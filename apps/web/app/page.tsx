@@ -1255,8 +1255,9 @@ export default function PortfolioPage() {
         </header>
         <main className={styles.content}>
           {meritzSync.status.available && meritzSync.status.configured && <div className={styles.meritzSyncStatus} role="status">
-            <span>{meritzSync.status.error ? "메리츠 동기화 지연 · 기존 잔고 유지" : !meritzSync.status.enabled ? "메리츠 자동 동기화 꺼짐" : meritzSync.checking ? "메리츠 잔고 확인 중" : "메리츠 자동 동기화"}</span>
+            <span>{meritzSync.status.error ? "메리츠 동기화 지연 · 기존 잔고 유지" : !meritzSync.status.enabled ? "메리츠 연결 꺼짐" : meritzSync.checking ? "메리츠 동기화 중" : "메리츠 잔고"}</span>
             {meritzSync.status.lastSuccessAt && <small>{new Date(meritzSync.status.lastSuccessAt).toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})} 확인</small>}
+            <button type="button" disabled={!meritzSync.canSync} onClick={meritzSync.synchronize}>{meritzSync.checking ? "동기화 중…" : "동기화"}</button>
             <button type="button" onClick={()=>go("accounts")}>연결 관리</button>
           </div>}
           <ServiceNotices key={session.user?.appUserId ?? "account"} userId={session.user?.appUserId ?? "account"} page={view === "notices"} selectedId={selectedNoticeId} onOpen={id => go("notices", selectedAsset, detailSource, id)} onAdminChange={setOperator} />

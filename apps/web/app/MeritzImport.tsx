@@ -1,30 +1,17 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Download, RefreshCw, Check } from "lucide-react";
 import type { BrokerageAccount } from "./accounts-model";
 import type { Holding } from "./holdings";
 import type { ManualAsset, Portfolio } from "./portfolio-model";
-import type { MeritzPreview } from "./meritz-model";
-import AssetIcon from "./AssetIcon";
 import styles from "./MeritzImport.module.css";
 import {
   meritzSyncSettingsEvent,
   meritzSyncStatusEvent,
   type MeritzSyncStatus,
 } from "./use-meritz-sync";
-const value = (n: number | null, currency: string) =>
-  n === null
-    ? "미등록"
-    : `${currency === "USD" ? "$" : ""}${n.toLocaleString("ko-KR", { maximumFractionDigits: 6 })}${currency === "KRW" ? "원" : ""}`;
-async function read<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok) throw Error(data.message || "잔고를 처리하지 못했습니다.");
-  return data;
-}
 export default function MeritzImport({
   accounts,
   disabled,
-  onApplied,
   onDirty,
 }: {
   accounts: BrokerageAccount[];
@@ -37,101 +24,47 @@ export default function MeritzImport({
   onDirty: (dirty: boolean) => void;
 }) {
   const [sync, setSync] = useState<MeritzSyncStatus | null>(null);
-  const [available, setAvailable] = useState(false),
-    [open, setOpen] = useState(false),
+  const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
-  const [accountId, setAccountId] = useState(""),
-    [cash, setCash] = useState<ManualAsset[]>([]),
-    [krwAssetId, setKrwAssetId] = useState("skip"),
-    [usdAssetId, setUsdAssetId] = useState("skip");
-  const [preview, setPreview] = useState<MeritzPreview | null>(null),
-    [selected, setSelected] = useState<string[]>([]),
-    [confirmed, setConfirmed] = useState(false);
+  const [accountId, setAccountId] = useState("");
+  const [cash, setCash] = useState<ManualAsset[]>([]);
+  const [krwAssetId, setKrwAssetId] = useState("");
+  const [usdAssetId, setUsdAssetId] = useState("");
   useEffect(() => {
     let active = true;
-    fetch("/api/accounts/meritz", { cache: "no-store" })
+    fetch("/api/accounts/meritz/sync", { cache: "no-store" })
       .then((r) => r.json())
       .then((r) => {
-        if (active) setAvailable(r.available === true);
+        if (active) setSync(r);
       })
       .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
-  useEffect(() => {
-    let active = true;
-    const loadStatus = () =>
-      void fetch("/api/accounts/meritz/sync", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((r) => {
-          if (active) setSync(r);
-        })
-        .catch(() => {});
     const receive = (event: Event) => {
       if (active) setSync((event as CustomEvent<MeritzSyncStatus>).detail);
     };
-    loadStatus();
     window.addEventListener(meritzSyncStatusEvent, receive);
-    window.addEventListener(meritzSyncSettingsEvent, loadStatus);
     return () => {
       active = false;
       window.removeEventListener(meritzSyncStatusEvent, receive);
-      window.removeEventListener(meritzSyncSettingsEvent, loadStatus);
     };
   }, []);
-  async function autoSync(configure = false, disconnect = false) {
-    if (
-      disconnect &&
-      !window.confirm(
-        "자동 동기화 연결을 해제할까요? 등록된 자산은 그대로 유지됩니다.",
-      )
-    )
-      return;
-    setBusy(true);
-    setError("");
-    try {
-      const result = await read<MeritzSyncStatus>(
-        await fetch("/api/accounts/meritz/sync", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            disconnect
-              ? { action: "disconnect" }
-              : configure
-                ? { action: "configure", accountId, krwAssetId, usdAssetId }
-                : { enabled: !sync?.enabled },
-          ),
-        }),
-      );
-      setSync(result);
-      if (configure) setOpen(false);
-      window.dispatchEvent(new Event(meritzSyncSettingsEvent));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   useEffect(() => {
-    onDirty(!!preview || busy);
+    onDirty(open || busy);
     return () => onDirty(false);
-  }, [preview, busy, onDirty]);
-  const eligible = accounts.filter((a) => a.broker.includes("메리츠"));
+  }, [open, busy, onDirty]);
   async function start() {
-    setError("");
     setBusy(true);
+    setError("");
     try {
-      const data = await read<{ portfolio: Portfolio | null }>(
-        await fetch("/api/portfolio", { cache: "no-store" }),
-      );
-      if (!data.portfolio)
-        throw Error("목표 설계에서 포트폴리오를 먼저 만들어 주세요.");
+      const r = await fetch("/api/portfolio", { cache: "no-store" });
+      const data = await r.json();
+      if (!r.ok || !data.portfolio)
+        throw Error("포트폴리오를 먼저 만들어 주세요.");
       setCash(data.portfolio.manualAssets);
+      const eligible = accounts.filter((a) => a.broker.includes("메리츠"));
       setAccountId(eligible.length === 1 ? eligible[0].id : "");
-      setKrwAssetId("skip");
-      setUsdAssetId("skip");
+      setKrwAssetId("");
+      setUsdAssetId("");
       setOpen(true);
     } catch (e) {
       setError((e as Error).message);
@@ -139,219 +72,140 @@ export default function MeritzImport({
       setBusy(false);
     }
   }
-  async function load() {
-    setError("");
+  async function configure(body: object) {
     setBusy(true);
-    try {
-      const data = await read<MeritzPreview>(
-        await fetch("/api/accounts/meritz", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "preview",
-            accountId,
-            krwAssetId,
-            usdAssetId,
-          }),
-        }),
-      );
-      setPreview(data);
-      setSelected(data.changes.map((c) => c.key));
-      setConfirmed(false);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function apply() {
-    if (!preview || !confirmed) return;
     setError("");
-    setBusy(true);
     try {
-      const data = await read<{
-        holdings: Holding[];
-        portfolio: Portfolio;
-        count: number;
-      }>(
-        await fetch("/api/accounts/meritz", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "apply",
-            token: preview.token,
-            selected,
-          }),
-        }),
-      );
-      setPreview(null);
+      const r = await fetch("/api/accounts/meritz/sync", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (!r.ok) throw Error(data.message || "연결하지 못했습니다.");
+      setSync(data);
       setOpen(false);
-      onApplied(data);
+      window.dispatchEvent(new Event(meritzSyncSettingsEvent));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
-  function cashSelect(
-    currency: "KRW" | "USD",
-    id: string,
-    setId: (id: string) => void,
-  ) {
-    const matches = cash.filter(
-      (c) =>
-        (currency === "USD") === (c.valueUsd !== null) &&
-        (!c.accountId || c.accountId === accountId),
-    );
-    return (
-      <label>
-        {currency === "KRW" ? "원화 현금" : "달러 현금"}
-        <select
-          value={id}
-          onChange={(e) => setId(e.target.value)}
-          disabled={busy || !accountId}
-        >
-          <option value="skip">이번에는 반영하지 않음</option>
-          {matches.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-              {c.accountId ? "" : " · 계좌 미지정"}
-            </option>
-          ))}
-          {!matches.some((c) => c.accountId === accountId) && (
-            <option value="new">이 계좌의 현금 자산 새로 만들기</option>
-          )}
-        </select>
-      </label>
-    );
-  }
-  if (!available) return null;
+  if (!sync?.available) return null;
   return (
-    <section className={styles.importer} aria-label="메리츠 잔고 불러오기">
+    <section className={styles.importer} aria-label="메리츠 계좌 동기화">
       <div className={styles.heading}>
         <div>
-          <strong>메리츠 계좌 연결</strong>
-          <p>실제 잔고와 비교한 뒤 선택한 변경만 반영합니다.</p>
+          <strong>메리츠 {sync.accountName || "계좌 연결"}</strong>
+          <p>
+            접속 시 한 번, 필요할 때 동기화 버튼으로 잔고를 바로 반영합니다.
+          </p>
         </div>
-        {!open && (
+        {(!sync.configured || !sync.enabled) && !open && (
           <button
             type="button"
             disabled={disabled || busy}
-            onClick={() => void start()}
+            onClick={() =>
+              sync.configured ? void configure({ enabled: true }) : void start()
+            }
           >
-            <Download size={16} />
-            {busy ? "준비 중" : "잔고 불러오기"}
+            {busy ? "연결 중" : "연결하기"}
           </button>
         )}
       </div>
-      {sync?.configured && (
-        <div className={styles.autoSync}>
-          <div>
-            <strong>
-              {sync.enabled ? "자동 동기화 켜짐" : "자동 동기화 꺼짐"} ·{" "}
-              {sync.accountName}
-            </strong>
-            <p>
-              {sync.enabled
-                ? "접속 중 30초마다 수량·평단·예수금을 맞춥니다. 메리츠에서 거래한 내용은 별도로 입력하지 않아도 됩니다."
-                : "자동 반영을 중지했습니다. 다시 시작하면 실제 계좌 잔고로 맞춥니다."}
-            </p>
-            <small>
-              {sync.lastSuccessAt
-                ? `${new Date(sync.lastSuccessAt).toLocaleString("ko-KR")} 마지막 확인`
-                : "다음 접속 시 실제 잔고를 확인합니다."}
-            </small>
-            {sync.error && <p role="status">{sync.error}</p>}
-          </div>
-          <div className={styles.autoActions}>
-            <button
-              type="button"
-              disabled={busy || disabled || !!preview}
-              onClick={() => void autoSync()}
-            >
-              {sync.enabled ? "일시 중지" : "다시 시작"}
-            </button>
-            <button
-              type="button"
-              disabled={busy || disabled || !!preview}
-              onClick={() => void autoSync(false, true)}
-            >
-              연결 해제
-            </button>
-          </div>
-        </div>
+      {sync.configured && (
+        <details className={styles.connection}>
+          <summary>연결 설정</summary>
+          <p>
+            주식 수량·평균 매입단가와 원화·달러 예수금을 실제 잔고로 맞춥니다.
+            다른 계좌와 가상자산은 유지합니다.
+          </p>
+          <button
+            type="button"
+            disabled={disabled || busy || open}
+            onClick={() => void configure({ action: "disconnect" })}
+          >
+            연결 해제
+          </button>
+        </details>
       )}
-      {error && (
+      {(error || sync.error) && (
         <p role="alert" className={styles.error}>
-          {error}
+          {error || sync.error}
         </p>
       )}
-      {open && !preview && (
+      {open && (
         <div className={styles.form}>
           <label>
-            반영할 Super365 계좌
+            Super365 계좌
             <select
               value={accountId}
               disabled={busy}
               onChange={(e) => {
                 setAccountId(e.target.value);
-                setKrwAssetId("skip");
-                setUsdAssetId("skip");
+                setKrwAssetId("");
+                setUsdAssetId("");
               }}
             >
-              <option value="">등록된 메리츠 계좌 선택</option>
-              {eligible.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
+              <option value="">계좌 선택</option>
+              {accounts
+                .filter((a) => a.broker.includes("메리츠"))
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
             </select>
           </label>
-          {!eligible.length && (
-            <p>‘계좌 추가’에서 메리츠증권 계좌를 먼저 등록해 주세요.</p>
-          )}
           <div className={styles.fields}>
-            {cashSelect("KRW", krwAssetId, setKrwAssetId)}
-            {cashSelect("USD", usdAssetId, setUsdAssetId)}
+            {(
+              [
+                ["KRW", krwAssetId, setKrwAssetId],
+                ["USD", usdAssetId, setUsdAssetId],
+              ] as const
+            ).map(([currency, id, setId]) => (
+              <label key={currency}>
+                {currency === "KRW" ? "원화 예수금" : "달러 예수금"}
+                <select
+                  value={id}
+                  disabled={busy || !accountId}
+                  onChange={(e) => setId(e.target.value)}
+                >
+                  <option value="">기존 현금 자산 선택</option>
+                  {cash
+                    .filter(
+                      (c) =>
+                        (currency === "USD") === (c.valueUsd !== null) &&
+                        (!c.accountId || c.accountId === accountId),
+                    )
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            ))}
           </div>
-          <p className={styles.note}>
-            API를 신청한 계좌와 같은 계좌를 선택하세요. 현금은 거래 차액을
-            더하지 않고 조회된 잔고로 바꿉니다. 다른 곳에 이미 등록한 현금은
-            기존 자산을 선택해 중복을 방지하세요.
+          <p>
+            연결하면 변경 내용을 별도 확인 없이 반영합니다. 현금은 계좌에 등록한
+            기존 자산을 선택하세요.
           </p>
-          <p className={styles.note}>
-            자동 동기화는 기존 원화·달러 현금 자산을 모두 선택한 후 연결할 수
-            있습니다.
-          </p>
-          <details>
-            <summary>현금 집계 기준</summary>
-            <p>
-              원화는 D+2 예수금, 달러는 추정 외화 예수금입니다. 매매 결제
-              예정액이 포함될 수 있으며 지금 출금 가능한 금액과 다를 수
-              있습니다. 달러 외 통화는 반영하지 않습니다.
-            </p>
-          </details>
           <div className={styles.actions}>
             <button
               type="button"
-              disabled={
-                busy ||
-                !accountId ||
-                [krwAssetId, usdAssetId].some(
-                  (id) => id === "skip" || id === "new",
-                )
+              disabled={busy || !accountId || !krwAssetId || !usdAssetId}
+              onClick={() =>
+                void configure({
+                  action: "configure",
+                  accountId,
+                  krwAssetId,
+                  usdAssetId,
+                })
               }
-              onClick={() => void autoSync(true)}
             >
-              이 계좌 자동 동기화
-            </button>
-            <button
-              type="button"
-              disabled={!accountId || busy}
-              onClick={() => void load()}
-            >
-              <RefreshCw size={15} />
-              {busy ? "잔고 조회 중" : "변경 내용 확인"}
+              {busy ? "연결 중" : "연결하고 동기화"}
             </button>
             <button
               type="button"
@@ -359,137 +213,6 @@ export default function MeritzImport({
               onClick={() => setOpen(false)}
             >
               취소
-            </button>
-          </div>
-        </div>
-      )}
-      {preview && (
-        <div className={styles.review}>
-          <div>
-            <h3>
-              {preview.accountName} · 변경 {preview.changes.length}건
-            </h3>
-            <p>
-              동일한 항목 {preview.unchanged}건 ·{" "}
-              {new Date(preview.fetchedAt).toLocaleTimeString("ko-KR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}{" "}
-              조회 · 5분 내 반영
-            </p>
-          </div>
-          <p className={styles.note}>
-            수량·평균 매입단가와 선택한 현금만 바뀝니다. 포트 배정과 기존
-            매입환율은 유지하며, 신규 해외 종목의 매입환율은 직접 입력해 주세요.
-            진행 중인 리밸런싱 계획의 거래 완료 표시는 별도로 확인하세요.
-          </p>
-          {preview.warnings.length > 0 && (
-            <details open>
-              <summary>직접 확인할 항목 {preview.warnings.length}건</summary>
-              <ul>
-                {preview.warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            </details>
-          )}
-          <div className={styles.rows}>
-            {preview.changes.map((c) => (
-              <label className={styles.row} key={c.key}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(c.key)}
-                  disabled={busy}
-                  onChange={(e) => {
-                    setSelected((ids) =>
-                      e.target.checked
-                        ? [...ids, c.key]
-                        : ids.filter((id) => id !== c.key),
-                    );
-                    setConfirmed(false);
-                  }}
-                />
-                {c.position && (
-                  <AssetIcon
-                    kind="stock"
-                    market={c.position.market}
-                    symbol={c.position.symbol}
-                    name={c.name}
-                  />
-                )}
-                <span>
-                  <strong>{c.name}</strong>
-                  {c.kind === "stock" ? (
-                    <>
-                      <span>
-                        수량{" "}
-                        {c.before === null
-                          ? "미등록"
-                          : c.before.toLocaleString("ko-KR", {
-                              maximumFractionDigits: 6,
-                            })}{" "}
-                        →{" "}
-                        {c.after.toLocaleString("ko-KR", {
-                          maximumFractionDigits: 6,
-                        })}
-                        주
-                      </span>
-                      <small>
-                        주당 평균 매입단가{" "}
-                        {value(c.beforeCost ?? null, c.currency)} →{" "}
-                        {value(c.position!.averageCost, c.currency)}
-                      </small>
-                    </>
-                  ) : (
-                    <span>
-                      잔고 {value(c.before, c.currency)} →{" "}
-                      {value(c.after, c.currency)}
-                    </span>
-                  )}
-                </span>
-              </label>
-            ))}
-          </div>
-          {preview.changes.length > 0 && (
-            <label className={styles.confirm}>
-              <input
-                type="checkbox"
-                checked={confirmed}
-                disabled={busy}
-                onChange={(e) => setConfirmed(e.target.checked)}
-              />
-              <span>계좌와 선택한 변경 내용을 확인했습니다.</span>
-            </label>
-          )}
-          <div className={styles.actions}>
-            <button
-              type="button"
-              disabled={busy || !selected.length || !confirmed}
-              onClick={() => void apply()}
-            >
-              <Check size={16} />
-              {busy ? "반영 중" : `선택한 ${selected.length}건 반영`}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setPreview(null);
-                setSelected([]);
-                setConfirmed(false);
-              }}
-            >
-              다시 선택
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setPreview(null);
-                setOpen(false);
-              }}
-            >
-              닫기
             </button>
           </div>
         </div>
