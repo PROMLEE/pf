@@ -442,3 +442,41 @@
   color: var(--muted);
   font-size: 13px;
 }
+
+.nav {
+  gap: 6px;
+  margin-bottom: 22px;
+}
+.nav button {
+  font-size: 14px;
+  min-height: 40px;
+  border-radius: 9px;
+}
+.nav .selected {
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: 650;
+}
+.primary {
+  border-radius: 10px;
+  min-height: 44px;
+  font-size: 14px;
+}
+.detail h2,
+.history h2 {
+  font-size: 22px;
+  letter-spacing: -0.025em;
+}
+.detail h3 {
+  font-size: 15px;
+}
+.progress {
+  height: 4px;
+  margin: 18px 0 12px;
+}
+.order {
+  border-color: var(--line);
+}
+.historyRow {
+  border-color: var(--line);
+}

@@ -1974,3 +1974,422 @@
 .meritzSyncStatus{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 16px;font-size:12px;color:var(--blue)}
 .meritzSyncStatus small{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .meritzSyncStatus button{border:0;background:transparent;padding:4px 0;color:var(--muted);text-decoration:underline;text-underline-offset:3px;font-size:12px;cursor:pointer}
+
+/* Application shell: neutral navigation and consistent reading width. */
+.shell,
+.workspace,
+.content {
+  background: var(--bg);
+}
+.sidebar {
+  width: 224px;
+  padding: 28px 16px 20px;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  color: var(--ink);
+}
+.workspace {
+  margin-left: 224px;
+}
+.brand {
+  gap: 10px;
+  padding: 0 10px;
+  color: var(--ink);
+  letter-spacing: 0;
+}
+.brand strong {
+  font-size: 16px;
+  letter-spacing: -0.025em;
+}
+.brand small {
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+.navGroup {
+  gap: 4px;
+  margin-top: 30px;
+}
+.navGroup > span {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0;
+}
+.navGroup > span:not(:first-child) {
+  padding-top: 20px;
+}
+.navGroup button {
+  height: 44px;
+  padding: 0 12px;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--muted);
+  border-radius: 9px;
+  font-weight: 550;
+}
+.navGroup button:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+.navGroup .navActive {
+  background: color-mix(in srgb, var(--blue) 8%, var(--surface));
+  color: var(--blue);
+  font-weight: 700;
+}
+.navActive i {
+  display: none;
+}
+.sideFoot {
+  padding: 20px 4px 0;
+}
+.sideNote {
+  color: var(--muted);
+  font-size: 12px;
+}
+.sideNote svg {
+  color: var(--muted);
+}
+.sideNote small,
+.sideUser small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.sideQuote {
+  color: var(--muted);
+  font-size: 11px;
+  border-color: var(--line);
+  line-height: 1.7;
+}
+.sideQuote small {
+  color: var(--muted);
+}
+.sideUser {
+  color: var(--ink);
+  border-color: var(--line);
+  font-size: 13px;
+}
+.sideUser > svg {
+  color: var(--muted);
+}
+.topbar {
+  height: 64px;
+  padding: 0 36px;
+  background: var(--bg);
+  font-size: 13px;
+  color: var(--muted);
+}
+.topbar strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.topPrivate {
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0;
+}
+.themeToggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: var(--muted);
+}
+.themeToggle:hover {
+  background: var(--soft);
+}
+.topActions {
+  gap: 8px;
+}
+.topAvatar {
+  width: 32px;
+  height: 32px;
+}
+.content {
+  width: min(1280px, 100%);
+  padding: 28px 36px 56px;
+}
+.pageHead {
+  margin-bottom: 24px;
+}
+.pageHead h1 {
+  font-size: 28px;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+.pageHead p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.sectionNav {
+  gap: 22px;
+  padding-bottom: 0;
+  margin-bottom: 24px;
+}
+.sectionNav button {
+  position: relative;
+  min-height: 46px;
+  padding: 10px 2px;
+  border-radius: 0;
+  font-size: 14px;
+}
+.sectionNav button:hover {
+  background: transparent;
+}
+.sectionNav button[aria-current="page"] {
+  background: transparent;
+  color: var(--ink);
+}
+.sectionNav button[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--ink);
+  border-radius: 2px;
+}
+.startGuide {
+  padding: 13px 16px;
+  margin-bottom: 20px;
+  gap: 12px;
+  background: var(--soft);
+  border-radius: 10px;
+}
+.startGuide strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.startGuide p {
+  font-size: 12px;
+  margin-top: 3px;
+}
+.meritzSyncStatus {
+  font-size: 12px;
+  gap: 6px 12px;
+  margin-bottom: 16px;
+}
+.meritzSyncStatus button {
+  min-height: 32px;
+  text-decoration: none;
+  color: var(--blue);
+  font-weight: 600;
+}
+.toolbar {
+  gap: 12px;
+}
+.search {
+  background: var(--soft);
+  border-color: transparent;
+  border-radius: 9px;
+}
+.search input {
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+}
+.tabs {
+  background: var(--soft);
+  padding: 3px;
+  border-radius: 9px;
+}
+.tabs button {
+  font-size: 13px;
+}
+.panelHead h2 {
+  font-size: 19px;
+}
+.holdingStats > div {
+  padding: 16px 0;
+}
+.holdingStats strong {
+  font-size: 24px;
+  letter-spacing: -0.025em;
+}
+.holdingStats span {
+  font-size: 13px;
+  color: var(--muted);
+}
+:global(html[data-theme="dark"]) .topbar {
+  background: var(--bg);
+  color: var(--muted);
+}
+:global(html[data-theme="dark"]) .topPrivate,
+:global(html[data-theme="dark"]) .themeToggle {
+  background: transparent;
+  color: var(--muted);
+}
+:global(html[data-theme="dark"]) .themeToggle:hover {
+  background: var(--soft);
+}
+@media (max-width: 1000px) and (min-width: 761px) {
+  .sidebar {
+    width: 200px;
+  }
+  .workspace {
+    margin-left: 200px;
+  }
+  .content {
+    padding: 24px;
+  }
+  .topbar {
+    padding: 0 24px;
+  }
+}
+@media (max-width: 760px) {
+  .workspace {
+    margin-left: 0;
+  }
+  .sidebar {
+    display: none;
+  }
+  .topbar,
+  .mobileHomeWorkspace .topbar {
+    height: 60px;
+    padding: 0 20px;
+  }
+  .topbar strong {
+    font-size: 14px;
+  }
+  .content,
+  .mobileHomeWorkspace .content {
+    padding: 16px 20px calc(88px + env(safe-area-inset-bottom));
+    background: var(--bg);
+  }
+  .pageHead {
+    margin-bottom: 20px;
+  }
+  .pageHead h1 {
+    font-size: 26px;
+  }
+  .pageHead p {
+    font-size: 13px;
+  }
+  .sectionNav {
+    gap: 20px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .sectionNav button {
+    font-size: 13px;
+    min-height: 44px;
+  }
+  .sectionNav button > svg {
+    width: 16px;
+    height: 16px;
+  }
+  .mobileNav {
+    padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    box-shadow: none;
+    background: var(--surface);
+  }
+  .mobileNav button {
+    min-height: 52px;
+    font-size: 11px;
+    gap: 4px;
+  }
+  .mobileNav button > svg {
+    width: 22px;
+    height: 22px;
+  }
+  .mobileNav .mobileActive {
+    color: var(--blue);
+    font-weight: 650;
+  }
+  .topPrivate {
+    display: none;
+  }
+  .startGuide {
+    padding: 12px 36px 12px 14px;
+    margin-bottom: 16px;
+  }
+  .startGuide p {
+    display: none;
+  }
+  .startGuide > div {
+    flex-basis: auto;
+  }
+  .startGuide button {
+    font-size: 12px;
+  }
+  .holdingStats strong {
+    font-size: 22px;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+  }
+  .panel {
+    padding-top: 8px;
+  }
+}
+
+.startGuide {
+  background: transparent;
+  padding: 8px 0 14px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+}
+.startGuide p {
+  display: none;
+}
+.startGuide > svg {
+  width: 17px;
+  height: 17px;
+}
+.startGuide strong {
+  font-weight: 550;
+}
+.startGuide button {
+  font-size: 12px;
+}
+@media (max-width: 760px) {
+  .startGuide {
+    padding-right: 30px;
+    padding-top: 4px;
+    gap: 6px;
+  }
+  .startGuide .startGuideDismiss {
+    top: 0;
+    right: 0;
+  }
+  .startGuide > div {
+    flex-basis: 100%;
+  }
+  .startGuide strong {
+    font-size: 12px;
+  }
+}
+
+.topPrivate {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .startGuide > div {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .startGuide strong {
+    line-height: 1.6;
+  }
+  .startGuide > button:not(.startGuideDismiss) {
+    flex: none;
+    padding: 6px 0;
+  }
+  .startGuide {
+    padding-right: 34px;
+    flex-wrap: nowrap;
+  }
+}

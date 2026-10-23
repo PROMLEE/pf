@@ -1998,3 +1998,622 @@
 .editorAssetButton .editorIdentity small{font-size:13px;color:var(--muted);line-height:1.5}
 .editorAssetAmount{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex:none;font-size:14px;font-variant-numeric:tabular-nums}
 @media(max-width:600px){.editorAssetButton{padding:14px 0;gap:10px}.editorAssetAmount{font-size:13px}.editorAssetButton .editorIdentity small{font-size:13px}.editorAssetButton .editorIdentity strong{font-size:14px}}
+
+/* Shared financial surfaces, lists and data hierarchy. */
+.builder {
+  color: var(--ink);
+  gap: 22px;
+}
+.heading {
+  margin-bottom: 0;
+}
+.heading h1 {
+  font-size: 28px;
+  letter-spacing: -0.035em;
+  margin: 0 0 6px;
+  color: var(--ink);
+}
+.heading p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.heading > div:last-child {
+  align-self: flex-start;
+}
+.ghost,
+.save {
+  min-height: 38px;
+  border-radius: 9px;
+  font-size: 13px;
+  padding: 9px 13px;
+}
+.ghost {
+  color: var(--muted);
+  border-color: var(--line);
+  background: var(--surface);
+}
+.save {
+  background: var(--action-fill);
+  color: var(--action-ink);
+}
+.panel {
+  padding: 24px 0;
+  background: var(--surface);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.panelHead h2 {
+  font-size: 20px;
+  letter-spacing: -0.025em;
+}
+.help,
+.methodNote,
+.calculationNotes {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.builder input,
+.builder select {
+  font-size: 14px;
+  color: var(--ink);
+  border-radius: 9px;
+  border-color: var(--line);
+  min-height: 42px;
+}
+.settings label,
+.bucket label,
+.rule label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.mobileAssetGroup {
+  margin-top: 20px;
+}
+.mobileAssetGroup h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+.mobileAssetGroup h2 span {
+  font-size: 12px;
+  font-weight: 450;
+  color: var(--muted);
+}
+.mobileAssetRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  min-height: 72px;
+  padding: 12px 0;
+  border-radius: 10px;
+  border: 0;
+}
+.mobileAssetRow:hover {
+  background: var(--soft);
+}
+.mobileAssetIdentity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.mobileAssetName,
+.mobileAssetValue {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.mobileAssetName strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mobileAssetName small {
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mobileAssetValue {
+  text-align: right;
+}
+.mobileAssetValue strong {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.mobileAssetValue small {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.mobileAssetValue .mobileUp,
+.mobileUp,
+.profitUp {
+  color: var(--positive);
+}
+.mobileAssetValue .mobileDown,
+.mobileDown,
+.profitDown {
+  color: var(--negative);
+}
+.mobileAssetGroup + .mobileAssetGroup {
+  margin-top: 28px;
+}
+.dashboardControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+.gainToggle {
+  padding: 3px;
+  background: var(--soft);
+  border-radius: 9px;
+  display: flex;
+  gap: 0;
+}
+.gainToggle button {
+  min-height: 32px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  color: var(--muted);
+}
+.gainToggle button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px #1020300a;
+}
+.allocationCard {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+.allocationHead h2 {
+  font-size: 18px;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+.allocationHead p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 270px;
+}
+.allocationSwitch {
+  background: var(--soft);
+  border-radius: 8px;
+}
+.allocationSwitch button {
+  min-height: 32px;
+  font-size: 12px;
+  padding: 6px 10px;
+  color: var(--muted);
+}
+.allocationSwitch button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px #1020300a;
+}
+.allocationBody {
+  grid-template-columns: 1fr;
+  gap: 22px;
+  margin-top: 24px;
+}
+.allocationChart {
+  width: 210px;
+}
+.allocationCenter span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.allocationCenter strong {
+  font-size: 29px;
+  color: var(--ink);
+}
+.allocationLegendHead {
+  font-size: 11px;
+  color: var(--muted);
+  border-color: var(--line);
+  padding-bottom: 10px;
+}
+.allocationLegendRow {
+  min-height: 40px;
+  font-size: 13px;
+  padding: 7px 4px;
+  color: var(--ink);
+}
+.allocationLegendRow strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+.allocationLegendRow > span:last-child {
+  color: var(--muted);
+}
+.allocationLegendRow:hover,
+.allocationLegendRow[aria-pressed="true"] {
+  background: var(--soft);
+}
+.allocationDetail {
+  border: 0;
+  background: var(--soft);
+  border-radius: 10px;
+  padding: 14px;
+}
+.allocationDetail span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.allocationDetail b {
+  font-size: 14px;
+  color: var(--ink);
+}
+.compositionView {
+  max-width: 960px;
+}
+.compositionView .allocationBody {
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 40px;
+  margin-top: 32px;
+}
+.compositionView .allocationChart {
+  width: 260px;
+}
+.compositionView .allocationLegendRow {
+  min-height: 46px;
+  font-size: 14px;
+}
+.compositionView .allocationLegendRow strong {
+  font-size: 14px;
+}
+.rebalanceOverview {
+  padding: 18px 20px;
+  border: 0;
+  background: var(--soft);
+  border-radius: 12px;
+  gap: 10px;
+  margin: 20px 0;
+}
+.rebalanceOverview > strong {
+  font-size: 16px;
+  color: var(--ink);
+}
+.rebalanceCashResult {
+  font-size: 13px;
+  color: var(--muted);
+}
+.advice {
+  padding: 24px 0;
+  border-color: var(--line);
+}
+.advice h3,
+.advice strong {
+  color: var(--ink);
+}
+.advice p {
+  font-size: 15px;
+  line-height: 1.6;
+}
+.advice small {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.adviceAdd p {
+  color: var(--positive);
+}
+.adviceSell p {
+  color: var(--negative);
+}
+.orderChooser > span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.orderChooser select {
+  font-size: 14px;
+  min-height: 44px;
+  background: var(--soft);
+  border-color: transparent;
+}
+.actionTag {
+  border-radius: 5px;
+  font-size: 11px;
+}
+.cashBudget {
+  font-size: 13px;
+  gap: 10px;
+}
+.cashBudget input {
+  min-height: 44px;
+}
+.targetWeight {
+  font-size: 13px;
+}
+.previewSummary {
+  background: var(--soft);
+  border: 0;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.detailTotal {
+  border: 0;
+  padding: 12px 0 24px;
+}
+.detailTotal strong {
+  font-size: 36px;
+  letter-spacing: -0.025em;
+}
+.detailFacts {
+  gap: 24px;
+  padding: 24px 0;
+  border-block: 1px solid var(--line);
+}
+.detailFacts span,
+.detailHint,
+.detailAccounts small {
+  font-size: 13px;
+}
+.detailAccounts button {
+  font-size: 13px;
+  min-height: 40px;
+}
+.preferences > section {
+  padding: 24px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.preferenceFields label {
+  font-size: 14px;
+}
+.preferences h2 {
+  font-size: 20px;
+}
+.editorGroupHead h2 {
+  font-size: 19px;
+}
+.editorGroupHead p {
+  font-size: 13px;
+}
+.editorAssetButton {
+  min-height: 76px;
+  border-bottom: 0;
+}
+.editorAssetButton .editorIdentity strong {
+  font-size: 15px;
+}
+.editorAssetAmount {
+  font-size: 15px;
+}
+.assetEditorSave {
+  border: 0;
+  border-radius: 10px;
+  background: var(--soft);
+}
+:global(html[data-theme="dark"]) .panel,
+:global(html[data-theme="dark"]) .allocationCard {
+  background: transparent;
+}
+.allocationLegendRow .allocationUnder {
+  color: var(--positive) !important;
+}
+.allocationLegendRow .allocationOver {
+  color: var(--negative) !important;
+}
+@media (max-width: 760px) {
+  .builder {
+    gap: 20px;
+  }
+  .heading h1 {
+    font-size: 26px;
+  }
+  .heading p {
+    font-size: 13px;
+  }
+  .heading > div:last-child .ghost {
+    font-size: 12px;
+    padding: 8px 10px;
+    min-height: 36px;
+  }
+  .panel {
+    padding: 12px 0;
+  }
+  .builder input,
+  .builder select {
+    font-size: 16px;
+  }
+  .mobileAssetRow {
+    min-height: 68px;
+    gap: 10px;
+    padding: 10px 0;
+  }
+  .mobileAssetName strong {
+    font-size: 14px;
+  }
+  .mobileAssetName small {
+    font-size: 12px;
+  }
+  .mobileAssetValue strong {
+    font-size: 15px;
+  }
+  .mobileAssetValue small {
+    font-size: 11px;
+  }
+  .mobileAssetIdentity {
+    gap: 10px;
+  }
+  .mobileAssetGroup + .mobileAssetGroup {
+    margin-top: 24px;
+  }
+  .gainToggle button {
+    font-size: 11px;
+    min-height: 32px;
+    padding: 6px 9px;
+  }
+  .allocationHead h2 {
+    font-size: 19px;
+  }
+  .allocationBody {
+    gap: 22px;
+  }
+  .compositionView .allocationBody {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-top: 22px;
+  }
+  .compositionView .allocationChart {
+    width: 220px;
+  }
+  .compositionView .allocationLegendRow {
+    font-size: 13px;
+    min-height: 42px;
+  }
+  .compositionView .allocationLegendRow strong {
+    font-size: 13px;
+  }
+  .advice {
+    padding: 22px 0;
+  }
+  .advice p {
+    font-size: 14px;
+  }
+  .advice small {
+    font-size: 12px;
+  }
+  .orderChooser select {
+    font-size: 14px;
+  }
+  .cashBudget input {
+    font-size: 16px;
+  }
+  .rebalanceOverview {
+    padding: 16px;
+  }
+  .detailTotal strong {
+    font-size: 32px;
+  }
+  .editorAssetButton {
+    min-height: 70px;
+  }
+  .editorAssetAmount {
+    font-size: 14px;
+  }
+  .editorAssetButton .editorIdentity strong {
+    font-size: 14px;
+  }
+}
+
+.allocationClear {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  min-height: 32px;
+  margin-left: auto;
+  padding: 5px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.allocationClear:hover {
+  background: var(--hover);
+}
+.allocationDetail {
+  position: relative;
+}
+.allocationDetail > .allocationClear {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+}
+.allocationDetail > strong {
+  padding-right: 24px;
+}
+.allocationCenter strong {
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+.compositionView .screenLinks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.compositionView .screenLinks button {
+  background: var(--soft);
+  border-radius: 10px;
+  font-size: 14px;
+  min-height: 46px;
+}
+.dashboardControls > select {
+  font-size: 12px;
+  min-height: 38px;
+  width: auto;
+  max-width: 45%;
+  padding: 7px 24px 7px 9px;
+  background: transparent;
+  border-color: var(--line);
+}
+
+.compositionView .allocationHead {
+  justify-content: flex-end;
+}
+.compositionView .allocationBody {
+  margin-top: 12px;
+}
+
+:global(html[data-theme="dark"]) .compositionView .allocationCard {
+  background: transparent;
+}
+.dashboardControls .gainToggle button {
+  font-size: 12px;
+  min-height: 34px;
+  padding: 6px 10px;
+}
+@media (max-width: 760px) {
+  .heading {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .heading > div:first-child {
+    min-width: 0;
+    flex: 1;
+  }
+  .heading > div:last-child {
+    flex: none;
+  }
+  .heading > div:last-child .ghost {
+    font-size: 0;
+    gap: 0;
+    min-width: 36px;
+    padding: 8px;
+  }
+  .heading > div:last-child .ghost svg {
+    width: 17px;
+    height: 17px;
+  }
+  .dashboardControls .gainToggle button {
+    font-size: 11px;
+    min-height: 32px;
+    padding: 6px 9px;
+  }
+}

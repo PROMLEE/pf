@@ -1,5 +1,6 @@
 "use client";
 import PushSettings from "./PushSettings";
+import PortfolioDashboard from "./PortfolioDashboard";
 import AssetEditDialog, { type EditableAssetSelection } from "./AssetEditDialog";
 import MarketDataStatus from "./MarketDataStatus";
 import RebalancePlans from "./RebalancePlans";
@@ -110,7 +111,7 @@ type Props = {
   onBack?: () => void;
   detailBackLabel?: string;
   onNavigate: (
-    screen: "preferences" | "strategy" | "allocation" | "rebalance" | "history" | "settings" | "accounts",
+    screen: "preferences" | "strategy" | "composition" | "allocation" | "rebalance" | "history" | "settings" | "accounts",
   ) => void;
   onDirtyChange: (dirty: boolean) => void;
 };
@@ -1837,9 +1838,9 @@ export default function PortfolioBuilder({
   const AssetSections = screen === "edit" ? "div" : "details";
   return (
     <div
-      className={`${styles.builder} ${screen === "dashboard" ? styles.homeBuilder : ""}`}
+      className={styles.builder}
     >
-      {screen !== "edit" && (
+      {screen !== "edit" && screen !== "dashboard" && (
         <div className={styles.heading}>
           <div>
             <h1>{titles[1]}</h1>
@@ -1852,13 +1853,13 @@ export default function PortfolioBuilder({
               disabled={refreshing || quotesRefreshing}
             >
               <RefreshCw size={16} />{" "}
-              {refreshing || quotesRefreshing ? "갱신 중" : "가격 갱신"}
+              {refreshing || quotesRefreshing ? "갱신 중" : "시세 갱신"}
             </button>}
             {dirty ? (
               <button className={styles.save} onClick={save} disabled={saving}>
                 {saving ? "저장 중" : "미저장 · 변경 내용 저장"}
               </button>
-            ) : screen !== "dashboard" && screen !== "detail" ? (
+            ) : ["strategy", "preferences", "allocation"].includes(screen) ? (
               <span className={styles.saved}>
                 <Check size={15} /> 저장됨
               </span>
@@ -1934,180 +1935,23 @@ export default function PortfolioBuilder({
         />
       )}
 
-      {screen === "dashboard" && (
-        <>
-          <section className={styles.mobileDashboard} aria-label="내 자산 요약">
-            <div className={styles.mobileDashboardTop}>
-              <span>총 평가액</span>
-              <button
-                type="button"
-                aria-label="가격 새로고침"
-                onClick={refresh}
-                disabled={refreshing || quotesRefreshing}
-              >
-                <RefreshCw
-                  size={18}
-                  className={
-                    refreshing || quotesRefreshing ? styles.mobileSpinning : ""
-                  }
-                />
-              </button>
-            </div>
-            <div className={styles.mobileTotal}>
-              {won.format(values?.total ?? 0)}
-              <span>원</span>
-            </div>
-            {dashboardControls}
-            <div className={styles.mobileMetricList}>
-              <div className={styles.gainMetric}>
-                <div>
-                  <span>{gainView === "daily" ? "일간 손익" : "전체 손익"}</span>
-                  <small>{displayedGainNote}</small>
-                </div>
-                <strong
-                  className={
-                    displayedGain === null
-                      ? ""
-                      : displayedGain >= 0
-                        ? styles.mobileUp
-                        : styles.mobileDown
-                  }
-                >
-                  {displayedGain === null
-                    ? "—"
-                    : `${displayedGain > 0 ? "+" : ""}${fmt(displayedGain)}`}
-                </strong>
-              </div>
-              <div>
-                <span>
-                  {gainView === "daily" ? "일간 수익률" : "전체 수익률"}{" "}
-                  <small>확인분</small>
-                </span>
-                <strong
-                  className={
-                    displayedGainPercent === null
-                      ? ""
-                      : displayedGainPercent >= 0
-                        ? styles.mobileUp
-                        : styles.mobileDown
-                  }
-                >
-                  {displayedGainPercent === null
-                    ? "—"
-                    : `${displayedGainPercent > 0 ? "+" : ""}${gainPct(displayedGainPercent)}`}
-                </strong>
-              </div>
-            </div>
-            <AssetList
-              investments={mobileInvestments}
-              manualAssets={draft.manualAssets}
-              usdKrw={draft.usdKrw}
-              gainView={gainView}
-              dailyLoading={quotesRefreshing || cryptoRefreshing}
-              onSelectAsset={onSelectAsset}
-              assetSort={assetSort}
-            />
-            <div className={styles.dashboardMetadata}>
-              {quotesRefreshing && <div className={styles.mobileQuoteTime}><span className={styles.livePulse} />시세 갱신 중</div>}
-              {(quoteError || fxRefreshError) && (
-                <div className={styles.mobileDataError}>
-                  {quoteError || fxRefreshError}
-                </div>
-              )}
-            </div>
-          </section>
-          <div className={styles.desktopOverview}>
-            <div className={styles.desktopPrimary}>
-              {dashboardControls}
-              <div className={styles.desktopMetricGrid}>
-                <section className={styles.desktopTotal}>
-                  <span>총 평가액</span>
-                  <strong>{fmt(values?.total ?? 0)}</strong>
-                </section>
-                <section className={styles.desktopGain}>
-                  <div>
-                    <span>{gainView === "daily" ? "일간 손익" : "전체 손익"}</span>
-                    <strong
-                      className={
-                        displayedGain === null
-                          ? ""
-                          : displayedGain >= 0
-                            ? styles.profitUp
-                            : styles.profitDown
-                      }
-                    >
-                      {displayedGain === null
-                        ? "—"
-                        : `${displayedGain > 0 ? "+" : ""}${fmt(displayedGain)}`}
-                    </strong>
-                    <small>
-                      {displayedGainPercent !== null
-                        ? `${displayedGainPercent > 0 ? "+" : ""}${gainPct(displayedGainPercent)} · `
-                        : ""}
-                      {displayedGainNote}
-                    </small>
-                  </div>
-                </section>
-              </div>
-              <section className={styles.desktopAssetPanel}>
-                <div className={styles.desktopSectionHead}>
-                  <div>
-                    <h2>보유 자산</h2>
-                  </div>
-                  <button type="button" onClick={onEditHoldings}>
-                    자산 수정 <ArrowRight size={14} />
-                  </button>
-                </div>
-                <AssetList
-                  investments={mobileInvestments}
-                  manualAssets={draft.manualAssets}
-                  includeFx={Boolean(draft.includeFxGains)} previousFx={dailyFxRate}
-                  usdKrw={draft.usdKrw}
-                  gainView={gainView}
-                  dailyLoading={quotesRefreshing || cryptoRefreshing}
-                  onSelectAsset={onSelectAsset}
-                  assetSort={assetSort}
-                />
-              </section>
-            </div>
-            <aside className={styles.desktopSide} aria-label="포트폴리오 구성">
-              <PortfolioVisuals portfolio={draft} holdings={holdings} />
-              <section className={styles.desktopTarget}>
-                <div>
-                  <span>목표 비중 점검</span>
-                  <strong>
-                    {rebalanceReady
-                      ? `${driftItems.length}개 조정 필요`
-                      : "배정·가격 확인 필요"}
-                  </strong>
-                  <small>
-                    {!rebalanceReady
-                      ? "미분류 자산과 시세를 확인하세요"
-                      : driftItems[0]
-                        ? `${driftItems[0].bucket.name} ${driftItems[0].gapPercent > 0 ? "+" : ""}${driftItems[0].gapPercent.toFixed(1)}%p`
-                        : "목표 비중 안에 있습니다"}
-                  </small>
-                </div>
-                <button type="button" onClick={() => onNavigate("rebalance")}>
-                  리밸런싱 보기 <ArrowRight size={15} />
-                </button>
-              </section>
-            </aside>
-          </div>
-          {(quotesRefreshing || quoteError || fxRefreshError || Boolean(values?.missingPrices)) && <div className={styles.dashboardMetadata}>
-            <div className={styles.desktopLiveStatus} role="status">
-              {quotesRefreshing && <span>시세 갱신 중</span>}
-              {(quoteError || fxRefreshError) && <em>{quoteError || fxRefreshError}</em>}
-              {Boolean(values?.missingPrices) && <em>가격 미확인 자산 {values?.missingPrices}개</em>}
-            </div>
-          </div>}
-        </>
-      )}
+      {screen === "dashboard" && <PortfolioDashboard
+        total={values?.total ?? 0} gain={displayedGain} percent={displayedGainPercent} gainView={gainView} gainNote={displayedGainNote}
+        refreshing={refreshing || quotesRefreshing} onRefresh={refresh} controls={dashboardControls}
+        onEdit={onEditHoldings} onHistory={()=>onNavigate("history")} onComposition={()=>onNavigate("composition")} onRebalance={()=>onNavigate("rebalance")}
+        composition={<PortfolioVisuals portfolio={draft} holdings={holdings}/>}
+        targetTitle={rebalanceReady ? driftItems.length ? `${driftItems.length}개 포트 조정 필요` : "목표 범위 안에 있어요" : "배정·가격 확인 필요"}
+        targetDetail={!rebalanceReady ? "미분류 자산과 시세를 확인하세요." : driftItems.length ? "정해둔 목표와 현재 비중의 차이를 확인하세요." : "다음 점검 때도 나의 투자 원칙을 이어가세요."}
+        metadata={<>{quotesRefreshing && <span>시세 갱신 중</span>}{(quoteError || fxRefreshError) && <p role="status">{quoteError || fxRefreshError}</p>}{Boolean(values?.missingPrices) && <span>가격 미확인 자산 {values?.missingPrices}개</span>}</>}
+      >
+        <AssetList investments={mobileInvestments} manualAssets={draft.manualAssets} includeFx={Boolean(draft.includeFxGains)} previousFx={dailyFxRate} usdKrw={draft.usdKrw} gainView={gainView} dailyLoading={quotesRefreshing || cryptoRefreshing} onSelectAsset={onSelectAsset} assetSort={assetSort}/>
+      </PortfolioDashboard>}
 
       {screen === "composition" && (
         <div className={styles.compositionView}>
-          <PortfolioVisuals portfolio={draft} holdings={holdings} />
+          <PortfolioVisuals portfolio={draft} holdings={holdings} showHeading={false} />
           <div className={styles.screenLinks}>
+            <button type="button" onClick={() => onNavigate("strategy")}>목표 비중 수정 <ArrowRight size={16} /></button>
             <button type="button" onClick={() => onNavigate("rebalance")}>
               리밸런싱 보기 <ArrowRight size={16} />
             </button>

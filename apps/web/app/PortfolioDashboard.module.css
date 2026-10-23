@@ -1,0 +1,269 @@
+.dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 48px;
+  align-items: start;
+  color: var(--ink);
+}
+.main {
+  min-width: 0;
+}
+.hero {
+  padding: 8px 0 28px;
+}
+.heroHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.heroHead h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 8px 10px;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.refresh:hover {
+  color: var(--blue);
+}
+.total {
+  margin: 14px 0 12px;
+  font-size: clamp(32px, 3.7vw, 46px);
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.total > span {
+  margin-left: 5px;
+  font-size: 0.66em;
+  font-weight: 650;
+}
+.returnLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.returnLine > span:first-child {
+  color: var(--muted);
+}
+.returnLine strong {
+  font-size: 17px;
+  font-weight: 650;
+}
+.returnPercent {
+  font-size: 13px;
+  font-weight: 600;
+}
+.positive {
+  color: var(--positive);
+}
+.negative {
+  color: var(--negative);
+}
+.note {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.shortcuts {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+}
+.shortcuts button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 13px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.shortcuts button:hover {
+  background: var(--hover);
+}
+.shortcuts button > svg:first-child {
+  color: var(--muted);
+}
+.shortcuts button > svg:last-child {
+  color: var(--muted);
+  margin-left: 4px;
+}
+.assets {
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+}
+.assetHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.assetHeading h2 {
+  font-size: 19px;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+.assetHeading button {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  border: 0;
+  padding: 8px 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+.controls {
+  margin-bottom: 16px;
+}
+.controls > div {
+  margin: 0;
+  min-width: 0;
+}
+.metadata {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 12px;
+}
+.aside {
+  min-width: 0;
+  position: sticky;
+  top: 86px;
+  padding-left: 28px;
+  border-left: 1px solid var(--line);
+}
+.target {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.target > span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.target h2 {
+  font-size: 22px;
+  margin: 8px 0;
+  letter-spacing: -0.025em;
+}
+.target p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0;
+}
+.target button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 16px;
+  border: 0;
+  background: var(--action-fill);
+  color: var(--action-ink);
+  border-radius: 10px;
+  padding: 13px 16px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.spinning {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
+}
+@media (max-width: 1150px) {
+  .dashboard {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 28px;
+  }
+  .aside {
+    padding-left: 20px;
+  }
+  .total {
+    font-size: 38px;
+  }
+}
+@media (max-width: 1000px) {
+  .dashboard {
+    display: block;
+  }
+  .aside {
+    display: none;
+  }
+  .hero {
+    padding-top: 4px;
+  }
+  .total {
+    font-size: 40px;
+  }
+}
+@media (max-width: 760px) {
+  .hero {
+    padding: 10px 0 24px;
+  }
+  .heroHead h1 {
+    font-size: 16px;
+  }
+  .total {
+    font-size: clamp(30px, 8.6vw, 38px);
+    margin: 12px 0;
+  }
+  .returnLine {
+    font-size: 13px;
+    gap: 7px;
+  }
+  .returnLine strong {
+    font-size: 16px;
+  }
+  .shortcuts {
+    margin-top: 20px;
+  }
+  .shortcuts button {
+    min-height: 40px;
+    padding: 9px 12px;
+    font-size: 12px;
+  }
+  .assets {
+    padding-top: 20px;
+  }
+  .assetHeading {
+    margin-bottom: 12px;
+  }
+  .assetHeading h2 {
+    font-size: 18px;
+  }
+  .controls {
+    margin-bottom: 16px;
+  }
+}

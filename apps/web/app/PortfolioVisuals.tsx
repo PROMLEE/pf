@@ -1,17 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import type { Holding } from "./holdings";
 import { portfolioValues, type Portfolio } from "./portfolio-model";
 import styles from "./portfolio.module.css";
 
-type Props = { portfolio: Portfolio; holdings: Holding[] };
+type Props = {
+  portfolio: Portfolio;
+  holdings: Holding[];
+  showHeading?: boolean;
+};
 type Mode = "actual" | "target";
 const circumference = 2 * Math.PI * 46;
 const percent = (value: number) => `${value.toFixed(1)}%`;
 const won = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 });
 
-export default function PortfolioVisuals({ portfolio, holdings }: Props) {
+export default function PortfolioVisuals({
+  portfolio,
+  holdings,
+  showHeading = true,
+}: Props) {
   const [mode, setMode] = useState<Mode>("actual");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { values, unassigned, total } = portfolioValues(portfolio, holdings);
@@ -49,18 +58,29 @@ export default function PortfolioVisuals({ portfolio, holdings }: Props) {
       a.name.localeCompare(b.name, "ko"),
   );
   const selected = sortedItems.find((item) => item.id === selectedId) ?? null;
+  const totalLabel =
+    total >= 100000000
+      ? `${(total / 100000000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}억원`
+      : total >= 10000
+        ? `${Math.round(total / 10000).toLocaleString("ko-KR")}만원`
+        : `${won.format(total)}원`;
   let offset = 0;
 
   return (
     <section
       className={styles.allocationCard}
       aria-label="포트폴리오 비중 원형 그래프"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setSelectedId(null);
+      }}
     >
       <div className={styles.allocationHead}>
-        <div>
-          <h2>포트별 자산 비중</h2>
-          <p>그래프 조각이나 포트 이름을 선택해 평가액과 비중을 확인하세요.</p>
-        </div>
+        {showHeading && (
+          <div>
+            <h2>포트별 자산 비중</h2>
+            <p>포트를 선택하면 상세 금액을 볼 수 있어요.</p>
+          </div>
+        )}
         {hasValues && (
           <div
             className={styles.allocationSwitch}
@@ -151,13 +171,14 @@ export default function PortfolioVisuals({ portfolio, holdings }: Props) {
                 ? selected.name
                 : showTarget
                   ? "목표 비중"
-                  : "현재 비중"}
+                  : "총 평가액"}
             </span>
             <strong>
               {selected
                 ? percent(showTarget ? selected.target : selected.actual)
-                : portfolio.buckets.length}
-              {!selected && <small>개 포트</small>}
+                : showTarget
+                  ? percent(targetTotal)
+                  : totalLabel}
             </strong>
           </div>
         </div>
@@ -174,7 +195,6 @@ export default function PortfolioVisuals({ portfolio, holdings }: Props) {
               className={styles.allocationLegendRow}
               key={item.id}
               aria-pressed={selectedId === item.id}
-              onPointerEnter={() => setSelectedId(item.id)}
               onFocus={() => setSelectedId(item.id)}
               onClick={() => setSelectedId(item.id)}
             >
@@ -224,6 +244,14 @@ export default function PortfolioVisuals({ portfolio, holdings }: Props) {
             <i style={{ background: selected.color }} />
             {selected.name}
           </strong>
+          <button
+            type="button"
+            className={styles.allocationClear}
+            aria-label="포트 선택 해제"
+            onClick={() => setSelectedId(null)}
+          >
+            <X size={15} />
+          </button>
           <div>
             <span>현재 평가액</span>
             <b>{won.format(selected.value)}원</b>

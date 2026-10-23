@@ -491,3 +491,99 @@
   font-size: 13px;
   padding: 4px 0;
 }
+
+/* Match the overview's typography and quiet account list. */
+.header h1 {
+  font-size: 28px;
+  letter-spacing: -0.035em;
+}
+.header p {
+  font-size: 14px;
+}
+.header {
+  margin-bottom: 24px;
+}
+.accountList {
+  padding-right: 24px;
+}
+.accountList > button {
+  border-radius: 10px;
+  min-height: 68px;
+  padding: 12px;
+}
+.accountList > button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--blue) 7%, var(--surface));
+}
+.accountList strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+.accountList small {
+  font-size: 13px;
+}
+.accountHead h2 {
+  font-size: 24px;
+  letter-spacing: -0.025em;
+}
+.stocks > article {
+  padding: 20px 0;
+  border-color: var(--line);
+}
+.stockIdentity strong {
+  font-size: 15px;
+}
+.facts small {
+  font-size: 13px;
+}
+.facts strong {
+  font-size: 16px;
+}
+.form {
+  padding: 20px;
+  border-radius: 12px;
+}
+.form label {
+  font-size: 14px;
+}
+.form small {
+  font-size: 13px;
+}
+.manager button {
+  border-radius: 9px;
+}
+.accountList > button:hover {
+  background: var(--soft);
+}
+@media (max-width: 760px) {
+  .header h1 {
+    font-size: 26px;
+  }
+  .header p {
+    font-size: 13px;
+  }
+  .header {
+    margin-bottom: 20px;
+  }
+  .accountList {
+    padding-right: 0;
+  }
+  .accountHead h2 {
+    font-size: 22px;
+  }
+  .accountList > button {
+    min-height: 60px;
+  }
+  .manager input,
+  .manager select {
+    font-size: 16px;
+  }
+  .form {
+    padding: 16px;
+  }
+  .facts small {
+    font-size: 12px;
+  }
+  .facts strong {
+    font-size: 15px;
+  }
+}

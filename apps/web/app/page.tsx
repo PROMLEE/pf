@@ -1279,7 +1279,7 @@ export default function PortfolioPage() {
           {view === "portfolio" && showStartGuide && (
             <section className={styles.startGuide} aria-label="처음 시작 안내">
               <CircleHelp size={21} />
-              <div><strong>나만의 포트폴리오, 어디서 시작할까요?</strong><p>목표 설계 → 자산 등록 → 배정 → 비중 점검</p></div>
+              <div><strong>목표 비중을 정하고 자산을 연결해 보세요.</strong><p>목표 설계 → 자산 등록 → 배정 → 비중 점검</p></div>
               <button type="button" onClick={() => go("guide")}>시작 안내 <ArrowRight size={16} /></button>
               <button type="button" className={styles.startGuideDismiss} aria-label="시작 안내 닫기" onClick={dismissStartGuide}><X size={17} /></button>
             </section>
