@@ -2404,9 +2404,13 @@
   font-size: 15px;
 }
 .assetEditorSave {
-  border: 0;
-  border-radius: 10px;
-  background: var(--soft);
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
 }
 :global(html[data-theme="dark"]) .panel,
 :global(html[data-theme="dark"]) .allocationCard {
@@ -2616,4 +2620,16 @@
     min-height: 32px;
     padding: 6px 9px;
   }
+}
+
+.detailFormActions .detailRemove {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: var(--positive);
+  font-size: 13px;
 }

@@ -396,6 +396,7 @@ function AssetDetail({
   onAssignStock,
   onEditingChange,
   onEditAsset,
+  accounts,
   backLabel = "이전 화면",
 }: {
   selection: AssetSelection;
@@ -410,6 +411,7 @@ function AssetDetail({
   onAssignStock: (id: string, bucketId: string | null, source: "auto" | "manual") => Promise<void>;
   onEditingChange: (editing: boolean) => void;
   onEditAsset: (selection: EditableAssetSelection) => void;
+  accounts: BrokerageAccount[];
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [tradeMode, setTradeMode] = useState(true);
@@ -419,6 +421,7 @@ function AssetDetail({
   const [editName, setEditName] = useState("");
   const [editValue, setEditValue] = useState("");
   const [editFxRate,setEditFxRate]=useState("");
+  const [editAccountId, setEditAccountId] = useState("");
   const [saving, setSaving] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState("");
@@ -432,7 +435,7 @@ function AssetDetail({
   const editedCrypto = portfolio.cryptoAssets.find(asset => `crypto:${asset.id}` === editing);
   const editedManual = portfolio.manualAssets.find(asset => asset.id === editing);
   const editDirty = tradeDirty || Boolean(editing && !(editedStock && tradeMode) && (editedManual
-    ? editName !== editedManual.name || editValue !== String(editedManual.valueUsd ?? editedManual.valueKrw) || editFxRate !== String(editedManual.averageFxRate??"")
+    ? editName !== editedManual.name || editValue !== String(editedManual.valueUsd ?? editedManual.valueKrw) || editFxRate !== String(editedManual.averageFxRate??"") || editAccountId !== (editedManual.accountId ?? "")
     : editedStock || editedCrypto
       ? editQuantity !== String(editedStock?.quantity ?? editedCrypto?.quantity ?? "") || editCost !== String(editedStock?.averageCost ?? editedCrypto?.averageCostKrw ?? "")
       : false));
@@ -488,8 +491,14 @@ function AssetDetail({
     setEditQuantity(String(row?.quantity ?? crypto?.quantity ?? ""));
     setEditCost(String(row?.averageCost ?? crypto?.averageCostKrw ?? ""));
     setEditFxRate(String(manual?.averageFxRate??""));
+    setEditAccountId(manual?.accountId ?? "");
     setEditName(manual?.name ?? "");
     setEditValue(String(manual?.valueUsd ?? manual?.valueKrw ?? ""));
+    setError("");
+  }
+  function closeEdit() {
+    if (saving || (editDirty && !window.confirm("저장하지 않은 변경 사항을 버리고 닫을까요?"))) return;
+    setEditing(null);
     setError("");
   }
   async function submitEdit(event: React.FormEvent<HTMLFormElement>) {
@@ -513,7 +522,7 @@ function AssetDetail({
         ...portfolio,
         cryptoAssets: portfolio.cryptoAssets.map((asset) => asset.id === crypto?.id ? { ...asset, quantity, averageCostKrw: cost } : asset),
         manualAssets: portfolio.manualAssets.map((asset) => asset.id === manual?.id ? {
-          ...asset, name: editName.trim(), valueKrw: asset.valueUsd === null ? amount : amount * portfolio.usdKrw,
+          ...asset, name: editName.trim(), accountId: editAccountId || null, valueKrw: asset.valueUsd === null ? amount : amount * portfolio.usdKrw,
           valueUsd: asset.valueUsd === null ? null : amount,
           averageFxRate: asset.valueUsd===null?null:editFxRate===""?null:Number(editFxRate),
         } : asset),
@@ -588,17 +597,29 @@ function AssetDetail({
         <AveragePriceCalculator key={selection.id} cashBalances={portfolio.manualAssets.map(asset => ({id: asset.id, name: asset.name, currency: asset.valueUsd === null ? "KRW" as const : "USD" as const, balance: asset.valueUsd ?? asset.valueKrw}))} initial={{quantity, averagePrice: averageCost, buyPrice: price, currency: first?.market === "US" ? "USD" : "KRW", fractional: Boolean(crypto) || (quantity !== null && !Number.isInteger(quantity))}} />
       </details>}
       {manual && <p className={styles.detailHint}>{manual.valueUsd!==null?"평균 환전 단가를 입력하면 달러 자산의 환율 손익을 계산합니다.":"직접 입력 원화 자산은 평가 금액만 관리합니다."}</p>}
-      {!first && !editing && (manual?.readOnly ? <p className={styles.detailHint}>메리츠 연동 자산입니다. 동기화 버튼으로 잔고를 반영해 주세요.</p> : <button type="button" className={styles.detailEdit} onClick={() => onEditAsset({kind: manual ? "manual" : "crypto", id: selection.id})}>자산 수정 <Pencil size={16} /></button>)}
+      {!first && (!editing || manual) && (manual?.readOnly
+        ? <p className={styles.detailHint}>메리츠 연동 자산입니다. 동기화 버튼으로 잔고를 반영해 주세요.</p>
+        : <button type="button" className={styles.detailEdit} disabled={saving || assigning}
+            aria-expanded={manual ? Boolean(editing) : undefined}
+            aria-controls={manual ? "asset-detail-editor" : undefined}
+            onClick={() => manual ? editing ? closeEdit() : beginEdit() : onEditAsset({kind: "crypto", id: selection.id})}>
+            {manual ? editing ? "잔고 수정 닫기" : "잔고 수정" : "자산 수정"} <Pencil size={16} />
+          </button>)}
       {editing && (editedStock && tradeMode ? <HoldingTradeEditor key={editedStock.id} holding={editedStock}
         onDirty={setTradeDirty} onBusy={setSaving} onCancel={() => setEditing(null)} onDirect={() => setTradeMode(false)}
         onSaved={(next, message) => {setEditing(null);onStockTradeSaved(next, message);}}
-      /> : <form ref={editForm} className={styles.detailForm} onSubmit={submitEdit} aria-label="이 자산 수정">
-        <h3>{first ? `${stockRows.find((row) => row.id === editing)?.account} 보유 정보 수정` : "자산 정보 수정"}</h3>
+      /> : <form id="asset-detail-editor" ref={editForm} className={styles.detailForm} onSubmit={submitEdit} aria-label="이 자산 수정">
+        <h3>{first ? `${stockRows.find((row) => row.id === editing)?.account} 보유 정보 수정` : manual ? "잔고 수정" : "자산 정보 수정"}</h3>
         <fieldset disabled={saving || assigning}>
           {manual ? <>
             {manual.valueUsd!==null && <label>평균 환전 단가 · 1 USD당 원<NumberInput value={editFxRate} onValueChange={setEditFxRate} min="100" max="100000" step="any" placeholder="모르면 비워두세요" /></label>}
             <label>자산 이름<input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={100} required /></label>
             <label>{manual.valueUsd === null ? "금액 (원)" : "금액 (USD)"}<NumberInput min="0" step="any" value={editValue} onValueChange={(value) => setEditValue(value)} required /></label>
+            <label>연결 계좌<select value={editAccountId} onChange={event => setEditAccountId(event.target.value)}>
+              <option value="">계좌 미연결</option>
+              {editAccountId && !accounts.some(account => account.id === editAccountId) && <option value={editAccountId}>현재 연결 계좌</option>}
+              {accounts.map(account => <option key={account.id} value={account.id}>{account.broker} · {account.name}</option>)}
+            </select></label>
           </> : <>
             <label>보유 수량<NumberInput min={first ? "0.000001" : "0"} step={first ? "0.000001" : "any"} value={editQuantity} onValueChange={(value) => setEditQuantity(value)} required /></label>
             <label>{first ? "주당 평균 매입단가" : "개당 평균 매입단가"} · {unit}<NumberInput min="0" step="any" value={editCost} onValueChange={(value) => setEditCost(value)} placeholder="모르면 비워두세요" /></label>
@@ -608,7 +629,15 @@ function AssetDetail({
         <div className={styles.detailFormActions}>
           <span className={styles.saved} role="status">{editDirty ? "미저장 · 저장하면 이 자산에 반영됩니다" : "저장된 보유 정보"}</span>
           <button type="submit" className={styles.detailEdit} disabled={saving || assigning || !editDirty}>{saving ? "저장 중…" : "저장"}</button>
-          <button type="button" className={styles.ghost} disabled={saving} onClick={() => { setEditing(null); setError(""); }}>취소</button>
+          <button type="button" className={styles.ghost} disabled={saving} onClick={closeEdit}>취소</button>
+          {manual && !manual.readOnly && <button type="button" className={styles.detailRemove} disabled={saving || assigning}
+            onClick={async () => {
+              if (!window.confirm(`${manual.name}을 등록 자산에서 삭제할까요?`)) return;
+              setSaving(true); setError("");
+              try { await onSavePortfolio({...portfolio,manualAssets:portfolio.manualAssets.filter(asset => asset.id !== manual.id)}); setEditing(null); }
+              catch (error) { setError(error instanceof Error ? error.message : "삭제하지 못했습니다."); }
+              finally { setSaving(false); }
+            }}><Trash2 size={14} /> 자산 삭제</button>}
         </div>
       </form>)}
     </section>
@@ -1884,6 +1913,7 @@ export default function PortfolioBuilder({
           backLabel={detailBackLabel}
           onEditingChange={setDetailDirty}
           onEditAsset={setAssetEditor}
+          accounts={cashAccounts}
           onStockTradeSaved={(next, message) => {
             onHoldings(withPreviousQuotes(next, holdings));
             onNotice(message);
@@ -2588,32 +2618,23 @@ export default function PortfolioBuilder({
                   </button>
                 </div>
                 </details>
-                {draft.manualAssets.map(asset => <button type="button" key={asset.id} id={`edit-manual-${asset.id}`} className={styles.editorAssetButton} disabled={dirty || saving || asset.readOnly} onClick={() => setAssetEditor({kind:"manual",id:asset.id})} aria-label={`${asset.name} ${asset.readOnly ? "메리츠 연동 읽기 전용" : "수정 창 열기"}`}>
+                {draft.manualAssets.map(asset => <button type="button" key={asset.id} id={`edit-manual-${asset.id}`} className={styles.editorAssetButton} disabled={dirty || saving} onClick={() => onSelectAsset({kind:"manual",id:asset.id})} aria-label={`${asset.name} 상세 보기`}>
                   <span className={styles.editorIdentity}><AssetIcon kind="cash" symbol={asset.valueUsd === null ? "KRW" : "USD"} name={asset.name}/><span><strong>{asset.name}</strong><small>{asset.readOnly ? "메리츠 연동 · 읽기 전용" : asset.valueUsd === null ? "원화 · KRW" : "미국 달러 · USD"}</small></span></span>
-                  <span className={styles.editorAssetAmount}><strong>{asset.valueUsd === null ? fmt(asset.valueKrw) : `$${quantityFormat.format(asset.valueUsd)}`}</strong>{!asset.readOnly && <ChevronRight size={17}/>}</span>
+                  <span className={styles.editorAssetAmount}><strong>{asset.valueUsd === null ? fmt(asset.valueKrw) : `$${quantityFormat.format(asset.valueUsd)}`}</strong><ChevronRight size={17}/></span>
                 </button>)}
                 </section>
               </>
             )}
           </AssetSections>
-          {screen === "edit" && <CashTransfers portfolio={draft} accounts={cashAccounts} disabled={dirty || saving} onDirty={setTransferDirty} onSaved={(next,message)=>{portfolioCache.set(userId,next);setDraft(next);setDirty(false);onNotice(message);}} />}
-          {screen === "edit" && (
+          {screen === "edit" && dirty && (
             <div className={styles.assetEditorSave}>
-              {dirty ? (
-                <button
-                  className={styles.save}
-                  onClick={save}
-                  disabled={saving}
-                >
-                  {saving ? "저장 중" : "가상자산·현금 변경 저장"}
-                </button>
-              ) : (
-                <span className={styles.saved}>
-                  <Check size={15} /> 저장됨
-                </span>
-              )}
+              <span className={styles.saved} role="status">미저장 · 추가한 자산을 저장해 주세요</span>
+              <button className={styles.save} onClick={save} disabled={saving}>
+                {saving ? "저장 중" : "자산 변경 저장"}
+              </button>
             </div>
           )}
+          {screen === "edit" && <CashTransfers portfolio={draft} accounts={cashAccounts} disabled={dirty || saving} onDirty={setTransferDirty} onSaved={(next,message)=>{portfolioCache.set(userId,next);setDraft(next);setDirty(false);onNotice(message);}} />}
         </>
       )}
       {(screen === "allocation" || screen === "edit" || screen === "preferences") && dirty && (
@@ -2704,6 +2725,12 @@ export default function PortfolioBuilder({
                       : ""}
                   </span>
                 </div>
+                {advice.items.filter(item => item.bucket.id === advice.cashAllocation?.bucketId
+                  && !withinPortfolioTolerance(draft, item.bucket.targetPercent, item.projectedPercent)).map(item => (
+                  <p key={item.bucket.id} className={styles.help} role="status">
+                    {item.bucket.name}이 허용 범위에 도달하지 못했습니다. 매수·매도 후보와 제외 설정을 확인하세요. 1주 단위·가용 예산에 따라 일부 차이가 남을 수 있습니다.
+                  </p>
+                ))}
                 <div className={styles.rebalanceDisclosures}>
                 <details className={styles.finalWeights}>
                   <summary>포트별 예상 비중 <ChevronDown size={14} /></summary>
@@ -2729,7 +2756,7 @@ export default function PortfolioBuilder({
                   ? `${marketSession.preferredMarket === "KR" ? "국내" : "미국"} 정규장 우선 · 같은 포트의 자동 후보에 적용됩니다. 직접 고른 종목은 유지합니다.`
                   : marketSession ? marketSession.KR.status === "unknown" || marketSession.US.status === "unknown" ? "장 일정 미확인 · 기존 후보 순서로 계산합니다." : "정규장 외 · 기존 후보 순서로 계산합니다."
                   : "장 일정 확인 전 · 기존 후보 순서로 계산합니다."}</p>
-                <p className={styles.help}>허용 범위 밖은 자동으로 조정을 제안합니다. 범위 안은 제안 없이 유지하며, 종목을 직접 선택하면 목표 비중까지 계산합니다.</p>
+                <p className={styles.help}>허용 범위 밖은 자동으로 조정을 제안합니다. 현금이 범위를 벗어나면 다른 포트도 목표 비중까지 함께 조정합니다. 그 외 범위 안인 포트는 직접 종목을 선택할 때만 제안합니다.</p>
 
             <div className={styles.previewSummary} aria-label="이번 계산 기준">
               <span>현재 자산 {fmt(advice.currentTotal)}</span>

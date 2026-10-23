@@ -867,3 +867,53 @@ test("settled cash is not described as excluded while manual unmodeled assets ex
   const separate=rebalance(p,rows,"trade",0,new Set());
   assert.match(separate.items.find(i=>i.bucket.id==="C").separateReview,/자산 합계에는 포함/);
 });
+
+test("cash above its band enables buys in otherwise in-band portfolios", () => {
+  const {p, rows} = cashPlan(3.7, 3.7, 260, {toleranceMode:"relative",relativeTolerancePercent:10});
+  for (const row of rows) { row.currentPrice=10; row.quantity=37; }
+  for (const candidate of p.rules) candidate.quotedPrice=10;
+  const original=JSON.stringify({p,rows});
+  const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true});
+  assert.ok(r.trades.some(t=>t.side==="buy"));
+  assert.ok(r.items.every(i=>withinPortfolioTolerance(p,i.bucket.targetPercent,i.projectedPercent)));
+  assertMatchesActual(r,p,rows);
+  assert.equal(JSON.stringify({p,rows}),original);
+});
+
+test("cash balancing includes funding while preserving explicit choices and exclusions",()=>{
+  const {p,rows}=cashPlan(3.7,3.7,260,{toleranceMode:"relative",relativeTolerancePercent:10});
+  for (const row of rows) {row.currentPrice=10;row.quantity=37;}
+  for (const candidate of p.rules) candidate.quotedPrice=10;
+  const r=rebalance(p,rows,"add-only",100,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true,excludedBuySymbols:new Set(["KR:B"]),buyRuleIds:{A:"A"}});
+  close(r.targetTotal,1100);
+  assert.equal(r.trades.some(t=>t.symbol==="B"),false);
+  assert.equal(r.trades.some(t=>t.side==="sell"),false);
+  assertMatchesActual(r,p,rows);
+});
+
+test("cash inside its band preserves the default no-proposal state",()=>{
+  const {p,rows}=cashPlan(4,4,200,{toleranceMode:"relative",relativeTolerancePercent:10});
+  const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true});
+  assert.equal(r.trades.length,0);
+  close(r.cashAllocation.projectedKrw,200);
+});
+
+test("cash balancing cannot bypass exclusions or an unaffordable share",()=>{
+  const {p,rows}=cashPlan(3.7,3.7,260,{toleranceMode:"relative",relativeTolerancePercent:10});
+  for (const excludedBuySymbols of [new Set(),new Set(["KR:A","KR:B"])]) {
+    const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true,excludedBuySymbols});
+    assert.equal(r.trades.length,0);
+    close(r.cashAllocation.projectedKrw,260);
+    assertMatchesActual(r,p,rows);
+  }
+});
+
+test("cash below its band can reserve proceeds from otherwise in-band stock surpluses",()=>{
+  const {p,rows}=cashPlan(4.35,4.35,130,{toleranceMode:"relative",relativeTolerancePercent:10});
+  for(const row of rows){row.currentPrice=5;row.quantity=87;}
+  for(const candidate of p.rules)candidate.quotedPrice=5;
+  const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true});
+  assert.ok(r.trades.some(t=>t.side==="sell"));
+  assert.ok(r.items.every(i=>withinPortfolioTolerance(p,i.bucket.targetPercent,i.projectedPercent)));
+  assertMatchesActual(r,p,rows);
+});

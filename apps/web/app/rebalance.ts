@@ -220,13 +220,14 @@ export function cashPortfolioBuckets(plan: Portfolio, holdings: Holding[]) {
     && !plan.rules.some(rule => rule.bucketId === bucket.id));
 }
 
-export function rebalance(
+function calculateRebalance(
   plan: Portfolio,
   holdings: Holding[],
   mode: RebalanceMode,
   newCash: number | null,
   excludedHoldingIds: Set<string>,
   options: RebalanceOptions = {},
+  balanceCash = false,
 ) {
   const { values, unassigned, total, missingPrices } = portfolioValues(
     plan,
@@ -284,8 +285,8 @@ export function rebalance(
   const targetTotal = total + cash;
   // Judge each portfolio against the funded total, before proposing trades.
   const requiresExplicitSelection = (bucket: Bucket) => Boolean(options.requireSelection && (
-    !options.autoOutsideTolerance || !needsPortfolioAdjustment(plan, bucket.targetPercent,
-      values.get(bucket.id) ?? 0, targetTotal > 0 ? (values.get(bucket.id) ?? 0) / targetTotal * 100 : 0)
+    !options.autoOutsideTolerance || (!balanceCash && !needsPortfolioAdjustment(plan, bucket.targetPercent,
+      values.get(bucket.id) ?? 0, targetTotal > 0 ? (values.get(bucket.id) ?? 0) / targetTotal * 100 : 0))
   ));
   const cryptoChoice = (bucket: Bucket, side: "buy" | "sell") => {
     const selected = options.cryptoAssetIds?.[bucket.id];
@@ -364,6 +365,10 @@ export function rebalance(
         if (!asset) continue;
         if (!positive(asset.quotedPriceKrw)) { addReason(bucket.id, "가상자산 현재가를 확인해 주세요."); continue; }
         const excess = (values.get(bucket.id) ?? 0) - targetTotal * bucket.targetPercent / 100;
+        if (balanceCash && !options.cryptoAssetIds?.[bucket.id] && reserveNeeded <= cash && !needsPortfolioAdjustment(
+          plan, bucket.targetPercent, values.get(bucket.id) ?? 0,
+          targetTotal > 0 ? (values.get(bucket.id) ?? 0) / targetTotal * 100 : 0,
+        )) continue;
         const lots = Math.min(cryptoLots(asset.quantity), cryptoLots(Math.max(0, excess) / asset.quotedPriceKrw!));
         if (!lots) continue;
         const quantity = lots / cryptoScale;
@@ -749,4 +754,30 @@ export function rebalance(
     projectedUnassignedPercent:
       targetTotal > 0 && !cashBucket ? (available / targetTotal) * 100 : 0,
   };
+}
+
+/** Recheck the settled cash band after all proposals, not only each security's band. */
+export function rebalance(
+  plan: Portfolio,
+  holdings: Holding[],
+  mode: RebalanceMode,
+  newCash: number | null,
+  excludedHoldingIds: Set<string>,
+  options: RebalanceOptions = {},
+) {
+  const initial = calculateRebalance(plan, holdings, mode, newCash, excludedHoldingIds, options);
+  const cashItem = initial.items.find(item => item.bucket.id === initial.cashAllocation?.bucketId);
+  if (!initial.ready || !options.autoOutsideTolerance || !cashItem
+    || withinPortfolioTolerance(plan, cashItem.bucket.targetPercent, cashItem.projectedPercent)) return initial;
+
+  // Recompute from the original positions once, with the same explicit choices,
+  // exclusions, prices and funding. Never append trades to an already traded copy.
+  const balanced = calculateRebalance(plan, holdings, mode, newCash, excludedHoldingIds, options, true);
+  const nextCash = balanced.items.find(item => item.bucket.id === cashItem.bucket.id)!;
+  const improved = Math.abs(nextCash.remainingGapKrw) < Math.abs(cashItem.remainingGapKrw) - 1e-7;
+  const preservesOtherBands = initial.items.every(item => item.bucket.id === cashItem.bucket.id
+    || !withinPortfolioTolerance(plan, item.bucket.targetPercent, item.projectedPercent)
+    || withinPortfolioTolerance(plan, item.bucket.targetPercent,
+      balanced.items.find(next => next.bucket.id === item.bucket.id)!.projectedPercent));
+  return improved && preservesOtherBands ? balanced : initial;
 }

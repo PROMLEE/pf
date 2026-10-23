@@ -171,7 +171,7 @@ export default function PortfolioPage() {
     try { localStorage.setItem(`pf-guide-dismissed:${session?.user?.appUserId ?? "account"}`, "1"); } catch { /* Dismiss for this visit when storage is unavailable. */ }
   }
   const [selectedAsset, setSelectedAsset] = useState<AssetSelection | null>(null);
-  const [detailSource, setDetailSource] = useState<"portfolio" | "holdings" | "accounts" | "rebalance">("portfolio");
+  const [detailSource, setDetailSource] = useState<"portfolio" | "holdings" | "accounts" | "rebalance" | "edit">("portfolio");
   const rebalanceScroll = useRef(0);
   const previousView = useRef<View>("portfolio");
   useEffect(() => {
@@ -201,7 +201,7 @@ export default function PortfolioPage() {
         ? { id, kind } : null;
       if (next === "detail" && !asset) next = "holdings";
       setSelectedAsset(asset);
-      setDetailSource(params.get("source") === "rebalance" ? "rebalance" : params.get("source") === "accounts" ? "accounts" : params.get("source") === "holdings" ? "holdings" : "portfolio");
+      setDetailSource(params.get("source") === "edit" ? "edit" : params.get("source") === "rebalance" ? "rebalance" : params.get("source") === "accounts" ? "accounts" : params.get("source") === "holdings" ? "holdings" : "portfolio");
       setView(next);
       setEditFocus(null);
       setEditingHoldingId(null);
@@ -459,7 +459,7 @@ export default function PortfolioPage() {
     setNotice("");
   }
 
-  function openAsset(asset: AssetSelection, source: "portfolio" | "holdings" | "accounts" | "rebalance") {
+  function openAsset(asset: AssetSelection, source: "portfolio" | "holdings" | "accounts" | "rebalance" | "edit") {
     if (view === "rebalance") rebalanceScroll.current = window.scrollY;
     setSelectedAsset(asset);
     setDetailSource(source);
@@ -1372,7 +1372,7 @@ export default function PortfolioPage() {
               onEditHoldings={() => go("edit")}
               selectedAsset={selectedAsset}
               onSelectAsset={(asset) => openAsset(asset, view === "rebalance" ? "rebalance" : view === "detail" ? detailSource : "portfolio")}
-              detailBackLabel={detailSource === "rebalance" ? "리밸런싱으로" : "이전 화면"}
+              detailBackLabel={detailSource === "rebalance" ? "리밸런싱으로" : detailSource === "edit" ? "자산 수정으로" : "이전 화면"}
               onBack={() => go(detailSource)}
               onNavigate={go}
               onDirtyChange={setPortfolioDirty}
@@ -1691,7 +1691,7 @@ export default function PortfolioPage() {
                   onImport={() => go("import")}
                   onEditHoldings={() => go("edit")}
                   selectedAsset={selectedAsset}
-                  onSelectAsset={(asset) => openAsset(asset, "portfolio")}
+                  onSelectAsset={(asset) => openAsset(asset, "edit")}
                       onBack={() => go(detailSource)}
                   focusAsset={editFocus}
                   onNavigate={go}
