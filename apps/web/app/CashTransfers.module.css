@@ -102,6 +102,7 @@
   overflow-wrap: anywhere;
 }
 @media (max-width: 700px) {
+  .form input, .form select { font-size: 16px; }
   .form {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;

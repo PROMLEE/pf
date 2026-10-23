@@ -1641,7 +1641,7 @@
 .flowForm { border: 0; margin: 0; min-width: 0; }
 .flowForm:disabled { opacity: .7; }
 
-.trendControls small, .trend > div, .trendHint, .performanceSummary small, .performanceSummary p { color: var(--muted); font-size: 12px; }
+.trendControls small, .trend > div, .trendHint, .performanceSummary small, .performanceSummary p { color: var(--muted); font-size: 13px; }
 .performanceSummary > details { grid-column: 1 / -1; }
 @media (max-width: 640px) {
   .trendControls { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; }

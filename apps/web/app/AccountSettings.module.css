@@ -43,7 +43,7 @@
 }
 .identity small {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   margin-bottom: 6px;
 }
@@ -83,7 +83,7 @@
   font-weight: 700;
 }
 .appearance p {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   margin: 7px 0 0;
 }
@@ -151,7 +151,7 @@
   font-weight: 700;
 }
 .menuRow small {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 .menuRow:hover strong {
@@ -195,6 +195,7 @@
   padding: 24px 0;
 }
 .signOutRow button {
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -257,7 +258,7 @@
 }
 .serviceInfo p {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
 }
 .serviceInfo nav {
@@ -267,6 +268,7 @@
   margin: 14px 0;
 }
 .serviceInfo a {
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 5px;

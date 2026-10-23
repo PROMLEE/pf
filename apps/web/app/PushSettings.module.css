@@ -15,6 +15,7 @@
   margin: 20px 0 12px;
 }
 .row > div {
+  min-width: 0;
   display: grid;
   gap: 8px;
 }
@@ -36,6 +37,8 @@
   background: var(--action-fill);
   color: var(--action-ink);
   white-space: nowrap;
+  min-height: 44px;
+  flex-shrink: 0;
 }
 .settings button:disabled {
   opacity: 0.5;
@@ -45,4 +48,9 @@
 }
 .install button {
   margin: 12px 0 0 16px;
+}
+
+@media (max-width: 600px) {
+  .row { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .install button { margin-left: 0; }
 }

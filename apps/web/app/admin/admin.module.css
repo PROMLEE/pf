@@ -178,6 +178,11 @@
   .console {
     padding: 20px 18px 60px;
   }
+  .header, .sectionHead, .actions { flex-wrap: wrap; }
+  .list article { flex-direction: column; gap: 12px; }
+  .noticeDetails { width: 100%; }
+  .console input, .console select, .console textarea { font-size: 16px; }
+  .console button { min-height: 44px; }
   .header {
     align-items: flex-start;
   }

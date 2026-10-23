@@ -166,6 +166,7 @@
   cursor: pointer;
 }
 @media (max-width: 600px) {
+  .calculator input, .calculator select { font-size: 16px; }
   .inputs {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
