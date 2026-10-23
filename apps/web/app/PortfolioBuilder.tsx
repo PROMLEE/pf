@@ -2756,7 +2756,7 @@ export default function PortfolioBuilder({
                   ? `${marketSession.preferredMarket === "KR" ? "국내" : "미국"} 정규장 우선 · 같은 포트의 자동 후보에 적용됩니다. 직접 고른 종목은 유지합니다.`
                   : marketSession ? marketSession.KR.status === "unknown" || marketSession.US.status === "unknown" ? "장 일정 미확인 · 기존 후보 순서로 계산합니다." : "정규장 외 · 기존 후보 순서로 계산합니다."
                   : "장 일정 확인 전 · 기존 후보 순서로 계산합니다."}</p>
-                <p className={styles.help}>허용 범위 밖은 자동으로 조정을 제안합니다. 현금이 범위를 벗어나면 다른 포트도 목표 비중까지 함께 조정합니다. 그 외 범위 안인 포트는 직접 종목을 선택할 때만 제안합니다.</p>
+                <p className={styles.help}>허용 범위 밖은 자동으로 조정을 제안합니다. 현금이 범위를 벗어나면 다른 포트의 허용 상한 안에서 추가 매수도 계산합니다. 그 외 범위 안인 포트는 직접 종목을 선택할 때만 제안합니다.</p>
 
             <div className={styles.previewSummary} aria-label="이번 계산 기준">
               <span>현재 자산 {fmt(advice.currentTotal)}</span>
@@ -2883,7 +2883,7 @@ export default function PortfolioBuilder({
                             </dl>
                             <small>
                               {item.unaffordableBuys[0].limitedBy === "target"
-                                ? "목표 비중에 맞춰 계산한 한도입니다. 입력한 전체 투자금과 다릅니다."
+                                ? "목표 비중과 허용 범위에 맞춰 계산한 한도입니다. 입력한 전체 투자금과 다릅니다."
                                 : "현재 남아 있는 매수 예산을 기준으로 계산한 한도입니다."}
                             </small>
 

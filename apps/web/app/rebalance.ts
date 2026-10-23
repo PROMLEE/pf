@@ -167,9 +167,10 @@ export function needsPortfolioAdjustment(plan: Portfolio, targetPercent: number,
 
 /** Allocate whole shares jointly: tolerance floors first, target weights second. */
 export function allocatePortfolioBuys(
-  entries: { id: string; gap: number; unitKrw: number; empty: boolean; toleranceKrw?: number }[],
+  entries: { id: string; gap: number; unitKrw: number; empty: boolean; toleranceKrw?: number; upperGap?: number }[],
   budget: number,
   toleranceKrw: number,
+  cashBand?: { minimumSpend: number; maximumSpend: number },
 ) {
   const epsilon = 1e-7;
   const states = entries.map(entry => {
@@ -208,6 +209,29 @@ export function allocatePortfolioBuys(
   }
   distribute("minimum");
   distribute("max");
+  if (cashBand) {
+    // Whole shares may cross the exact target while remaining inside the band's
+    // upper limit. Use that room only when settled cash is still above its band.
+    let needed = cashBand.minimumSpend - (budget - remaining);
+    while (needed > epsilon) {
+      const spendable = Math.min(remaining, cashBand.maximumSpend - (budget - remaining));
+      const active = states.map(entry => ({entry, room: Math.max(0,
+        Math.floor(((entry.upperGap ?? entry.gap) + epsilon) / entry.unitKrw) - entry.shares)}))
+        .filter(({entry,room}) => room > 0 && entry.unitKrw <= spendable + epsilon)
+        .sort((a,b) =>
+          (2 * (a.entry.shares * a.entry.unitKrw - a.entry.gap) + a.entry.unitKrw) -
+          (2 * (b.entry.shares * b.entry.unitKrw - b.entry.gap) + b.entry.unitKrw)
+          || a.entry.id.localeCompare(b.entry.id));
+      if (!active.length) break;
+      const {entry,room} = active[0];
+      const count = Math.min(room, Math.floor((spendable + epsilon) / entry.unitKrw),
+        Math.ceil((needed - epsilon) / entry.unitKrw));
+      if (count <= 0) break;
+      entry.shares += count;
+      remaining = Math.max(0, remaining - count * entry.unitKrw);
+      needed -= count * entry.unitKrw;
+    }
+  }
   return new Map(states.map(entry => [entry.id, entry.shares]));
 }
 
@@ -459,7 +483,10 @@ function calculateRebalance(
           (targetTotal * bucket.targetPercent) / 100 -
           (values.get(bucket.id) ?? 0),
       }))
-      .filter(({ bucket, gap }) => gap > 0 && bucket.id !== cashBucket?.id)
+      .filter(({ bucket, gap }) => bucket.id !== cashBucket?.id && (gap > 0
+        || balanceCash && bucket.targetPercent > 0
+          && gap + targetTotal * tolerancePoints(plan, bucket.targetPercent) / 100 > 0)
+        && !(balanceCash && [...trades, ...cryptoTrades].some(trade => trade.bucketId === bucket.id && trade.side === "sell")))
       .sort((a, b) => b.gap - a.gap);
     const selectedCryptoBuys: { bucket: Bucket; gap: number; asset: Portfolio["cryptoAssets"][number] }[] = [];
     const selectedBuys: { bucket: Bucket; gap: number; rule: Rule; candidate: CandidateEvaluation }[] = [];
@@ -501,19 +528,20 @@ function calculateRebalance(
           }
           continue;
         }
-        const shares = Math.floor(Math.min(gap, available) / candidate.unitKrw);
+        const purchaseRoom = gap + (balanceCash ? targetTotal * tolerancePoints(plan, bucket.targetPercent) / 100 : 0);
+        const shares = Math.floor(Math.min(purchaseRoom, available) / candidate.unitKrw);
         if (shares > 0) {
           selected = { rule, candidate, shares };
           break;
         }
-        const limitKrw = Math.min(gap, available);
+        const limitKrw = Math.min(purchaseRoom, available);
         unaffordableBuys.set(bucket.id, [...(unaffordableBuys.get(bucket.id) ?? []), {
           ruleId: rule.id,
           name: rule.name || rule.symbol,
           symbol: rule.symbol,
           unitKrw: candidate.unitKrw,
           limitKrw,
-          limitedBy: gap <= available ? "target" : "cash",
+          limitedBy: purchaseRoom <= available ? "target" : "cash",
         }]);
         candidate.reason =
           available <= 0
@@ -539,12 +567,21 @@ function calculateRebalance(
         id: bucket.id, gap, unitKrw: candidate.unitKrw,
         empty: (values.get(bucket.id) ?? 0) === 0,
         toleranceKrw: targetTotal * tolerancePoints(plan, bucket.targetPercent) / 100,
+        upperGap: balanceCash ? gap + targetTotal * tolerancePoints(plan, bucket.targetPercent) / 100 : gap,
       })), ...selectedCryptoBuys.map(({bucket,gap,asset}) => ({
         id:bucket.id,gap:Math.min(gap, Number.MAX_SAFE_INTEGER * asset.quotedPriceKrw! / cryptoScale),unitKrw:asset.quotedPriceKrw! / cryptoScale,
         empty:false,toleranceKrw:targetTotal * tolerancePoints(plan,bucket.targetPercent) / 100,
+        upperGap: Math.min(balanceCash ? gap + targetTotal * tolerancePoints(plan, bucket.targetPercent) / 100 : gap,
+          Number.MAX_SAFE_INTEGER * asset.quotedPriceKrw! / cryptoScale),
       }))],
       available,
       0,
+      balanceCash && cashBucket ? {
+        minimumSpend: Math.max(0, cashCurrent - usedFromCash + reservedCash + available
+          - targetTotal * (cashBucket.targetPercent + tolerancePoints(plan, cashBucket.targetPercent)) / 100),
+        maximumSpend: Math.max(0, cashCurrent - usedFromCash + reservedCash + available
+          - targetTotal * Math.max(0, cashBucket.targetPercent - tolerancePoints(plan, cashBucket.targetPercent)) / 100),
+      } : undefined,
     );
     for (const {bucket,asset} of selectedCryptoBuys) {
       const lots = allocations.get(bucket.id) ?? 0;
@@ -555,7 +592,7 @@ function calculateRebalance(
       projectedCryptoAssets.find(row => row.id === asset.id)!.quantity += quantity;
       available = Math.max(0,available - amountKrw);
     }
-    for (const { bucket, rule, candidate } of selectedBuys) {
+    for (const { bucket, gap, rule, candidate } of selectedBuys) {
       const shares = allocations.get(bucket.id) ?? 0;
       if (shares < 1) {
         candidate.reason = "전체 포트의 최종 비중과 예산을 함께 계산한 결과, 이 후보에 배분할 1주 매수 금액이 남지 않았습니다.";
@@ -579,7 +616,7 @@ function calculateRebalance(
         broker: owned?.broker ?? null,
         account: owned?.account ?? null,
         usdKrw: rule.market === "US" ? plan.usdKrw : null,
-        selectionReason: `${options.buyRuleIds?.[bucket.id] ? "사용자가 선택한 매수 종목" : options.candidatePolicy === "fallback" ? "순서대로 매수 가능한 후보 검토" : "우선 후보 사용"} · ${candidate.reason}`,
+        selectionReason: `${options.buyRuleIds?.[bucket.id] ? "사용자가 선택한 매수 종목" : options.candidatePolicy === "fallback" ? "순서대로 매수 가능한 후보 검토" : "우선 후보 사용"} · ${candidate.reason}${balanceCash && amountKrw > Math.max(0, gap) + 1e-7 ? " · 현금 허용 범위를 맞추기 위한 추가 매수 포함" : ""}`,
       });
       if (owned)
         projectedHoldings.find((row) => row.id === owned.id)!.quantity +=

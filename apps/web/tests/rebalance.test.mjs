@@ -884,9 +884,10 @@ test("cash balancing includes funding while preserving explicit choices and excl
   const {p,rows}=cashPlan(3.7,3.7,260,{toleranceMode:"relative",relativeTolerancePercent:10});
   for (const row of rows) {row.currentPrice=10;row.quantity=37;}
   for (const candidate of p.rules) candidate.quotedPrice=10;
-  const r=rebalance(p,rows,"add-only",100,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true,excludedBuySymbols:new Set(["KR:B"]),buyRuleIds:{A:"A"}});
+  const r=rebalance(p,rows,"add-only",100,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true,excludedBuySymbols:new Set(["KR:Y"]),buyRuleIds:{A:"X"}});
   close(r.targetTotal,1100);
-  assert.equal(r.trades.some(t=>t.symbol==="B"),false);
+  assert.ok(r.trades.some(t=>t.symbol==="X" && t.side==="buy"));
+  assert.equal(r.trades.some(t=>t.symbol==="Y"),false);
   assert.equal(r.trades.some(t=>t.side==="sell"),false);
   assertMatchesActual(r,p,rows);
 });
@@ -900,7 +901,7 @@ test("cash inside its band preserves the default no-proposal state",()=>{
 
 test("cash balancing cannot bypass exclusions or an unaffordable share",()=>{
   const {p,rows}=cashPlan(3.7,3.7,260,{toleranceMode:"relative",relativeTolerancePercent:10});
-  for (const excludedBuySymbols of [new Set(),new Set(["KR:A","KR:B"])]) {
+  for (const excludedBuySymbols of [new Set(),new Set(["KR:X","KR:Y"])]) {
     const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true,excludedBuySymbols});
     assert.equal(r.trades.length,0);
     close(r.cashAllocation.projectedKrw,260);
@@ -915,5 +916,70 @@ test("cash below its band can reserve proceeds from otherwise in-band stock surp
   const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true});
   assert.ok(r.trades.some(t=>t.side==="sell"));
   assert.ok(r.items.every(i=>withinPortfolioTolerance(p,i.bucket.targetPercent,i.projectedPercent)));
+  assertMatchesActual(r,p,rows);
+});
+
+test("whole-share buys may cross exact targets within upper bands to restore the cash band",()=>{
+  const {p,rows}=cashPlan(3.7,3.7,260,{toleranceMode:"relative",relativeTolerancePercent:10});
+  for(const row of rows){row.currentPrice=50;row.quantity=7.4;}
+  for(const candidate of p.rules)candidate.quotedPrice=50;
+  // A and B each lack 30 won to target, so target-only floor rounding bought nothing.
+  // One 50 won share leaves its stock at 42% (within 36–44%) and cash at 21%.
+  const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true});
+  assert.equal(r.trades.length,1);
+  close(r.cashAllocation.projectedKrw,210);
+  assert.ok(r.items.every(i=>withinPortfolioTolerance(p,i.bucket.targetPercent,i.projectedPercent)));
+  assertMatchesActual(r,p,rows);
+});
+
+test("cash top-ups cannot cross either stock upper bounds or the cash lower bound",()=>{
+  const allocations=allocatePortfolioBuys([
+    {id:"A",gap:30,upperGap:200,unitKrw:100,empty:false},
+    {id:"B",gap:30,upperGap:45,unitKrw:50,empty:false},
+  ],200,0,{minimumSpend:40,maximumSpend:60});
+  assert.equal(allocations.get("A"),0); // One share would push cash below its floor.
+  assert.equal(allocations.get("B"),0); // One share would push this stock above its ceiling.
+});
+
+test("eight portfolios with 11.9% cash can reach all bands despite sub-share target gaps",()=>{
+  const targets=[20,20,10,25,5,5,5];
+  const values=[2000,1930,930,2460,490,470,530];
+  const prices=[5000,200,100,500,100,10,500];
+  const rows=values.map((value,i)=>holding(`h${i}`,`S${i}`,value/prices[i],prices[i]));
+  const p=plan(rows.map((row,i)=>[row.id,`P${i}`]),prices.map((price,i)=>rule(`S${i}`,`P${i}`,price)),{
+    buckets:[...targets.map((targetPercent,i)=>({id:`P${i}`,name:`P${i}`,targetPercent,color:"#000"})),{id:"C",name:"현금",targetPercent:10,color:"#999"}],
+    manualAssets:[{id:"cash",bucketId:"C",name:"현금",valueKrw:1190,valueUsd:null}],
+    toleranceMode:"relative",relativeTolerancePercent:10,
+  });
+  const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true});
+  close(r.currentTotal,10000);
+  assert.ok(r.items.every(i=>withinPortfolioTolerance(p,i.bucket.targetPercent,i.projectedPercent)));
+  assert.ok(r.cashAllocation.projectedKrw>=900 && r.cashAllocation.projectedKrw<=1100);
+  assertMatchesActual(r,p,rows);
+});
+
+test("fractional crypto top-ups use the same upper-band room and preserve total value",()=>{
+  const rows=[holding("a","A",3.7,100)];
+  const p=plan([["a","A"]],[rule("A","A",100)],{
+    buckets:[{id:"A",name:"주식",targetPercent:40,color:"#000"},{id:"B",name:"코인",targetPercent:40,color:"#000"},{id:"C",name:"현금",targetPercent:20,color:"#000"}],
+    cryptoAssets:[{id:"btc",bucketId:"B",marketCode:"KRW-BTC",name:"비트코인",quantity:370/5e9,averageCostKrw:null,quotedPriceKrw:5e9}],
+    manualAssets:[{id:"cash",bucketId:"C",name:"현금",valueKrw:260,valueUsd:null}],
+    toleranceMode:"relative",relativeTolerancePercent:10,
+  });
+  const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true});
+  assert.equal(r.cryptoTrades.length,1);
+  assert.equal(r.cryptoTrades[0].quantity,1e-8);
+  close(r.cashAllocation.projectedKrw,210);
+  assert.ok(r.items.every(i=>withinPortfolioTolerance(p,i.bucket.targetPercent,i.projectedPercent)));
+  assertMatchesActual(r,p,rows);
+});
+
+test("cash top-ups never undo an explicit sale with a new buy in the same portfolio",()=>{
+  const {p,rows}=cashPlan(4.3,3.3,240,{toleranceMode:"relative",relativeTolerancePercent:10});
+  rows[0].quantity=43;rows[0].currentPrice=10;p.rules[0].quotedPrice=10;
+  rows[1].quantity=1.1;rows[1].currentPrice=300;p.rules[1].quotedPrice=300;
+  const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true,sellSymbols:{A:"KR:X"}});
+  assert.ok(r.trades.some(t=>t.bucketId==="A" && t.side==="sell"));
+  assert.equal(r.trades.some(t=>t.bucketId==="A" && t.side==="buy"),false);
   assertMatchesActual(r,p,rows);
 });
