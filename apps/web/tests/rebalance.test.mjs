@@ -14,7 +14,7 @@ const dataUrl = (source) =>
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const modelUrl = dataUrl(await compile("../app/portfolio-model.ts"));
 const { portfolioValues } = await import(modelUrl);
-const { rebalance, allocatePortfolioBuys, withinTolerance, tolerancePoints, withinPortfolioTolerance } = await import(
+const { rebalance, allocatePortfolioBuys, withinTolerance, tolerancePoints, withinPortfolioTolerance, rebalancePresentation } = await import(
   dataUrl(
     (await compile("../app/rebalance.ts")).replace(
       '"./portfolio-model"',
@@ -982,4 +982,32 @@ test("cash top-ups never undo an explicit sale with a new buy in the same portfo
   assert.ok(r.trades.some(t=>t.bucketId==="A" && t.side==="sell"));
   assert.equal(r.trades.some(t=>t.bucketId==="A" && t.side==="buy"),false);
   assertMatchesActual(r,p,rows);
+});
+
+
+test("cash-only shortage stops collateral sales before funding unnecessary in-band buys",()=>{
+  const rows=[holding("a","A",325,1),holding("b","B",325,1),holding("d","D",180,1)];
+  const p=plan([["a","A"],["b","B"],["d","D"]],[rule("A","A",1),rule("B","B",1),rule("D","D",1)],{
+    buckets:[{id:"A",name:"A",targetPercent:30,color:"#000"},{id:"B",name:"B",targetPercent:30,color:"#000"},{id:"D",name:"D",targetPercent:20,color:"#000"},{id:"C",name:"현금",targetPercent:20,color:"#000"}],
+    manualAssets:[{id:"cash",bucketId:"C",name:"현금",valueKrw:170,valueUsd:null}],
+    toleranceMode:"relative",relativeTolerancePercent:10,
+  });
+  const r=rebalance(p,rows,"trade",0,new Set(),{cashBucketId:"C",requireSelection:true,autoOutsideTolerance:true});
+  assert.equal(r.trades.filter(t=>t.side==="buy").length,0);
+  close(r.trades.reduce((sum,t)=>sum+t.amountKrw,0),30);
+  close(r.cashAllocation.projectedKrw,200);
+  assert.ok(r.items.every(i=>withinPortfolioTolerance(p,i.bucket.targetPercent,i.projectedPercent)));
+  assertMatchesActual(r,p,rows);
+});
+
+test("present out-of-range status remains distinct from a successful final projection",()=>{
+  const p=plan([],[],{toleranceMode:"relative",relativeTolerancePercent:10});
+  const item={bucket:{targetPercent:20},currentPercent:25,fundedPercent:25,projectedPercent:20,cashSettlement:null};
+  const state=rebalancePresentation(p,item,true,false,0);
+  assert.equal(state.currentLabel,"현재 초과");
+  assert.equal(state.reason,"허용 범위 조정");
+  assert.equal(rebalancePresentation(p,{...item,currentPercent:20,fundedPercent:20},true,false,0).reason,"현금 비중 맞춤");
+  assert.equal(rebalancePresentation(p,{...item,currentPercent:20},true,false,100).reason,"추가금 반영 후 범위 조정");
+  assert.equal(rebalancePresentation(p,item,true,true,0).reason,"직접 선택한 조정");
+  assert.equal(rebalancePresentation(p,{...item,currentPercent:20,fundedPercent:20},false,false,0).currentLabel,"현재 범위 이내");
 });

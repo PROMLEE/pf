@@ -2633,3 +2633,11 @@
   color: var(--positive);
   font-size: 13px;
 }
+
+.rangeSummary { display: grid; gap: 5px; margin: 16px 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
+.rangeSummary strong { color: var(--ink); font-weight: 650; }
+.finalWeights small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; font-weight: 400; white-space: normal; line-height: 1.5; }
+.finalWeights td > span { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px; white-space: normal; }
+.proposalBasis { display: block; margin: 7px 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.finalWeights .outsideNow, .proposalBasis .outsideNow { color: var(--ink); font-weight: 700; }
+@media (max-width: 600px) { .finalWeights th:first-child { width: 36%; } .finalWeights td { white-space: normal; } }

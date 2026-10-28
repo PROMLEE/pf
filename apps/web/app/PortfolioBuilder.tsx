@@ -50,7 +50,7 @@ import {
   type Rule,
 } from "./portfolio-model";
 import { historyPerformance, kstTime, dailyObservations, dailyPositionChanges } from "./history-performance";
-import { cashPortfolioBuckets, needsPortfolioAdjustment, rebalance, symbolKey, withinPortfolioTolerance, tolerancePoints } from "./rebalance";
+import { cashPortfolioBuckets, needsPortfolioAdjustment, rebalancePresentation, rebalance, symbolKey, withinPortfolioTolerance, tolerancePoints } from "./rebalance";
 import styles from "./portfolio.module.css";
 
 type Candidate = {
@@ -121,6 +121,7 @@ const quantityFormat = new Intl.NumberFormat("ko-KR", {
 });
 const fmt = (value: number) => `${won.format(value)}원`;
 const pct = (value: number) => `${value.toFixed(1)}%`;
+const weightPct = (value: number) => `${value.toFixed(2)}%`;
 const gainPct = (value: number) => `${value.toFixed(2)}%`;
 const kstDate = () =>
   new Intl.DateTimeFormat("sv-SE", {
@@ -1580,6 +1581,7 @@ export default function PortfolioBuilder({
         draft!, item.bucket.targetPercent, item.projectedPercent,
       )).length
     : 0;
+  const outsideNow = rebalanceReady ? advice.items.filter(item => !withinPortfolioTolerance(draft!, item.bucket.targetPercent, item.currentPercent)) : [];
   const targetTotal =
     draft?.buckets.reduce((sum, bucket) => sum + bucket.targetPercent, 0) ?? 0;
   const historyCutoff = historyPeriod === "all" ? "" : new Date(Date.now() - Number(historyPeriod) * 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
@@ -2703,6 +2705,10 @@ export default function PortfolioBuilder({
               </div>
             ) : (
               <>
+                <p className={styles.rangeSummary}>
+                  <strong>현재 범위 밖 {outsideNow.length}개</strong>
+                  <span>{outsideNow.length ? outsideNow.map(item => `${item.bucket.name} ${item.currentPercent < item.bucket.targetPercent ? "부족" : "초과"}`).join(" · ") : "모든 포트가 허용 범위 안입니다."}</span>
+                </p>
                 <div className={styles.rebalanceOverview}>
                   <strong>
                     매수{" "}
@@ -2736,13 +2742,17 @@ export default function PortfolioBuilder({
                   <summary>포트별 예상 비중 <ChevronDown size={14} /></summary>
                   <table>
                     <caption>선택한 주식·가상자산 거래와 추가 투입금·현금 잔액을 반영한 예상 비중</caption>
-                    <thead><tr><th>포트</th><th>목표</th><th>제안 후</th><th>허용 범위</th></tr></thead>
-                    <tbody>{advice.items.map(item => <tr key={item.bucket.id}>
-                      <th scope="row">{item.bucket.name}</th>
-                      <td>{pct(item.bucket.targetPercent)}</td>
-                      <td>{pct(item.projectedPercent)}</td>
-                      <td>{withinPortfolioTolerance(draft, item.bucket.targetPercent, item.projectedPercent) ? "이내" : "범위 밖"}</td>
-                    </tr>)}</tbody>
+                    <thead><tr><th>포트 · 현재 상태</th><th>현재 → 제안 후</th><th>목표 · 허용 범위</th></tr></thead>
+                    <tbody>{advice.items.map(item => {
+                      const state = rebalancePresentation(draft, item, false, false, advice.newCash);
+                      const finalInside = withinPortfolioTolerance(draft, item.bucket.targetPercent, item.projectedPercent);
+                      const band = tolerancePoints(draft, item.bucket.targetPercent);
+                      return <tr key={item.bucket.id}>
+                        <th scope="row">{item.bucket.name}<small className={state.currentOutside ? styles.outsideNow : undefined}>{state.currentLabel}</small></th>
+                        <td><span>{weightPct(item.currentPercent)} → <strong>{weightPct(item.projectedPercent)}</strong></span><small>제안 후 {finalInside ? "범위 이내" : "범위 밖"}</small></td>
+                        <td>{weightPct(item.bucket.targetPercent)}<small>{weightPct(Math.max(0,item.bucket.targetPercent-band))}~{weightPct(Math.min(100,item.bucket.targetPercent+band))}</small></td>
+                      </tr>;
+                    })}</tbody>
                   </table>
                 </details>
                 <details className={styles.calculationNotes}>
@@ -2791,6 +2801,7 @@ export default function PortfolioBuilder({
                     const needsAdjustment = !withinPortfolioTolerance(draft, item.bucket.targetPercent, item.fundedPercent);
                     const bucketHasSelection = Boolean(buyRuleIds[item.bucket.id] || sellSymbols[item.bucket.id] || cryptoAssetIds[item.bucket.id]);
                     const hasBucketTrades = itemTrades.length > 0 || itemCryptoTrades.length > 0;
+                    const presentation = rebalancePresentation(draft, item, hasBucketTrades, bucketHasSelection, advice.newCash);
                     const resultLabel = hasBucketTrades ? "제안 후" : "계산 기준";
                     const amount = item.amountAdjustment;
                     const settlement = item.cashSettlement;
@@ -2821,8 +2832,9 @@ export default function PortfolioBuilder({
                             </span>
                             {item.bucket.name}
                           </strong>
+                          <small className={styles.proposalBasis}><span className={presentation.currentOutside ? styles.outsideNow : undefined}>{presentation.currentLabel}</span>{(hasBucketTrades || settlement) && ` · ${presentation.reason}`}</small>
                           <small className={styles.fundedWeight}>
-                            {amount ? `현재 ${pct(item.currentPercent)} · 목표 ${pct(item.bucket.targetPercent)}` : hasBucketTrades ? `현재 ${pct(item.currentPercent)} → 제안 후 ${pct(item.projectedPercent)}` : `현재 ${pct(item.currentPercent)}${advice.newCash > 0 ? ` · 자금 반영 ${pct(item.fundedPercent)}` : ""}`}
+                            현재 {weightPct(item.currentPercent)} → 제안 후 {weightPct(item.projectedPercent)}
                           </small>
                           {!amount && <small className={styles.targetWeight}>
                             목표 {pct(item.bucket.targetPercent)} · {withinPortfolioTolerance(draft, item.bucket.targetPercent, item.projectedPercent)

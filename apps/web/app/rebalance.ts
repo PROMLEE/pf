@@ -393,7 +393,10 @@ function calculateRebalance(
           plan, bucket.targetPercent, values.get(bucket.id) ?? 0,
           targetTotal > 0 ? (values.get(bucket.id) ?? 0) / targetTotal * 100 : 0,
         )) continue;
-        const lots = Math.min(cryptoLots(asset.quantity), cryptoLots(Math.max(0, excess) / asset.quotedPriceKrw!));
+        const cashOnlySale = balanceCash && !options.cryptoAssetIds?.[bucket.id] && withinPortfolioTolerance(
+          plan, bucket.targetPercent, targetTotal > 0 ? (values.get(bucket.id) ?? 0) / targetTotal * 100 : 0);
+        const saleNeeded = cashOnlySale ? Math.min(excess, Math.max(0, reserveNeeded - available)) : excess;
+        const lots = Math.min(cryptoLots(asset.quantity), cryptoLots(Math.max(0, saleNeeded) / asset.quotedPriceKrw!));
         if (!lots) continue;
         const quantity = lots / cryptoScale;
         const amountKrw = quantity * asset.quotedPriceKrw!;
@@ -414,7 +417,10 @@ function calculateRebalance(
           )
         )
           continue;
-        let remaining = excess;
+        const cashOnlySale = balanceCash && !options.sellSymbols?.[bucket.id] && withinPortfolioTolerance(
+          plan, bucket.targetPercent, targetTotal > 0 ? current / targetTotal * 100 : 0);
+        let remaining = cashOnlySale ? Math.min(excess, Math.max(0, reserveNeeded - available)) : excess;
+        if (remaining <= 1e-7) continue;
         const owned = holdings
           .filter(
             (row) =>
@@ -817,4 +823,19 @@ export function rebalance(
     || withinPortfolioTolerance(plan, item.bucket.targetPercent,
       balanced.items.find(next => next.bucket.id === item.bucket.id)!.projectedPercent));
   return improved && preservesOtherBands ? balanced : initial;
+}
+
+
+/** Explain the present state separately from why a calculated trade exists. */
+export function rebalancePresentation(plan: Portfolio, item: RebalanceItem, hasTrades: boolean, explicit: boolean, newCash: number) {
+  const currentOutside = !withinPortfolioTolerance(plan, item.bucket.targetPercent, item.currentPercent);
+  const fundedOutside = !withinPortfolioTolerance(plan, item.bucket.targetPercent, item.fundedPercent);
+  return {
+    currentOutside,
+    currentLabel: currentOutside ? `현재 ${item.currentPercent < item.bucket.targetPercent ? "부족" : "초과"}` : "현재 범위 이내",
+    reason: !hasTrades ? item.cashSettlement ? "거래 후 현금 반영" : "제안 없음"
+      : explicit ? "직접 선택한 조정"
+      : fundedOutside ? !currentOutside && newCash > 0 ? "추가금 반영 후 범위 조정" : "허용 범위 조정"
+      : "현금 비중 맞춤",
+  };
 }
