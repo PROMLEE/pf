@@ -239,6 +239,8 @@ test("service worker displays plain notifications and restricts click destinatio
   });
   await pending;
   assert.equal(shown[0].options.data.url, "/");
+  assert.equal(shown[0].options.icon, "/brand/portrhythm-logo-192.png");
+  assert.equal(shown[0].options.badge, "/brand/portrhythm-notification-badge-96.png");
   handlers.notificationclick({
     notification: { close() {}, data: { url: "/?notice=123" } },
     waitUntil(p) {

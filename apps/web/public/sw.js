@@ -6,7 +6,8 @@ self.addEventListener('push', event => {
  const title=typeof payload.title==='string'?payload.title.slice(0,120):'PortRhythm';
  const body=typeof payload.body==='string'?payload.body.slice(0,200):'새 공지가 있습니다.';
  let url='/';try{const candidate=new URL(payload.url,self.location.origin);if(candidate.origin===self.location.origin&&candidate.pathname==='/')url=candidate.pathname+candidate.search;}catch{}
- event.waitUntil(self.registration.showNotification(title,{body,icon:'/brand/portrhythm-logo-192.png',badge:'/brand/portrhythm-logo-192.png',tag:typeof payload.tag==='string'?payload.tag:'portrhythm',data:{url}}));
+ // Android masks the small badge to one colour: use PR on a transparent canvas.
+ event.waitUntil(self.registration.showNotification(title,{body,icon:'/brand/portrhythm-logo-192.png',badge:'/brand/portrhythm-notification-badge-96.png',tag:typeof payload.tag==='string'?payload.tag:'portrhythm',data:{url}}));
 });
 self.addEventListener('notificationclick', event => {
  event.notification.close();
