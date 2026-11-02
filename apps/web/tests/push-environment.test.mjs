@@ -14,7 +14,13 @@ const source = ts.transpileModule(
     },
   },
 ).outputText;
-const { pushPlatform, pushAvailability, readPushEnvironment } = await import(
+const {
+  pushPlatform,
+  pushAvailability,
+  readPushEnvironment,
+  canAttemptPushPermission,
+  requestPushPermission,
+} = await import(
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
 );
 const android = {
@@ -145,4 +151,32 @@ test("environment reinspection reads the current permission rather than a cached
       else delete globalThis[name];
     }
   }
+});
+
+test("a direct denied-permission retry invokes the browser API synchronously without fabricating a grant", async () => {
+  const denied = { ...android, permission: "denied" };
+  let requests = 0;
+  assert.equal(canAttemptPushPermission(denied), true);
+  const pending = requestPushPermission(denied, () => {
+    requests++;
+    return Promise.resolve("denied");
+  });
+  assert.equal(requests, 1);
+  assert.equal(await pending, "denied");
+  assert.equal(
+    requestPushPermission({ ...denied, supported: false }, () => {
+      requests++;
+      return Promise.resolve("granted");
+    }),
+    null,
+  );
+  assert.equal(requests, 1);
+  assert.equal(
+    await requestPushPermission({ ...denied, permission: "granted" }, () => {
+      requests++;
+      return Promise.resolve("granted");
+    }),
+    "granted",
+  );
+  assert.equal(requests, 1);
 });

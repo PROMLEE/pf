@@ -27,3 +27,11 @@
 - [Chromium 권한 검사와 요청](https://chromium.googlesource.com/chromium/src/+/HEAD/components/permissions/README.md): 브라우저 정책·요청 억제·안드로이드 앱 알림 권한 확인.
 - [웨일 공식 Google Play 안내](https://play.google.com/store/apps/details?id=com.naver.whale): 웹사이트·페이지 공유 알림에 사용하는 알림 권한 안내.
 - [WebKit의 iOS·iPadOS Web Push 안내](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/): 홈 화면 웹 앱과 사용자 동작에서의 권한 요청.
+
+## 후속: 버튼의 실제 동작 구분
+
+‘권한 다시 확인’은 클릭될 때 같은 권한 값을 다시 읽기만 했고, 결과 문구도 화면 아래에 나타나 눌리지 않는 것처럼 보였다. 일반 브라우저의 안전한 실행 환경에서는 이제 상단 **알림 권한 요청** 버튼이 사용자 클릭 안에서 실제 `Notification.requestPermission()`을 호출한다. 이미 허용 상태라면 권한 창을 재요청하지 않고 기기를 연결한다. 브라우저가 거절하면 거절 결과를 버튼 바로 아래에 표시한다.
+
+별도의 **상태 다시 확인**은 요청 없이 현재 상태만 읽고, 확인 횟수·한국 시간·권한 결과를 가까이 표시한다. iOS 설치 전·프레임·미지원 환경에서는 권한 요청을 강행하지 않는다. 브라우저가 denied를 반환하면 이를 허용으로 바꾸거나 구독 API로 우회하지 않는다. 실제 안드로이드 웨일의 권한 창이 열리거나 수신이 해결됐다는 검증은 아직 하지 못했다.
+
+명시적 denied 재요청이 브라우저 API를 동기적으로 한 번 호출하고 그 결과를 그대로 지키는 회귀 검사를 추가했다.

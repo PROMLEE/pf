@@ -85,3 +85,12 @@
   color: var(--ink);
   text-align: right;
 }
+
+.feedback {
+  padding: 12px 14px;
+  background: var(--soft);
+  border-radius: 8px;
+  color: var(--ink) !important;
+  font-size: 13px;
+  line-height: 1.7;
+}

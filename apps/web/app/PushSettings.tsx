@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import {
   readPushEnvironment,
   pushAvailability,
+  canAttemptPushPermission,
+  requestPushPermission,
   type PushEnvironment,
 } from "./push-environment";
 import styles from "./PushSettings.module.css";
@@ -25,6 +27,9 @@ export default function PushSettings() {
     [endpoint, setEndpoint] = useState(""),
     [message, setMessage] = useState(""),
     [install, setInstall] = useState<BeforeInstall | null>(null);
+  const [checked, setChecked] = useState<{ at: number; count: number } | null>(
+    null,
+  );
   useEffect(() => {
     let live = true;
     const initial = readPushEnvironment();
@@ -87,6 +92,10 @@ export default function PushSettings() {
     };
   }, []);
   function recheck() {
+    setChecked((previous) => ({
+      at: Date.now(),
+      count: (previous?.count ?? 0) + 1,
+    }));
     const next = readPushEnvironment();
     setEnvironment(next);
     if (next.permission !== "granted") setEnabled(false);
@@ -99,12 +108,18 @@ export default function PushSettings() {
   async function toggle() {
     const context = readPushEnvironment();
     setEnvironment(context);
-    if (!enabled && !pushAvailability(context).canRequest) {
+    if (!enabled && !canAttemptPushPermission(context)) {
       recheck();
       return;
     }
     setBusy(true);
-    setMessage("");
+    setMessage(
+      enabled
+        ? "알림을 끄고 있습니다."
+        : context.permission === "granted"
+          ? "알림 기기를 연결하고 있습니다."
+          : `${context.browser}에 알림 권한을 요청하고 있습니다.`,
+    );
     try {
       if (enabled) {
         const r = await fetch("/api/push", {
@@ -119,17 +134,21 @@ export default function PushSettings() {
         return;
       }
       // Must execute directly in the button gesture; never prompt on page load.
-      const allowed =
-        context.permission === "granted"
-          ? "granted"
-          : await Notification.requestPermission();
+      const request = requestPushPermission(context, () =>
+        Notification.requestPermission(),
+      );
+      if (!request) {
+        recheck();
+        return;
+      }
+      const allowed = await request;
       const next = readPushEnvironment();
       setEnvironment(next);
       if (allowed !== "granted")
         throw new Error(
           allowed === "default"
             ? "알림 요청이 아직 허용되지 않았습니다. 요청 창을 닫았다면 알림 켜기를 다시 눌러 주세요."
-            : pushAvailability({ ...next, permission: allowed }).reason,
+            : `${context.browser}이 권한 요청을 허용하지 않아 알림을 연결하지 못했습니다. 권한 창이 나타나지 않았다면 브라우저가 요청을 즉시 거절한 상태이며, 사이트에서 이를 강제로 해제할 수는 없습니다.`,
         );
       const registration = await navigator.serviceWorker.register("/sw.js", {
         scope: "/",
@@ -166,7 +185,7 @@ export default function PushSettings() {
       setEnvironment(next);
       setMessage(
         e instanceof DOMException && e.name === "NotAllowedError"
-          ? "알림 연결이 허용되지 않았습니다. 사이트 권한과 휴대폰의 브라우저 앱 알림 권한을 함께 확인한 뒤 권한 다시 확인을 눌러 주세요."
+          ? "알림 연결이 허용되지 않았습니다. 사이트 권한과 휴대폰의 브라우저 앱 알림 권한을 함께 확인한 뒤 상태 다시 확인을 눌러 주세요."
           : e instanceof Error
             ? e.message
             : "알림 설정을 변경하지 못했습니다.",
@@ -228,11 +247,19 @@ export default function PushSettings() {
             ? "처리 중"
             : enabled
               ? "알림 끄기"
-              : restricted
-                ? "권한 다시 확인"
-                : "알림 켜기"}
+              : environment?.permission === "denied" &&
+                  canAttemptPushPermission(environment)
+                ? "알림 권한 요청"
+                : restricted
+                  ? "상태 다시 확인"
+                  : "알림 켜기"}
         </button>
       </div>
+      {message && (
+        <p className={styles.feedback} role="status" aria-live="polite">
+          {message}
+        </p>
+      )}
       {environment && restricted && (
         <div className={styles.install}>
           <strong>이 기기에서 확인할 항목</strong>
@@ -293,15 +320,31 @@ export default function PushSettings() {
           </div>
         </dl>
         <button type="button" disabled={busy || loading} onClick={recheck}>
-          권한 다시 확인
+          상태 다시 확인
         </button>
+        {checked && (
+          <p role="status">
+            상태 확인 {checked.count}회 ·{" "}
+            {new Date(checked.at).toLocaleTimeString("ko-KR", {
+              timeZone: "Asia/Seoul",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}{" "}
+            ·{" "}
+            {permission === "denied"
+              ? "여전히 권한 사용 불가"
+              : permission === "granted"
+                ? "권한 허용됨"
+                : "확인 완료"}
+          </p>
+        )}
       </details>
       {enabled && (
         <button type="button" disabled={busy} onClick={() => void test()}>
           테스트 알림 보내기
         </button>
       )}
-      {message && <p role="status">{message}</p>}
       {!installed && (
         <div className={styles.install}>
           <strong>홈 화면에서 앱처럼 사용하기</strong>

@@ -106,3 +106,25 @@ export function pushAvailability(env: PushEnvironment) {
         : "알림을 켜면 권한을 요청합니다.",
   };
 }
+
+// A browser may still refuse this request. Calling the API from an explicit
+// gesture is different from rereading permission, and never bypasses its result.
+export function canAttemptPushPermission(env: PushEnvironment) {
+  return (
+    env.supported &&
+    env.secure &&
+    !env.embedded &&
+    !(env.ios && !env.installed) &&
+    !env.inApp &&
+    env.permission !== "unknown"
+  );
+}
+export function requestPushPermission(
+  env: PushEnvironment,
+  request: () => Promise<NotificationPermission>,
+) {
+  if (!canAttemptPushPermission(env)) return null;
+  return env.permission === "granted"
+    ? Promise.resolve("granted" as const)
+    : request();
+}
