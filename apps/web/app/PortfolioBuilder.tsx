@@ -4,6 +4,7 @@ import ReviewSettings, { ReviewObservation } from "./ReviewSettings";
 import PortfolioDashboard from "./PortfolioDashboard";
 import AssetEditDialog, { type EditableAssetSelection } from "./AssetEditDialog";
 import MarketDataStatus from "./MarketDataStatus";
+import PreferencesTabs, { type PreferenceTab } from "./PreferencesTabs";
 import RebalancePlans from "./RebalancePlans";
 import type { MarketSessions } from "./market-sessions";
 import CashTransfers from "./CashTransfers";
@@ -704,6 +705,7 @@ export default function PortfolioBuilder({
   const [dirty, setDirty] = useState(false);
   const [detailDirty, setDetailDirty] = useState(false);
   const [reviewDirty, setReviewDirty] = useState(false);
+  const [requestedPreferenceTab, setRequestedPreferenceTab] = useState<PreferenceTab>();
   const [transferDirty, setTransferDirty] = useState(false);
   const [runDirty, setRunDirty] = useState(false);
   const [showRunPreview, setShowRunPreview] = useState(false);
@@ -1804,7 +1806,7 @@ export default function PortfolioBuilder({
       "목표 설계",
       "원하는 포트 비중과 리밸런싱 기준을 정하세요.",
     ],
-    preferences: ["PREFERENCES", "설정", "알림과 환율·손익 표시 방식을 관리하세요."],
+    preferences: ["PREFERENCES", "설정", "필요한 설정을 골라 변경하세요."],
     composition: [
       "PORTFOLIO MIX",
       "포트별 자산 비중",
@@ -1897,7 +1899,7 @@ export default function PortfolioBuilder({
               <button className={styles.save} onClick={save} disabled={saving}>
                 {saving ? "저장 중" : "미저장 · 변경 내용 저장"}
               </button>
-            ) : ["strategy", "preferences", "allocation"].includes(screen) && !reviewDirty ? (
+            ) : ["strategy", "allocation"].includes(screen) && !reviewDirty ? (
               <span className={styles.saved}>
                 <Check size={15} /> 저장됨
               </span>
@@ -1999,10 +2001,10 @@ export default function PortfolioBuilder({
       )}
 
       {screen === "preferences" && (
-        <div className={styles.preferences}>
-          <MarketDataStatus />
-          <PushSettings />
-          <ReviewSettings userId={userId} onDirty={setReviewDirty}/>
+        <PreferencesTabs initialTab={requestedPreferenceTab} onTabChange={setRequestedPreferenceTab} reviewDirty={reviewDirty} panels={{
+          notifications: <PushSettings />,
+          review: <ReviewSettings userId={userId} onDirty={setReviewDirty}/>,
+          valuation: <>
           <section aria-labelledby="fx-settings-title">
             <h2 id="fx-settings-title">환율</h2>
             <p>달러 자산을 원화로 환산할 때 사용할 환율입니다.</p>
@@ -2029,9 +2031,14 @@ export default function PortfolioBuilder({
                 </select>
               </label>
             </div>
-            <p>켰을 때는 미국 주식의 원화 매입원가와 달러 현금의 평균 환전 단가가 필요합니다. 모르는 원가는 손익 미확인으로 표시합니다.</p>
-            <p>총평가액·비중·리밸런싱은 이 선택과 관계없이 현재 환율로 계산합니다.</p>
+            <p>총평가액·비중·리밸런싱은 항상 현재 환율로 계산합니다.</p>
+            <details>
+              <summary>환율 손익은 어떻게 계산하나요?</summary>
+              <p>환율 손익을 포함하려면 미국 주식의 원화 매입원가와 달러 현금의 평균 환전 단가가 필요합니다. 모르는 원가는 손익 미확인으로 표시합니다.</p>
+            </details>
           </section>
+          </>,
+          general: <>
           <section aria-labelledby="portfolio-settings-title">
             <h2 id="portfolio-settings-title">포트폴리오</h2>
             <div className={styles.preferenceFields}>
@@ -2041,7 +2048,9 @@ export default function PortfolioBuilder({
             </div>
             <button type="button" className={styles.ghost} onClick={() => onNavigate("strategy")}>목표 비중·허용 오차 변경 <ArrowRight size={15} /></button>
           </section>
-        </div>
+          <MarketDataStatus />
+          </>,
+        }} />
       )}
 
       {screen === "strategy" && (
@@ -2083,7 +2092,7 @@ export default function PortfolioBuilder({
                 {draft.toleranceMode === "relative" ? "%" : "%p"}
               </label>
             </div>
-            <button type="button" className={styles.ghost} onClick={() => onNavigate("preferences")}>
+            <button type="button" className={styles.ghost} onClick={() => { setRequestedPreferenceTab("valuation"); onNavigate("preferences"); }}>
               환율·손익 설정 <ArrowRight size={15} />
             </button>
             <div className={styles.bucketList}>
@@ -2654,7 +2663,7 @@ export default function PortfolioBuilder({
           </button>
         </div>
       )}
-      {screen === "rebalance" && <ReviewSettings userId={userId} compact onSettings={()=>onNavigate("preferences")} onDirty={setReviewDirty}/>}
+      {screen === "rebalance" && <ReviewSettings userId={userId} compact onSettings={()=>{setRequestedPreferenceTab("review");onNavigate("preferences");}} onDirty={setReviewDirty}/>}
       {screen === "rebalance" && <RebalancePlans
         userId={userId} portfolio={draft} holdings={holdings} disabled={dirty||saving}
         canStart={rebalanceReady&&(advice.trades.length+advice.cryptoTrades.length)>0}

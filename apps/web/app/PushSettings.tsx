@@ -219,14 +219,11 @@ export default function PushSettings() {
   const permission = environment?.permission ?? "unknown";
   return (
     <section className={styles.settings} aria-labelledby="push-settings-title">
-      <h2 id="push-settings-title">알림·앱 설치</h2>
-      <p>
-        공지와 직접 설정한 포트폴리오 점검 알림을 받습니다. 수신 허용은 이
-        기기에만 적용됩니다.
-      </p>
+      <h2 id="push-settings-title">브라우저 알림</h2>
+      <p>공지와 포트폴리오 점검 알림을 이 기기에서 받습니다.</p>
       <div className={styles.row}>
         <div>
-          <strong>브라우저 알림</strong>
+          <strong>이 기기의 알림</strong>
           <small>
             {loading
               ? "설정 확인 중…"
@@ -261,8 +258,8 @@ export default function PushSettings() {
         </p>
       )}
       {environment && restricted && (
-        <div className={styles.install}>
-          <strong>이 기기에서 확인할 항목</strong>
+        <details className={styles.install}>
+          <summary>알림이 연결되지 않나요?</summary>
           {environment.android ? (
             <p>
               휴대폰 설정 → 애플리케이션 → {environment.browser} → 알림과,
@@ -285,7 +282,11 @@ export default function PushSettings() {
             권한 값만으로 사용자가 직접 차단했는지 판별할 수 없습니다. 설정에서
             돌아오면 상태를 다시 확인합니다.
           </p>
-        </div>
+          <p>
+            AdGuard 같은 광고 차단 앱을 사용한다면 ‘Push API 차단’도 확인해
+            주세요. 브라우저에서 허용해도 웹 알림이 차단될 수 있습니다.
+          </p>
+        </details>
       )}
       <details className={styles.diagnostics}>
         <summary>알림 상태 확인</summary>
@@ -341,13 +342,18 @@ export default function PushSettings() {
         )}
       </details>
       {enabled && (
-        <button type="button" disabled={busy} onClick={() => void test()}>
+        <button
+          type="button"
+          className={styles.secondary}
+          disabled={busy}
+          onClick={() => void test()}
+        >
           테스트 알림 보내기
         </button>
       )}
       {!installed && (
-        <div className={styles.install}>
-          <strong>홈 화면에서 앱처럼 사용하기</strong>
+        <details className={styles.install}>
+          <summary>홈 화면에 앱 추가</summary>
           {install ? (
             <button
               type="button"
@@ -366,7 +372,7 @@ export default function PushSettings() {
                 : "브라우저 메뉴의 앱 설치 또는 홈 화면에 추가를 이용하세요. 설치 메뉴가 없는 브라우저에서도 사이트를 그대로 사용할 수 있습니다."}
             </p>
           )}
-        </div>
+        </details>
       )}
     </section>
   );

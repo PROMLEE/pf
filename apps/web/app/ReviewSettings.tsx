@@ -169,11 +169,8 @@ export default function ReviewSettings({
       className={styles.settings}
       aria-labelledby="review-settings-title"
     >
-      <h2 id="review-settings-title">점검일·리밸런싱 알림</h2>
-      <p>
-        정한 날에 비중을 확인하고, 필요한 경우에만 조정하세요. 브라우저 알림을
-        켠 기기로 발송합니다.
-      </p>
+      <h2 id="review-settings-title">포트폴리오 점검 일정</h2>
+      <p>정한 날 오전 9시 이후, 알림을 켠 기기로 점검을 알려드립니다.</p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -241,10 +238,6 @@ export default function ReviewSettings({
             </small>
           </div>
         </fieldset>
-        <p className={styles.note}>
-          한국 시간 오전 9시 이후 순차 발송합니다. 알림을 켜기 전에는 발송하지
-          않으며, 알림 본문에 금액·보유 종목은 표시하지 않습니다.
-        </p>
         <div className={styles.actions}>
           <span role="status">
             {dirty
@@ -288,6 +281,13 @@ export default function ReviewSettings({
         </dl>
       )}
       {message && <p role="status">{message}</p>}
+      <details className={styles.note}>
+        <summary>점검 알림 안내</summary>
+        <p>
+          한국 시간 기준으로 발송합니다. 브라우저 알림을 켜야 받을 수 있으며,
+          알림 본문에 금액·보유 종목은 표시하지 않습니다.
+        </p>
+      </details>
     </section>
   );
 }

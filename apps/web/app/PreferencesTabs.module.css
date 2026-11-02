@@ -1,0 +1,107 @@
+.settings {
+  width: 100%;
+  max-width: 840px;
+  min-width: 0;
+}
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--soft);
+  margin-bottom: 28px;
+}
+.tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+}
+.tabs button[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 4px #0000000c;
+}
+.tabs button:hover {
+  color: var(--ink);
+}
+.tabs button:focus-visible,
+.panel:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.panel {
+  min-width: 0;
+}
+.panel[hidden] {
+  display: none;
+}
+.panel > section + section {
+  margin-top: 28px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line);
+}
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+.panel p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.65;
+  margin: 8px 0 16px;
+}
+.unsaved {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+.panel details > summary {
+  cursor: pointer;
+  color: var(--blue);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 0;
+}
+@media (max-width: 600px) {
+  .tabs {
+    gap: 2px;
+    padding: 3px;
+    margin-bottom: 24px;
+    border-radius: 10px;
+  }
+  .tabs button {
+    min-height: 44px;
+    font-size: 13px;
+    padding: 8px 3px;
+    gap: 0;
+  }
+  .tabs button > svg {
+    display: none;
+  }
+  .panel h2 {
+    font-size: 18px;
+  }
+  .panel > section + section {
+    margin-top: 24px;
+    padding-top: 24px;
+  }
+}
