@@ -27,6 +27,7 @@ const valid = {
 test("push subscriptions accept supported HTTPS providers and reject SSRF destinations", () => {
   for (const endpoint of [
     "https://fcm.googleapis.com/fcm/send/test",
+    "https://jmt17.google.com/fcm/send/test",
     "https://updates.push.services.mozilla.com/wpush/v2/test",
     "https://web.push.apple.com/test",
     "https://abc.notify.windows.com/test",
@@ -38,6 +39,12 @@ test("push subscriptions accept supported HTTPS providers and reject SSRF destin
     "https://127.0.0.1/test",
     "https://169.254.169.254/test",
     "https://fcm.googleapis.com.evil.example/test",
+    "https://jmt17.google.com.evil.example/fcm/send/test",
+    "https://evil.jmt17.google.com/fcm/send/test",
+    "http://jmt17.google.com/fcm/send/test",
+    "https://jmt17.google.com:444/fcm/send/test",
+    "https://jmt17.google.com/log",
+    "https://jmt17.google.com/fcm/send/../log",
     "https://fcm.googleapis.com:444/test",
     "https://name:pass@web.push.apple.com/test",
     "https://example.com/test",
@@ -145,6 +152,16 @@ test("push registration rejects cross-origin and malicious endpoints without DB 
     400,
   );
   assert.equal(state.calls.length, 0);
+});
+test("Whale legacy FCM subscriptions register without rewriting the provider endpoint", async () => {
+  reset();
+  const endpoint = "https://jmt17.google.com/fcm/send/whale-test-token";
+  const result = await route.POST(request({ ...valid, endpoint }));
+  assert.equal(result.status, 200);
+  const insert = state.calls.find((call) =>
+    call.sql.includes("insert into portfolio.push_subscriptions"),
+  );
+  assert.deepEqual(insert.params, ["owner", endpoint, valid.keys.p256dh, valid.keys.auth]);
 });
 test("subscription ownership cannot be reassigned and removal scopes to session user", async () => {
   reset();
@@ -319,4 +336,11 @@ test("notification login return preserves only a valid notice and never a client
     assert.equal(noticeLink.noticeReturnPath(source), "/");
 });
 
-test("review notification login returns only to the whitelisted rebalance screen",()=>{assert.equal(noticeLink.noticeReturnPath("https://pf.example/?view=rebalance&callbackUrl=https://evil.example"),"/?view=rebalance");});
+test("review notification login returns only to the whitelisted rebalance screen", () => {
+  assert.equal(
+    noticeLink.noticeReturnPath(
+      "https://pf.example/?view=rebalance&callbackUrl=https://evil.example",
+    ),
+    "/?view=rebalance",
+  );
+});

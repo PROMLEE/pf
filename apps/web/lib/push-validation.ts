@@ -10,6 +10,9 @@ export function pushSubscriptionInput(value: unknown) {
     const url = new URL(body.endpoint);
     const allowed =
       url.hostname === "fcm.googleapis.com" ||
+      // Legacy Chromium/Whale subscriptions can use Google's staging FCM host.
+      (url.hostname === "jmt17.google.com" &&
+        url.pathname.startsWith("/fcm/send/")) ||
       url.hostname === "updates.push.services.mozilla.com" ||
       url.hostname === "web.push.apple.com" ||
       url.hostname.endsWith(".notify.windows.com");
