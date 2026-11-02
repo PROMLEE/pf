@@ -1,5 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import {
+  readPushEnvironment,
+  pushAvailability,
+  type PushEnvironment,
+} from "./push-environment";
 import styles from "./PushSettings.module.css";
 type BeforeInstall = Event & {
   prompt: () => Promise<void>;
@@ -11,8 +16,7 @@ function keyBytes(key: string) {
   );
 }
 export default function PushSettings() {
-  const [supported, setSupported] = useState(false),
-    [permission, setPermission] = useState<NotificationPermission>("default"),
+  const [environment, setEnvironment] = useState<PushEnvironment | null>(null),
     [ready, setReady] = useState(false),
     [key, setKey] = useState(""),
     [loading, setLoading] = useState(true),
@@ -20,26 +24,20 @@ export default function PushSettings() {
     [enabled, setEnabled] = useState(false),
     [endpoint, setEndpoint] = useState(""),
     [message, setMessage] = useState(""),
-    [ios, setIos] = useState(false),
-    [installed, setInstalled] = useState(false),
     [install, setInstall] = useState<BeforeInstall | null>(null);
   useEffect(() => {
     let live = true;
-    const support =
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window &&
-      window.isSecureContext;
-    setSupported(support);
-    setInstalled(
-      window.matchMedia("(display-mode: standalone)").matches ||
-        (navigator as Navigator & { standalone?: boolean }).standalone === true,
-    );
-    setIos(
-      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1),
-    );
-    if (support) setPermission(Notification.permission);
+    const initial = readPushEnvironment();
+    setEnvironment(initial);
+    const support = initial.supported && initial.secure;
+    const refreshEnvironment = () => {
+      if (document.visibilityState !== "visible") return;
+      const next = readPushEnvironment();
+      setEnvironment(next);
+      if (next.permission !== "granted") setEnabled(false);
+    };
+    window.addEventListener("focus", refreshEnvironment);
+    document.addEventListener("visibilitychange", refreshEnvironment);
     void (async () => {
       try {
         const r = await fetch("/api/push", { cache: "no-store" });
@@ -75,7 +73,7 @@ export default function PushSettings() {
       setInstall(event as BeforeInstall);
     };
     const added = () => {
-      setInstalled(true);
+      setEnvironment(readPushEnvironment());
       setInstall(null);
     };
     window.addEventListener("beforeinstallprompt", prompt);
@@ -84,9 +82,27 @@ export default function PushSettings() {
       live = false;
       window.removeEventListener("beforeinstallprompt", prompt);
       window.removeEventListener("appinstalled", added);
+      window.removeEventListener("focus", refreshEnvironment);
+      document.removeEventListener("visibilitychange", refreshEnvironment);
     };
   }, []);
+  function recheck() {
+    const next = readPushEnvironment();
+    setEnvironment(next);
+    if (next.permission !== "granted") setEnabled(false);
+    setMessage(
+      pushAvailability(next).canRequest
+        ? "권한 상태를 다시 확인했습니다. 알림 켜기를 눌러 연결해 주세요."
+        : pushAvailability(next).reason,
+    );
+  }
   async function toggle() {
+    const context = readPushEnvironment();
+    setEnvironment(context);
+    if (!enabled && !pushAvailability(context).canRequest) {
+      recheck();
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -103,10 +119,18 @@ export default function PushSettings() {
         return;
       }
       // Must execute directly in the button gesture; never prompt on page load.
-      const allowed = await Notification.requestPermission();
-      setPermission(allowed);
+      const allowed =
+        context.permission === "granted"
+          ? "granted"
+          : await Notification.requestPermission();
+      const next = readPushEnvironment();
+      setEnvironment(next);
       if (allowed !== "granted")
-        throw new Error("브라우저에서 알림을 허용해야 받을 수 있습니다.");
+        throw new Error(
+          allowed === "default"
+            ? "알림 요청이 아직 허용되지 않았습니다. 요청 창을 닫았다면 알림 켜기를 다시 눌러 주세요."
+            : pushAvailability({ ...next, permission: allowed }).reason,
+        );
       const registration = await navigator.serviceWorker.register("/sw.js", {
         scope: "/",
       });
@@ -138,8 +162,14 @@ export default function PushSettings() {
       setEnabled(true);
       setMessage("이 기기의 브라우저 알림을 켰습니다.");
     } catch (e) {
+      const next = readPushEnvironment();
+      setEnvironment(next);
       setMessage(
-        e instanceof Error ? e.message : "알림 설정을 변경하지 못했습니다.",
+        e instanceof DOMException && e.name === "NotAllowedError"
+          ? "알림 연결이 허용되지 않았습니다. 사이트 권한과 휴대폰의 브라우저 앱 알림 권한을 함께 확인한 뒤 권한 다시 확인을 눌러 주세요."
+          : e instanceof Error
+            ? e.message
+            : "알림 설정을 변경하지 못했습니다.",
       );
     } finally {
       setBusy(false);
@@ -161,11 +191,20 @@ export default function PushSettings() {
       setBusy(false);
     }
   }
-  const needInstall = ios && !installed;
+  const availability = environment
+    ? pushAvailability(environment)
+    : { canRequest: false, reason: "실행 환경 확인 중…" };
+  const ios = environment?.ios ?? false;
+  const installed = environment?.installed ?? false;
+  const restricted = !!environment && !availability.canRequest;
+  const permission = environment?.permission ?? "unknown";
   return (
     <section className={styles.settings} aria-labelledby="push-settings-title">
       <h2 id="push-settings-title">알림·앱 설치</h2>
-      <p>공지와 직접 설정한 포트폴리오 점검 알림을 받습니다. 수신 허용은 이 기기에만 적용됩니다.</p>
+      <p>
+        공지와 직접 설정한 포트폴리오 점검 알림을 받습니다. 수신 허용은 이
+        기기에만 적용됩니다.
+      </p>
       <div className={styles.row}>
         <div>
           <strong>브라우저 알림</strong>
@@ -174,33 +213,89 @@ export default function PushSettings() {
               ? "설정 확인 중…"
               : !ready
                 ? "서버 알림 설정 준비 중"
-                : needInstall
-                  ? "홈 화면에 추가 후 알림을 켤 수 있습니다."
-                  : !supported
-                    ? "이 브라우저에서는 푸시 알림을 지원하지 않습니다."
-                    : permission === "denied"
-                      ? "브라우저 설정에서 알림 차단을 해제해 주세요."
-                      : enabled
-                        ? "이 기기에서 수신 중"
-                        : "꺼짐"}
+                : enabled && permission === "granted"
+                  ? "이 기기에서 수신 중"
+                  : availability.reason}
           </small>
         </div>
         <button
           type="button"
           onClick={() => void toggle()}
-          disabled={
-            loading ||
-            busy ||
-            !ready ||
-            !supported ||
-            needInstall ||
-            (!enabled && permission === "denied")
-          }
+          disabled={loading || busy || !ready || !environment}
           aria-pressed={enabled}
         >
-          {busy ? "처리 중" : enabled ? "알림 끄기" : "알림 켜기"}
+          {busy
+            ? "처리 중"
+            : enabled
+              ? "알림 끄기"
+              : restricted
+                ? "권한 다시 확인"
+                : "알림 켜기"}
         </button>
       </div>
+      {environment && restricted && (
+        <div className={styles.install}>
+          <strong>이 기기에서 확인할 항목</strong>
+          {environment.android ? (
+            <p>
+              휴대폰 설정 → 애플리케이션 → {environment.browser} → 알림과,
+              브라우저의 이 사이트 알림 권한을 각각 확인해 주세요. 메뉴 이름은
+              기기에 따라 다를 수 있습니다. 허용 상태인데도 계속 불가능하면 일반
+              모드에서 다시 열거나 다른 브라우저로 비교해 주세요.
+            </p>
+          ) : ios && installed ? (
+            <p>
+              휴대폰 설정 → 알림에서 홈 화면에 추가한 PortRhythm의 알림 권한을
+              확인해 주세요.
+            </p>
+          ) : !ios ? (
+            <p>
+              사이트 권한과 운영체제의 브라우저 앱 알림 권한을 함께 확인해
+              주세요.
+            </p>
+          ) : null}
+          <p>
+            권한 값만으로 사용자가 직접 차단했는지 판별할 수 없습니다. 설정에서
+            돌아오면 상태를 다시 확인합니다.
+          </p>
+        </div>
+      )}
+      <details className={styles.diagnostics}>
+        <summary>알림 상태 확인</summary>
+        <dl>
+          <div>
+            <dt>브라우저</dt>
+            <dd>{environment?.browser ?? "확인 중"}</dd>
+          </div>
+          <div>
+            <dt>실행 방식</dt>
+            <dd>{installed ? "홈 화면 앱" : "브라우저 탭"}</dd>
+          </div>
+          <div>
+            <dt>웹 푸시 기능</dt>
+            <dd>{environment?.supported ? "감지됨" : "사용 불가"}</dd>
+          </div>
+          <div>
+            <dt>알림 권한</dt>
+            <dd>
+              {permission === "granted"
+                ? "허용"
+                : permission === "default"
+                  ? "아직 결정되지 않음"
+                  : permission === "denied"
+                    ? "사용 불가 (denied)"
+                    : "확인 불가"}
+            </dd>
+          </div>
+          <div>
+            <dt>기기 연결</dt>
+            <dd>{enabled ? "연결됨" : "연결 안 됨"}</dd>
+          </div>
+        </dl>
+        <button type="button" disabled={busy || loading} onClick={recheck}>
+          권한 다시 확인
+        </button>
+      </details>
       {enabled && (
         <button type="button" disabled={busy} onClick={() => void test()}>
           테스트 알림 보내기
