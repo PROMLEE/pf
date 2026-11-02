@@ -1,5 +1,6 @@
 "use client";
 import PushSettings from "./PushSettings";
+import ReviewSettings, { ReviewObservation } from "./ReviewSettings";
 import PortfolioDashboard from "./PortfolioDashboard";
 import AssetEditDialog, { type EditableAssetSelection } from "./AssetEditDialog";
 import MarketDataStatus from "./MarketDataStatus";
@@ -702,6 +703,7 @@ export default function PortfolioBuilder({
   const [refreshing, setRefreshing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [detailDirty, setDetailDirty] = useState(false);
+  const [reviewDirty, setReviewDirty] = useState(false);
   const [transferDirty, setTransferDirty] = useState(false);
   const [runDirty, setRunDirty] = useState(false);
   const [showRunPreview, setShowRunPreview] = useState(false);
@@ -824,7 +826,7 @@ export default function PortfolioBuilder({
     if (screen !== "history") { setFlowAmount(""); setFlowNote(""); setFlowTime(""); setEditingFlowId(null); }
   }, [screen]);
   const flowDirty = Boolean(flowAmount || flowNote || flowTime || editingFlowId);
-  useEffect(() => onDirtyChange(dirty || detailDirty || flowDirty || transferDirty || runDirty), [dirty, detailDirty, flowDirty, transferDirty, runDirty, onDirtyChange]);
+  useEffect(() => onDirtyChange(dirty || detailDirty || flowDirty || transferDirty || runDirty || reviewDirty), [dirty, detailDirty, flowDirty, transferDirty, runDirty, reviewDirty, onDirtyChange]);
   function editFlow(flow: CashFlow) {
     setEditingFlowId(flow.id); setFlowDate(flow.date); setFlowAmount(String(Math.abs(flow.amountKrw)));
     setFlowKind(flow.amountKrw > 0 ? "deposit" : "withdrawal"); setFlowNote(flow.note); setFlowTime(flow.occurredAt ? kstTime(flow.occurredAt, true) : "");
@@ -1871,6 +1873,11 @@ export default function PortfolioBuilder({
     <div
       className={styles.builder}
     >
+      <ReviewObservation userId={userId}
+        ready={Boolean(rebalanceReady && !dirty && !quotesRefreshing && !quoteError
+          && holdings.every(row => row.currentPrice !== null && row.quoteCheckedAt && Date.now()-Date.parse(row.quoteCheckedAt)<86400000)
+          && draft.cryptoAssets.every(asset => asset.quotedPriceKrw !== null && asset.quoteCheckedAt && Date.now()-Date.parse(asset.quoteCheckedAt)<86400000))}
+        weights={draft.buckets.map(bucket=>({id:bucket.id,percent:values && values.total>0?(values.values.get(bucket.id)??0)/values.total*100:0}))}/>
       {screen !== "edit" && screen !== "dashboard" && (
         <div className={styles.heading}>
           <div>
@@ -1890,7 +1897,7 @@ export default function PortfolioBuilder({
               <button className={styles.save} onClick={save} disabled={saving}>
                 {saving ? "저장 중" : "미저장 · 변경 내용 저장"}
               </button>
-            ) : ["strategy", "preferences", "allocation"].includes(screen) ? (
+            ) : ["strategy", "preferences", "allocation"].includes(screen) && !reviewDirty ? (
               <span className={styles.saved}>
                 <Check size={15} /> 저장됨
               </span>
@@ -1995,6 +2002,7 @@ export default function PortfolioBuilder({
         <div className={styles.preferences}>
           <MarketDataStatus />
           <PushSettings />
+          <ReviewSettings userId={userId} onDirty={setReviewDirty}/>
           <section aria-labelledby="fx-settings-title">
             <h2 id="fx-settings-title">환율</h2>
             <p>달러 자산을 원화로 환산할 때 사용할 환율입니다.</p>
@@ -2646,6 +2654,7 @@ export default function PortfolioBuilder({
           </button>
         </div>
       )}
+      {screen === "rebalance" && <ReviewSettings userId={userId} compact onSettings={()=>onNavigate("preferences")} onDirty={setReviewDirty}/>}
       {screen === "rebalance" && <RebalancePlans
         userId={userId} portfolio={draft} holdings={holdings} disabled={dirty||saving}
         canStart={rebalanceReady&&(advice.trades.length+advice.cryptoTrades.length)>0}

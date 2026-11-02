@@ -99,7 +99,7 @@ export default function PushSettings() {
         const data = await r.json();
         if (!r.ok) throw new Error(data.message);
         setEnabled(false);
-        setMessage("이 기기의 공지 알림을 껐습니다.");
+        setMessage("이 기기의 브라우저 알림을 껐습니다.");
         return;
       }
       // Must execute directly in the button gesture; never prompt on page load.
@@ -136,7 +136,7 @@ export default function PushSettings() {
       }
       setEndpoint(sub.endpoint);
       setEnabled(true);
-      setMessage("이 기기의 공지 알림을 켰습니다.");
+      setMessage("이 기기의 브라우저 알림을 켰습니다.");
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : "알림 설정을 변경하지 못했습니다.",
@@ -165,10 +165,10 @@ export default function PushSettings() {
   return (
     <section className={styles.settings} aria-labelledby="push-settings-title">
       <h2 id="push-settings-title">알림·앱 설치</h2>
-      <p>새 공지를 브라우저 알림으로 받으세요. 이 기기에만 적용됩니다.</p>
+      <p>공지와 직접 설정한 포트폴리오 점검 알림을 받습니다. 수신 허용은 이 기기에만 적용됩니다.</p>
       <div className={styles.row}>
         <div>
-          <strong>공지 알림</strong>
+          <strong>브라우저 알림</strong>
           <small>
             {loading
               ? "설정 확인 중…"

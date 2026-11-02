@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     try {
       await sendPush(subscription, {
         title: "PortRhythm 알림 테스트",
-        body: "공지 알림이 이 기기에 연결됐습니다.",
+        body: "브라우저 알림이 이 기기에 연결됐습니다.",
         url: "/?view=preferences",
         tag: "portrhythm-test",
       });

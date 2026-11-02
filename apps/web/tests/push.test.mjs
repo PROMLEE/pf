@@ -318,3 +318,5 @@ test("notification login return preserves only a valid notice and never a client
   ])
     assert.equal(noticeLink.noticeReturnPath(source), "/");
 });
+
+test("review notification login returns only to the whitelisted rebalance screen",()=>{assert.equal(noticeLink.noticeReturnPath("https://pf.example/?view=rebalance&callbackUrl=https://evil.example"),"/?view=rebalance");});

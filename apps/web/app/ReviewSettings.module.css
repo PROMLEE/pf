@@ -1,0 +1,143 @@
+.settings h2 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+.settings p,
+.compact p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.settings fieldset {
+  margin: 18px 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.option label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  width: fit-content;
+}
+.option input {
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  accent-color: var(--blue);
+}
+.option small {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.option select {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.actions span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.actions button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--soft);
+  color: var(--blue);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.settings button[type="submit"] {
+  background: var(--action-fill);
+  color: var(--action-ink);
+  margin-left: auto;
+}
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.note {
+  margin: 18px 0;
+}
+.dates {
+  display: grid;
+  gap: 10px;
+  margin: 24px 0 0;
+  font-size: 13px;
+}
+.dates div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.dates dt {
+  color: var(--muted);
+}
+.dates dd {
+  margin: 0;
+  text-align: right;
+}
+.compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 22px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.compact strong {
+  font-size: 14px;
+}
+.compact p {
+  margin: 5px 0 0;
+}
+.compact small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.compact > p {
+  flex-basis: 100%;
+}
+@media (max-width: 600px) {
+  .option select {
+    font-size: 16px;
+  }
+  .compact {
+    align-items: flex-start;
+  }
+  .dates div {
+    align-items: flex-start;
+  }
+  .dates dd {
+    max-width: 65%;
+  }
+}
